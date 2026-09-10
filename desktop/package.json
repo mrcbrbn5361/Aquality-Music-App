@@ -73,6 +73,9 @@
       "icon": "assets/icon.ico",
       "artifactName": "Aquality-Music-Setup-${version}-win11.${ext}"
     },
+    "portable": {
+      "artifactName": "Aquality-Music-Portable-${version}-win11.${ext}"
+    },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
