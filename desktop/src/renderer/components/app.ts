@@ -956,9 +956,15 @@
     if (coverUrl) payload.coverUrl = coverUrl;
     // ytmdesktop2: large_text her zaman album/title olmalı, yoksa hover eski kalıyor
     (payload as any).largeImageText = album || title;
-    // YouTube Music'te Aç butonu
-    if (key && key.length === 11) {
-      (payload as any).buttons = [{ label: "YouTube Music'te Aç", url: `https://music.youtube.com/watch?v=${key}` }];
+    // Butonlar: YouTube Music'te Aç + Discord Sunucusu (Ayarlar'daki "Butonları Göster"e bağlı, en fazla 2)
+    const showButtons = (document.getElementById('discordButtons') as HTMLInputElement)?.checked !== false;
+    if (showButtons) {
+      const btns: Array<{ label: string; url: string }> = [];
+      if (key && key.length === 11) {
+        btns.push({ label: "YouTube Music'te Aç", url: `https://music.youtube.com/watch?v=${key}` });
+      }
+      btns.push({ label: 'Discord Sunucusu', url: 'https://discord.gg/aquality' });
+      (payload as any).buttons = btns.slice(0, 2);
     }
     api.discord.setActivity(payload).catch((e: any) => dlog('Discord hatası:', String(e)));
   }
