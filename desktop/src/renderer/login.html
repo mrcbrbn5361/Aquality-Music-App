@@ -145,7 +145,7 @@
       switchState('Loading');
       try {
         const result = await api?.auth?.loginMusic();
-        if (result?.success) {
+        if (result?.success || result?.opened) {
           const user = await api?.auth?.getMusicUser?.();
           document.getElementById('successUserName').textContent = user?.name || 'Kullanıcı';
           switchState('Success');

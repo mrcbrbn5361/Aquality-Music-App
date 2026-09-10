@@ -19,12 +19,24 @@ export class DiscordRPC {
   private client: Client | null = null;
   private isConnected = false;
   private currentAppId = '';
+  private connecting = false;
 
   async connect(): Promise<void> {
     await this.connectWithId(DISCORD_APP_ID);
   }
 
   async connectWithId(appId: string): Promise<void> {
+    // Art arda bağlanma isteklerini tekle (15sn'lik durum yoklaması çakışmasın)
+    if (this.connecting) return;
+    this.connecting = true;
+    try {
+      await this.doConnect(appId);
+    } finally {
+      this.connecting = false;
+    }
+  }
+
+  private async doConnect(appId: string): Promise<void> {
     if (this.client) {
       this.disconnect();
     }
@@ -54,6 +66,7 @@ export class DiscordRPC {
     } catch (err) {
       console.log('[Discord] Rich Presence bağlanamadı (Discord açık olabilir)');
       this.isConnected = false;
+      try { this.client?.destroy(); } catch {}
       this.client = null;
     }
   }

@@ -139,21 +139,47 @@
     return [...state.userQueue, ...state.contextQueue];
   }
 
+  // Kuyruğu diske yaz (yeniden başlatmada geri yüklenir)
+  function saveQueue(): void {
+    try {
+      api.store.set('queue', state.queue.map((s) => ({
+        id: s.id, title: s.title, artist: s.artist, thumbnail: s.thumbnail
+      })));
+      api.store.set('queueIndex', state.queueIndex);
+    } catch {}
+  }
+
+  async function restoreQueue(): Promise<void> {
+    try {
+      const saved: Array<{ id: string; title: string; artist: string; thumbnail: string }> =
+        await api.store.get('queue') || [];
+      if (!saved.length) return;
+      state.contextQueue = saved.map((s) => ({ ...s, artistId: '', duration: 0 } as QueueItem));
+      state.queue = rebuildMergedQueue();
+      const savedIdx: number = await api.store.get('queueIndex');
+      state.queueIndex = (typeof savedIdx === 'number' && savedIdx >= 0 && savedIdx < state.queue.length)
+        ? savedIdx : -1;
+    } catch {}
+  }
+
   function addToQueue(song: Song): void {
     state.userQueue.push(song as QueueItem);
     state.queue = rebuildMergedQueue();
+    saveQueue();
     showToast(`Sıraya eklendi: ${song.title}`, 'success');
   }
 
   function playNext(song: Song): void {
     state.userQueue.unshift(song as QueueItem);
     state.queue = rebuildMergedQueue();
+    saveQueue();
     showToast(`Önce çalınacak: ${song.title}`, 'success');
   }
 
   function clearUserQueue(): void {
     state.userQueue = [];
     state.queue = rebuildMergedQueue();
+    saveQueue();
     showToast('Sıra temizlendi', 'info');
   }
 
@@ -175,6 +201,7 @@
     }
     const ctxEl = $('#playerContext');
     if (ctxEl) ctxEl.textContent = name || '';
+    saveQueue();
   }
 
   function show(el: HTMLElement) { el.classList.add('open', 'visible'); }
@@ -874,6 +901,7 @@
     _skipFor = '';
     _mismatchVid = '';
     _mismatchCount = 0;
+    saveQueue();
 
     // Add to recently played
     state.recentlyPlayed = [song, ...state.recentlyPlayed.filter((s) => s.id !== song.id)].slice(0, 100);
@@ -1845,14 +1873,18 @@ function updatePlayIcon() {
     api.store.get('discordEnabled').then((v: any) => { if (v !== undefined) enabledToggle.checked = !!v; });
     api.store.get('discordButtons').then((v: any) => { if (v !== undefined) buttonsToggle.checked = !!v; });
     api.store.get('discordThumbnails').then((v: any) => { if (v !== undefined) thumbsToggle.checked = !!v; });
-    enabledToggle.addEventListener('change', () => { api.store.set('discordEnabled', enabledToggle.checked); if (!enabledToggle.checked) { api.discord.clearActivity().catch(()=>{}); statusEl.textContent = 'Kapalı'; } else { refreshDiscordStatus(); } });
+    enabledToggle.addEventListener('change', () => { api.store.set('discordEnabled', enabledToggle.checked); if (!enabledToggle.checked) { api.discord.clearActivity().catch(()=>{}); statusEl.textContent = 'Kapalı'; } else { (api.discord as any).reconnect?.().catch(()=>{}).finally(() => refreshDiscordStatus()); } });
     buttonsToggle.addEventListener('change', () => api.store.set('discordButtons', buttonsToggle.checked));
     thumbsToggle.addEventListener('change', () => api.store.set('discordThumbnails', thumbsToggle.checked));
 
-    // RPC durumu (tokensuz — Discord masaüstü uygulaması gerekli)
+    // RPC durumu (tokensuz — Discord masaüstü uygulaması gerekli).
+    // Bağlı değilse yeniden bağlanmayı dene (ana süreç 45sn throttle uygular).
     async function refreshDiscordStatus() {
       try {
-        const ok = await api.discord.isReady();
+        let ok = await api.discord.isReady();
+        if (!ok && enabledToggle.checked) {
+          ok = await (api.discord as any).reconnect?.().catch(() => false) ?? false;
+        }
         statusEl.textContent = ok ? '✓ Bağlı (RPC)' : 'Discord uygulaması bekleniyor...';
       } catch { statusEl.textContent = '—'; }
     }
@@ -1943,6 +1975,9 @@ function updatePlayIcon() {
       const slider = $('#volumeSlider') as HTMLInputElement;
       slider.value = String(state.volume);
     }
+
+    // Load saved queue (önceki oturumdan kalan sıra)
+    await restoreQueue();
 
     // Load saved shuffle/repeat
     const savedShuffle = await api.store.get('shuffle');

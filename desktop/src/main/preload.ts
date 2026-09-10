@@ -69,6 +69,7 @@ const api = {
       buttons?: Array<{ label: string; url: string }>;
     }) => ipcRenderer.invoke('discord:setActivity', data),
     clearActivity: () => ipcRenderer.invoke('discord:clearActivity'),
+    reconnect: () => ipcRenderer.invoke('discord:reconnect'),
   },
 
   discordAuth: {

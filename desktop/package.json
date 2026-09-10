@@ -58,8 +58,8 @@
     ],
     "publish": {
       "provider": "github",
-      "owner": "mrcbrbn5361",
-      "repo": "aquality-music"
+      "owner": "aquality-music",
+      "repo": "aquality-music-app"
     },
     "win": {
       "target": [

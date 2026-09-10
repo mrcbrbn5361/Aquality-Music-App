@@ -33,9 +33,13 @@ let resolverListenerSet = false;
 const isDev = !app.isPackaged;
 
 function createWindow(): void {
+  // Kaydedilmiş pencere konumu varsa geri yükle
+  const saved = storeManager?.getWindowBounds();
+  const bounds = (saved && saved.width >= 800 && saved.height >= 500)
+    ? { x: saved.x, y: saved.y, width: saved.width, height: saved.height }
+    : { width: 1280, height: 820 };
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 820,
+    ...bounds,
     minWidth: 960,
     minHeight: 640,
     frame: false,
@@ -74,6 +78,13 @@ function createWindow(): void {
   });
 
   mainWindow.on('close', () => {
+    // Pencere konumunu kaydet (sonraki açılışta geri yüklenir)
+    try {
+      if (mainWindow && !mainWindow.isMaximized()) {
+        const b = mainWindow.getBounds();
+        storeManager?.saveWindowBounds(b);
+      }
+    } catch {}
     try { streamResolver?.destroy(); } catch {}
     try { discordRPC?.disconnect(); } catch {}
   });
@@ -365,8 +376,23 @@ function setupIPC(): void {
   ipcMain.handle('auth:getMusicUser', () => musicAuth.getUser());
 
   // ── Discord Rich Presence IPC (yalnızca resmi RPC/IPC yolu — token yok) ──
+  // Discord geç açılırsa sessizce yeniden bağlan (throttle'lı — spam yok)
+  let lastDiscordReconnectAt = 0;
+  async function ensureDiscordConnected(): Promise<boolean> {
+    if (discordRPC.isReady()) return true;
+    const now = Date.now();
+    if (now - lastDiscordReconnectAt < 45000) return false;
+    lastDiscordReconnectAt = now;
+    try { await discordRPC.connect(); } catch {}
+    return discordRPC.isReady();
+  }
   ipcMain.handle('discord:getAppId', () => discordRPC.getAppId());
   ipcMain.handle('discord:isReady', () => discordRPC.isReady());
+  ipcMain.handle('discord:reconnect', async () => {
+    lastDiscordReconnectAt = Date.now();
+    try { await discordRPC.connect(); } catch {}
+    return discordRPC.isReady();
+  });
   ipcMain.handle('discord:setActivity', async (_, data) => {
     const enabled = storeManager.get('discordEnabled' as any);
     if (enabled === false) return;
@@ -374,7 +400,7 @@ function setupIPC(): void {
     const showThumbs = storeManager.get('discordThumbnails' as any);
     if (showButtons === false) delete (data as any).buttons;
     if (showThumbs === false) { delete (data as any).coverUrl; delete (data as any).largeImageText; }
-    if (discordRPC.isReady()) {
+    if (await ensureDiscordConnected()) {
       await discordRPC.setActivity(data);
     }
   });
@@ -405,8 +431,14 @@ function setupIPC(): void {
   ipcMain.handle('lyrics:setEnabled', (_, v:boolean) => lyricsProvider.setEnabled(v));
 
   // ── Auto-update ─────────────────────────────
-  ipcMain.handle('auto:checkForUpdates', () => {
-    return { status: 'already_checking' };
+  ipcMain.handle('auto:checkForUpdates', async () => {
+    try {
+      const r: any = await autoUpdater.checkForUpdates();
+      const info: any = r?.updateInfo || {};
+      return { status: 'checked', version: info.version || null, releaseNotes: info.releaseNotes || null };
+    } catch (err: any) {
+      return { status: 'error', error: err?.message || String(err) };
+    }
   });
 
   ipcMain.handle('auto:getUpdateStatus', () => {
@@ -419,12 +451,15 @@ function setupIPC(): void {
   });
 }
 
-if (!app.isDefaultProtocolClient('aquality-music')) app.setAsDefaultProtocolClient('aquality-music');
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
 
 app.whenReady().then(async () => {
   if (!gotLock) return;
+  // Protokol kaydı ready içinde (Windows'ta ready öncesi kayıt tutarsız olur)
+  try {
+    if (!app.isDefaultProtocolClient('aquality-music')) app.setAsDefaultProtocolClient('aquality-music');
+  } catch {}
   storeManager = new StoreManager();
   googleAuth = new GoogleOAuth();
   musicAuth = new MusicAuth();

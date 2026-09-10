@@ -321,9 +321,9 @@ export class GoogleOAuth {
   private async refreshGoogleToken(tokens: OAuthTokens): Promise<void> {
     if (!tokens.refresh_token) return;
     try {
-      const config = this.store.get('googleTokens');
-      const clientId = this.store.get('googleClientId') || '';
-      const clientSecret = this.store.get('googleClientSecret') || '';
+      // Mağazadaki değer boşsa paket varsayılanını kullan (yoksa yenileme sessizce ölür)
+      const { clientId, clientSecret } = this.getGoogleConfig();
+      if (!clientId || !clientSecret) return;
       const res = await fetch(GOOGLE_TOKEN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
