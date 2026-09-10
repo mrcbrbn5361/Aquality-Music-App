@@ -7,11 +7,11 @@ interface YTClient {
   clientVersion: string;
 }
 
-const AQUALITY_CLIENT: YTClient = {
+const WEB_REMIX: YTClient = {
   hl: 'tr',
   gl: 'TR',
-  clientName: 'ANDROID_MUSIC',
-  clientVersion: '6.42.52'
+  clientName: 'WEB_REMIX',
+  clientVersion: '1.20241001.00.00'
 };
 
 export interface Song {
@@ -86,7 +86,7 @@ export class YouTubeAPI {
   private accessToken: string | null = null;
 
   constructor() {
-    this.client = { ...AQUALITY_CLIENT };
+    this.client = { ...WEB_REMIX };
   }
 
   setAccessToken(token: string | null): void {
@@ -514,26 +514,62 @@ export class YouTubeAPI {
 
     const items: Song[] = [];
     let currentIndex = 0;
-    const contents = (data as any)?.contents?.singleColumnMusicWatchNextResultsRenderer?.results?.results?.contents;
+    const pushPanelItem = (pv: any) => {
+      const id = pv?.videoId;
+      if (!id) return;
+      items.push({
+        id,
+        title: pv?.title?.runs?.[0]?.text || pv?.title?.simpleText || '',
+        artist: pv?.shortBylineText?.runs?.[0]?.text || '',
+        artistId: pv?.shortBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId || '',
+        thumbnail: pv?.thumbnail?.thumbnails?.slice(-1)[0]?.url || '',
+        duration: this.duration(pv?.lengthText?.simpleText || pv?.lengthText?.runs?.[0]?.text || '')
+      });
+      if (pv?.selected) currentIndex = items.length - 1;
+      else if (id === videoId && currentIndex === 0 && items.length === 1) currentIndex = 0;
+    };
 
-    if (Array.isArray(contents)) {
-      for (const content of contents) {
-        const secondary = content.musicWatchNextResultsRenderer?.results?.results?.contents;
-        if (!Array.isArray(secondary)) continue;
-        for (const item of secondary) {
-          const primary = item.compactPlaylistRenderer || item.compactVideoRenderer;
-          if (!primary) continue;
-          const id = primary.videoId || primary.playlistId;
-          if (!id) continue;
-          items.push({
-            id,
-            title: primary.title?.runs?.[0]?.text || '',
-            artist: primary.shortBylineText?.runs?.[0]?.text || '',
-            artistId: primary.shortBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId || '',
-            thumbnail: primary.thumbnail?.thumbnails?.slice(-1)[0]?.url || '',
-            duration: this.duration(primary.lengthText?.simpleText)
-          });
-          if (primary.videoId === videoId) currentIndex = items.length - 1;
+    // YT Music: tabbedRenderer -> musicQueueRenderer -> playlistPanelRenderer
+    const tabs = (data as any)?.contents?.singleColumnMusicWatchNextResultsRenderer
+      ?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs;
+    if (Array.isArray(tabs)) {
+      for (const tab of tabs) {
+        const panel = tab?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer?.contents;
+        if (Array.isArray(panel)) {
+          for (const item of panel) {
+            if (item?.playlistPanelVideoRenderer) pushPanelItem(item.playlistPanelVideoRenderer);
+            else if (item?.playlistPanelVideoWrapperRenderer?.primaryRenderer?.playlistPanelVideoRenderer) {
+              pushPanelItem(item.playlistPanelVideoWrapperRenderer.primaryRenderer.playlistPanelVideoRenderer);
+            }
+          }
+        }
+        if (items.length) break;
+      }
+    }
+
+    // Fallback: eski YouTube sekli (compactVideoRenderer)
+    if (!items.length) {
+      const contents = (data as any)?.contents?.singleColumnMusicWatchNextResultsRenderer?.results?.results?.contents;
+
+      if (Array.isArray(contents)) {
+        for (const content of contents) {
+          const secondary = content.musicWatchNextResultsRenderer?.results?.results?.contents;
+          if (!Array.isArray(secondary)) continue;
+          for (const item of secondary) {
+            const primary = item.compactPlaylistRenderer || item.compactVideoRenderer;
+            if (!primary) continue;
+            const id = primary.videoId || primary.playlistId;
+            if (!id) continue;
+            items.push({
+              id,
+              title: primary.title?.runs?.[0]?.text || '',
+              artist: primary.shortBylineText?.runs?.[0]?.text || '',
+              artistId: primary.shortBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId || '',
+              thumbnail: primary.thumbnail?.thumbnails?.slice(-1)[0]?.url || '',
+              duration: this.duration(primary.lengthText?.simpleText)
+            });
+            if (primary.videoId === videoId) currentIndex = items.length - 1;
+          }
         }
       }
     }
@@ -542,7 +578,7 @@ export class YouTubeAPI {
   }
 
   async getSearchSuggestions(input: string): Promise<string[]> {
-    const data = await this.request('get_search_suggestions', { input });
+    const data = await this.request('music/get_search_suggestions', { input });
     const suggestions: string[] = [];
     const contents = (data as any)?.contents || [];
 
@@ -636,13 +672,28 @@ export class YouTubeAPI {
 
       // 3) LRCLIB.org fallback (açık kaynaklı söz API'si)
       try {
-        const songTitle = (data as any)?.contents?.singleColumnMusicWatchNextResultsRenderer?.results?.results?.contents
+        let songTitle = (data as any)?.contents?.singleColumnMusicWatchNextResultsRenderer?.results?.results?.contents
           ?.find((c: any) => c?.musicResponsiveListItemRenderer)?.musicResponsiveListItemRenderer
           ?.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.map((r: any) => r.text).join('') || '';
-        const songArtist = (data as any)?.contents?.singleColumnMusicWatchNextResultsRenderer?.results?.results?.contents
+        let songArtist = (data as any)?.contents?.singleColumnMusicWatchNextResultsRenderer?.results?.results?.contents
           ?.find((c: any) => c?.musicResponsiveListItemRenderer)?.musicResponsiveListItemRenderer
           ?.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.map((r: any) => r.text).join('') || '';
-        
+
+        // Başlık bulunamazsa oEmbed'den al (auth gerektirmez)
+        if (!songTitle) {
+          try {
+            const oRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
+            if (oRes.ok) {
+              const o: any = await oRes.json();
+              // "Sanatçı - Parça" formatını böl
+              const m = String(o.title || '').match(/^(.*?)\s+-\s+(.*)$/);
+              if (m) { songArtist = songArtist || m[1].trim(); songTitle = m[2].trim(); }
+              else songTitle = String(o.title || '');
+              songArtist = songArtist || String(o.author_name || '').replace(/ - Topic$/, '');
+            }
+          } catch {}
+        }
+
         if (songTitle) {
           const lrcUrl = `https://lrclib.net/api/get?track_name=${encodeURIComponent(songTitle)}&artist_name=${encodeURIComponent(songArtist)}`;
           const lrcRes = await fetch(lrcUrl, {
