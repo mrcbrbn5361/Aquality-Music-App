@@ -171,9 +171,9 @@ function setupIPC(): void {
   });
 
   // YouTube API
-  ipcMain.handle('yt:search', async (_, query: string) => {
+  ipcMain.handle('yt:search', async (_, query: string, filter?: string) => {
     try {
-      const result = await youtubeAPI.search(query);
+      const result = await youtubeAPI.search(query, filter || 'all');
       console.log('[Main] Search:', query, 'songs:', result.songs?.length || 0, 'videos:', result.videos?.length || 0);
       console.log('[Main] Search first song:', JSON.stringify(result.songs?.[0]));
       return result;

@@ -445,15 +445,22 @@ export class StreamResolver {
     }
   }
 
-  // Şarkıyı oynat — sıralı kuyruk
+  // Şarkıyı oynat — sıralı kuyruk + nesil iptali:
+  // yeni play isteği gelirse eski doPlay erken durur (hızlı şarkı geçişlerinde
+  // eski şarkının yüklenip çalmaya devam etmesi / kuyruk birikmesi önlenir)
+  private playGen = 0;
   play(videoId: string): Promise<void> {
-    this.queue = this.queue.then(() => this.doPlay(videoId)).catch((e) => {
+    const gen = ++this.playGen;
+    this.queue = this.queue.then(() => {
+      if (gen !== this.playGen) return;
+      return this.doPlay(videoId, gen);
+    }).catch((e) => {
       console.error('[Player] play kuyruk hatası:', e?.message || e);
     });
     return this.queue;
   }
 
-  private async doPlay(videoId: string): Promise<void> {
+  private async doPlay(videoId: string, gen: number): Promise<void> {
     if (!videoId) return;
     this.currentVideoId = videoId;
     this.userWantsPaused = false;
@@ -465,6 +472,8 @@ export class StreamResolver {
     }
     let loaded = false;
     for (let attempt = 0; attempt < 3 && !loaded; attempt++) {
+      // Daha yeni bir play isteği varsa bu yüklemeyi bırak
+      if (gen !== this.playGen || this.currentVideoId !== videoId) return;
       try {
         await win.loadURL(`${WATCH_URL}${encodeURIComponent(videoId)}`);
         loaded = true;
@@ -481,7 +490,7 @@ export class StreamResolver {
       await new Promise((r) => setTimeout(r, 1000));
       if (win.isDestroyed()) return;
       // Araya daha yeni bir play girdiyse eski şarkıyı kurcalama (kuyruk çakışması)
-      if (this.currentVideoId !== videoId) return;
+      if (this.currentVideoId !== videoId || gen !== this.playGen) return;
       if (this.userWantsPaused) break;
       try {
         const alreadyPlaying = await win.webContents.executeJavaScript(

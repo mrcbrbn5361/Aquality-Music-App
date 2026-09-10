@@ -16,7 +16,7 @@ const api = {
   },
 
   youtube: {
-    search: (query: string) => ipcRenderer.invoke('yt:search', query),
+    search: (query: string, filter?: string) => ipcRenderer.invoke('yt:search', query, filter),
     player: (videoId: string) => ipcRenderer.invoke('yt:player', videoId),
     home: () => ipcRenderer.invoke('yt:home'),
     browse: (browseId: string, params?: string) => ipcRenderer.invoke('yt:browse', browseId, params),

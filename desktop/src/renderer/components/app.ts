@@ -70,10 +70,10 @@
     try { api.debugLog(line); } catch {}
   }
 
-  async function ytSearch(query: string) {
+  async function ytSearch(query: string, filter?: string) {
     try { 
-      const r = await api.youtube.search(query);
-      console.log('[Renderer] Search result:', JSON.stringify({ songs: r.songs?.length, videos: r.videos?.length, albums: r.albums?.length }));
+      const r = await api.youtube.search(query, filter || state.searchFilter || 'all');
+      console.log('[Renderer] Search result:', JSON.stringify({ songs: r.songs?.length, videos: r.videos?.length, albums: r.albums?.length, artists: r.artists?.length }));
       return r;
     } catch (e) { 
       console.error('[Renderer] Search error:', e);
@@ -797,8 +797,9 @@
       } else {
         _endStallCount = 0;
       }
-      // Açılamayan parça (Spotify: otomatik atla) — yavaş ağa tolerans için 12sn bekle
-      if (mine && Date.now() - lastPlayRequestAt > 12000 && (!u.duration || !u.title)) {
+      // Açılamayan parça (Spotify: otomatik atla) — yavaş ağa tolerans için 12sn bekle.
+      // SADECE poll bizim parçaya aitse (bayat poll ile zincirleme atlama yapma).
+      if (matchesMine && mine && Date.now() - lastPlayRequestAt > 12000 && (!u.duration || !u.title)) {
         const skipKey = 'skip|' + mine;
         if (_skipFor !== skipKey) {
           _skipFor = skipKey;
@@ -867,6 +868,12 @@
     state.currentTime = 0;
     state.duration = song.duration || 0;
     lastPlayRequestAt = Date.now();
+    // Parça-sonu/atlama/eşleşmeme sayaçlarını sıfırla (önceki parçanın poll'leri yeni şarkıyı tetiklemesin)
+    _endedFor = '';
+    _endStallCount = 0;
+    _skipFor = '';
+    _mismatchVid = '';
+    _mismatchCount = 0;
 
     // Add to recently played
     state.recentlyPlayed = [song, ...state.recentlyPlayed.filter((s) => s.id !== song.id)].slice(0, 100);

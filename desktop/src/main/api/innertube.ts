@@ -154,7 +154,11 @@ export class YouTubeAPI {
   private parseSong(item: any): Song | null {
     const r = item.musicResponsiveListItemRenderer;
     if (!r) return null;
-    const videoId = r.playlistItemData?.videoId;
+    // Video kimligi: once playlist verisi, sonra gezinme endpoint'leri (video raflarında playlistItemData olmaz)
+    const videoId = r.playlistItemData?.videoId
+      || r.navigationEndpoint?.watchEndpoint?.videoId
+      || r.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint?.videoId
+      || '';
     if (!videoId) return null;
 
     const col0 = r.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text;
@@ -256,12 +260,77 @@ export class YouTubeAPI {
     return null;
   }
 
-  async search(query: string): Promise<SearchResult> {
-    // Genelarama params'ı: hem şarkılar hem diğer türleri döner
-    const data = await this.request('search', { 
-      query,
-      params: 'EgWKAQIIAWoKEAMQBBAJEAoQBQ%3D%3D'
-    });
+  // YT Music arama filtre params'ları (farklı türler için farklı sonuç)
+  // NOT: YouTube filtre baytlarını değiştirdi — albüm için ayrı filtre yok,
+  // albümler genel aramadan + sanatçı filtresinden toplanır.
+  private static readonly SEARCH_PARAMS: Record<string, string> = {
+    songs: 'EgWKAQIIAWoKEAMQBBAJEAoQBQ%3D%3D',
+    videos: 'EgWKAQIQAWoKEAMQBBAJEAoQBQ%3D%3D',
+    artists: 'EgWKAQJDAYoKEAMQBBAJEAoQBQ%3D%3D',
+    playlists: 'EgWKAQJAAWoKEAMQBBAJEAoQBQ%3D%3D'
+  };
+
+  // Arama kartını (en üst sonuç) ilgili kovaya koy
+  private parseCard(card: any, results: SearchResult): void {
+    const title = this.text(card.title);
+    const subtitle = this.text(card.subtitle);
+    const thumb = card.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails?.slice(-1)[0]?.url || '';
+    const nav = card.title?.runs?.[0]?.navigationEndpoint;
+    const browseId: string = nav?.browseEndpoint?.browseId || '';
+    const videoId: string = nav?.watchEndpoint?.videoId || '';
+    if (browseId.startsWith('MPRE')) {
+      results.albums.push({ browseId, title, artist: subtitle.split('•')[0]?.trim(), thumbnail: thumb });
+    } else if (browseId.startsWith('UC') || /sanatçı|artist/i.test(subtitle)) {
+      if (browseId) results.artists.push({ browseId, name: title, thumbnail: thumb });
+    } else if (/albüm|album/i.test(subtitle)) {
+      if (browseId) results.albums.push({ browseId, title, thumbnail: thumb });
+    } else if (/liste|playlist/i.test(subtitle)) {
+      if (browseId) results.playlists.push({ browseId, title, thumbnail: thumb });
+    } else if (videoId) {
+      results.songs.push({ id: videoId, title, artist: subtitle.split('•')[0]?.trim() || '', artistId: '', thumbnail: thumb, duration: 0 });
+    }
+  }
+
+  // Tekil arama öğesini türüne göre kovaya koy (video / albüm / sanatçı / liste)
+  private bucketSearchItem(item: any, results: SearchResult): void {
+    if (item?.musicTwoRowItemRenderer) {
+      const parsed = this.parseTwoRow(item);
+      if (!parsed) return;
+      if ('browseId' in parsed) {
+        const bid = (parsed as Album).browseId || '';
+        if (bid.startsWith('MPRE')) results.albums.push(parsed as Album);
+        else if (bid.startsWith('UC')) results.artists.push(parsed as Artist);
+        else results.playlists.push(parsed as Playlist);
+      } else {
+        results.songs.push(parsed as Song);
+      }
+      return;
+    }
+    const r = item?.musicResponsiveListItemRenderer;
+    if (!r) return;
+    const nav = r.navigationEndpoint;
+    const browseId: string = nav?.browseEndpoint?.browseId || '';
+    // Gözatma hedefi varsa türüne göre ayır (albüm / sanatçı / liste)
+    if (browseId && !nav?.watchEndpoint?.videoId) {
+      const title = this.text(r.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text);
+      const sub = this.text(r.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text);
+      const thumb = this.thumb(r);
+      if (browseId.startsWith('MPRE')) results.albums.push({ browseId, title, artist: sub.split('•')[0]?.trim(), thumbnail: thumb });
+      else if (browseId.startsWith('UC')) results.artists.push({ browseId, name: title, thumbnail: thumb });
+      else if (/^(VL|PL|MPSP|MPED)/.test(browseId)) results.playlists.push({ browseId, title, thumbnail: thumb });
+      return;
+    }
+    // Aksi halde çalınabilir öğe (şarkı / video)
+    const song = this.parseSong(item);
+    if (song) results.songs.push(song);
+  }
+
+  async search(query: string, filter: string = 'all'): Promise<SearchResult> {
+    // Filtre yoksa genel arama: şarkılar + diğer türler birlikte döner
+    const params = YouTubeAPI.SEARCH_PARAMS[filter];
+    const body: Record<string, unknown> = { query };
+    if (params) body.params = params;
+    const data = await this.request('search', body);
     const results: SearchResult = { songs: [], videos: [], albums: [], artists: [], playlists: [] };
 
     // Farklı formatları dene
@@ -289,15 +358,33 @@ export class YouTubeAPI {
     if (!contents.length) return results;
 
     for (const section of contents) {
-      // musicShelfRenderer: dikey liste (şarkılar, videolar)
+      // musicCardShelfRenderer: en üst sonuç kartı (sanatçı / albüm / şarkı)
+      const card = section.musicCardShelfRenderer;
+      if (card) {
+        this.parseCard(card, results);
+        continue;
+      }
+
+      // itemSectionRenderer: genel aramada liste öğeleri (şarkı + albüm + sanatçı karışık)
+      const itemSection = section.itemSectionRenderer?.contents;
+      if (Array.isArray(itemSection)) {
+        for (const item of itemSection) this.bucketSearchItem(item, results);
+        continue;
+      }
+
+      // musicShelfRenderer: dikey liste (şarkılar, videolar, listeler)
       const shelf = section.musicShelfRenderer;
       if (shelf) {
         const category = shelf.title?.runs?.[0]?.text || '';
+        const isVideoShelf = /video/i.test(category);
         for (const item of (shelf.contents || [])) {
-          const song = this.parseSong(item);
-          if (!song) continue;
-          if (category.match(/video/i)) results.videos.push(song);
-          else results.songs.push(song);
+          if (isVideoShelf) {
+            const song = this.parseSong(item);
+            if (song) results.videos.push(song);
+          } else {
+            // Gözatma hedefli öğeler (liste/profil) kovalarına, çalınabilirler şarkılara
+            this.bucketSearchItem(item, results);
+          }
         }
         continue;
       }
