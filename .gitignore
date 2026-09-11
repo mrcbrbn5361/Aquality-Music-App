@@ -24,10 +24,7 @@ website/dist/
 .DS_Store
 Thumbs.db
 
-# Ignore lock files
-package-lock.json
-. o p e n c o d e /  
- .opencode/
+.opencode/
 .opencode/
 .expo/
 mobile/.expo/

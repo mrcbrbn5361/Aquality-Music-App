@@ -100,7 +100,7 @@
       "icon": "assets/icon.png",
       "category": "public.app-category.music",
       "artifactName": "Aquality-Music-${version}-mac-${arch}.${ext}",
-      "hardenedRuntime": true,
+      "identity": null,
       "gatekeeperAssess": false
     },
     "dmg": {

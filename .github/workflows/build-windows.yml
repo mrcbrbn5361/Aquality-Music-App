@@ -8,6 +8,9 @@ on:
     branches: [ master, main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -44,3 +47,11 @@ jobs:
             desktop/release/*.exe
             desktop/release/*.blockmap
             desktop/release/latest.yml
+
+      - name: Attach Windows assets to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          gh release upload v1.0.0 desktop/release/*.exe --clobber || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
