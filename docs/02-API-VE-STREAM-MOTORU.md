@@ -8,10 +8,10 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-12 00:03` |
+| **Son Güncelleme** | `2026-09-12 00:12` |
 | **Proje Sürümü** | `v1.0.0` (Masaüstü: `v1.0.0`, Web: `v1.0.0`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `267136d - chore(mobile): add monorepo metro config and root tunnel scripts (10 minutes ago)` |
+| **Son Commit** | `05f8ef9 - fix(mobile): update expo start guide and kill stale dev server processes (8 minutes ago)` |
 | **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Takip Edilen Sorunlar** | 21 / 21 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->

@@ -21,8 +21,29 @@ import { LyricsData, Song } from '../../src/types';
 const { width } = Dimensions.get('window');
 const ARTWORK_SIZE = Math.min(width - 64, 340);
 
-export default function PlayerModal() {
-  const router = useRouter();
+export interface PlayerModalProps {
+  onClose?: () => void;
+}
+
+export default function PlayerModal({ onClose }: PlayerModalProps = {}) {
+  let router: any = null;
+  try {
+    router = useRouter();
+  } catch (e) {}
+
+  const handleClose = () => {
+    playerStore.setPlayerModalOpen(false);
+    if (onClose) {
+      onClose();
+      return;
+    }
+    if (router && typeof router.back === 'function') {
+      try {
+        router.back();
+      } catch (e) {}
+    }
+  };
+
   const { currentSong, playing, likedIds, shuffle, repeat, queue, queueIndex } = usePlayer();
   const { currentTime, duration } = usePlayerProgress();
 
@@ -53,7 +74,7 @@ export default function PlayerModal() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.emptyWrap}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
+          <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
             <Ionicons name="chevron-down" size={28} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.emptyText}>Çalan şarkı bulunmuyor.</Text>
@@ -76,7 +97,7 @@ export default function PlayerModal() {
       <View style={styles.container}>
         {/* Üst Bar: Kapat Butonu & MetroList Segment Switcher */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
+          <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
             <Ionicons name="chevron-down" size={26} color="#f8fafc" />
           </TouchableOpacity>
 

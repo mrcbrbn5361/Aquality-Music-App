@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Aquality Music",
+    "slug": "aquality-music",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./mobile/assets/icon.png",
+    "scheme": "aqualitymusic",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./mobile/assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0b0e14"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.aquality.music",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.aquality.music",
+      "permissions": [
+        "WAKE_LOCK",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./mobile/assets/icon.png",
+        "backgroundColor": "#0b0e14"
+      }
+    }
+  }
+}

@@ -18,6 +18,7 @@ interface PlayerState {
   playlists: Playlist[];
   themeAccent: ThemeAccent;
   audioQuality: 'high' | 'medium' | 'low';
+  playerModalOpen: boolean;
 }
 
 const STORAGE_KEYS = {
@@ -48,7 +49,8 @@ class PlayerStore {
     adBlocker: true,
     playlists: [],
     themeAccent: 'cyan',
-    audioQuality: 'high'
+    audioQuality: 'high',
+    playerModalOpen: false
   };
 
   private listeners = new Set<() => void>();
@@ -135,6 +137,11 @@ class PlayerStore {
 
   setPlaying(playing: boolean) {
     this.state.playing = playing;
+    this.notify();
+  }
+
+  setPlayerModalOpen(open: boolean) {
+    this.state.playerModalOpen = open;
     this.notify();
   }
 

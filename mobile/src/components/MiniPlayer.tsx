@@ -6,8 +6,16 @@ import { usePlayer, usePlayerProgress, playerStore } from '../store/player-store
 import { mobilePlayer } from '../services/player';
 import { Equalizer } from './Equalizer';
 
-export const MiniPlayer: React.FC = () => {
-  const router = useRouter();
+export interface MiniPlayerProps {
+  onOpenPlayer?: () => void;
+}
+
+export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onOpenPlayer }) => {
+  let router: any = null;
+  try {
+    router = useRouter();
+  } catch (e) {}
+
   const { currentSong, playing, likedIds } = usePlayer();
   const { currentTime, duration } = usePlayerProgress();
 
@@ -17,7 +25,16 @@ export const MiniPlayer: React.FC = () => {
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   const openFullPlayer = () => {
-    router.push('/modal/player');
+    playerStore.setPlayerModalOpen(true);
+    if (onOpenPlayer) {
+      onOpenPlayer();
+      return;
+    }
+    if (router && typeof router.push === 'function') {
+      try {
+        router.push('/modal/player');
+      } catch (e) {}
+    }
   };
 
   return (
