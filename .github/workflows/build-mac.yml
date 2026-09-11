@@ -30,6 +30,9 @@ jobs:
           npm install
           brew install p7zip
           P7ZA=$(which 7za || which 7z)
+          ln -sf "$P7ZA" ./7za
+          ln -sf "$P7ZA" ./desktop/7za
+          chmod +x ./7za ./desktop/7za 2>/dev/null || true
           for dir in node_modules/7zip-bin/mac/arm64 node_modules/7zip-bin/mac/x64 desktop/node_modules/7zip-bin/mac/arm64 desktop/node_modules/7zip-bin/mac/x64; do
             mkdir -p "$dir"
             cp "$P7ZA" "$dir/7za"

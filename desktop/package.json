@@ -30,6 +30,7 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/ws": "^8.18.1",
+    "7zip-bin": "^5.2.0",
     "concurrently": "^8.2.2",
     "electron": "28.3.3",
     "electron-builder": "^24.9.1",

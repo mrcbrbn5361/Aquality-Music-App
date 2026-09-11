@@ -4,10 +4,10 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-11 22:32` |
+| **Son Güncelleme** | `2026-09-11 22:39` |
 | **Proje Versiyonu** | `v1.0.0` (Masaüstü: `v1.0.0`, Web: `v1.0.0`, Mobil: `v1.0.0`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `443cd06 - fix(ci): optimize macos dmg build without 7zip-bin (5 minutes ago)` |
+| **Son Git Commit** | `eae1ad1 - fix(ci): robust 7zip-bin setup for macOS DMG and Windows packaging (5 minutes ago)` |
 | **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Kod Hacmi (LOC)** | Ana Süreç: ~4465 satır, Arayüz: ~4729 satır, Mobil (Expo): ~3584 satır, Web: ~1069 satır |
 
@@ -54,7 +54,22 @@
 
 | Dosya Yolu | Durum |
 |---|---|
+| `.github/workflows/build-mac.yml` | Düzenlendi |
+| `PROJE-DURUM.md` | Düzenlendi |
+| `desktop/package.json` | Düzenlendi |
+| `docs/01-MIMARI-VE-SISTEM-TASARIMI.md` | Düzenlendi |
+| `docs/02-API-VE-STREAM-MOTORU.md` | Düzenlendi |
+| `docs/03-AUTH-VE-GUVENLIK.md` | Düzenlendi |
+| `docs/04-RENDERER-VE-ARAYUZ.md` | Düzenlendi |
+| `docs/05-VERI-STORE-VE-DURUM.md` | Düzenlendi |
+| `docs/06-PAKETLEME-VE-DAGITIM.md` | Düzenlendi |
+| `docs/07-WEB-SITESI-VE-SEO.md` | Düzenlendi |
+| `docs/08-SORUNLAR-VE-COZUMLER.md` | Düzenlendi |
+| `docs/09-GELISTIRICI-KILAVUZU.md` | Düzenlendi |
+| `docs/10-MOBIL-EXPO-REHBERI.md` | Düzenlendi |
+| `docs/README.md` | Düzenlendi |
 | `package-lock.json` | Düzenlendi |
+| `package.json` | Düzenlendi |
 
 ---
 
