@@ -15,13 +15,14 @@
     "build": "npm run build:main && npm run build:renderer",
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build",
-    "build:installer": "npm run build && electron-builder --win nsis",
-    "build:win": "npm run build && electron-builder --win",
-    "build:portable": "npm run build && electron-builder --win portable",
-    "build:mac": "npm run build && electron-builder --mac",
+    "build:installer": "npm run build && electron-builder --win nsis -c.publish=never",
+    "build:win": "npm run build && electron-builder --win -c.publish=never",
+    "build:portable": "npm run build && electron-builder --win portable -c.publish=never",
+    "build:mac": "npm run build && electron-builder --mac -c.publish=never",
     "typecheck": "tsc --noEmit -p tsconfig.main.json"
   },
   "dependencies": {
+    "7zip-bin": "^5.2.0",
     "chrome-remote-interface": "^0.34.0",
     "discord-rpc": "^4.0.1",
     "electron-store": "^8.2.0",
@@ -30,7 +31,6 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/ws": "^8.18.1",
-    "7zip-bin": "^5.2.0",
     "concurrently": "^8.2.2",
     "electron": "28.3.3",
     "electron-builder": "^24.9.1",
@@ -88,6 +88,13 @@
             "x64",
             "arm64"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "icon": "assets/icon.png",
@@ -98,7 +105,8 @@
     },
     "dmg": {
       "artifactName": "Aquality-Music-${version}-mac-${arch}.${ext}",
-      "title": "Aquality Music"
+      "title": "Aquality Music",
+      "background": null
     },
     "portable": {
       "artifactName": "Aquality-Music-Portable-${version}-win11.${ext}",

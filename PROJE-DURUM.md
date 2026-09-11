@@ -4,10 +4,10 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-11 22:39` |
+| **Son Güncelleme** | `2026-09-11 22:44` |
 | **Proje Versiyonu** | `v1.0.0` (Masaüstü: `v1.0.0`, Web: `v1.0.0`, Mobil: `v1.0.0`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `eae1ad1 - fix(ci): robust 7zip-bin setup for macOS DMG and Windows packaging (5 minutes ago)` |
+| **Son Git Commit** | `66bdd16 - fix(ci): link 7za and restore 7zip-bin for CI runners (5 minutes ago)` |
 | **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Kod Hacmi (LOC)** | Ana Süreç: ~4465 satır, Arayüz: ~4729 satır, Mobil (Expo): ~3584 satır, Web: ~1069 satır |
 
@@ -69,7 +69,6 @@
 | `docs/10-MOBIL-EXPO-REHBERI.md` | Düzenlendi |
 | `docs/README.md` | Düzenlendi |
 | `package-lock.json` | Düzenlendi |
-| `package.json` | Düzenlendi |
 
 ---
 

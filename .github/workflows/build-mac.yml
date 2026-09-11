@@ -51,11 +51,12 @@ jobs:
           name: Aquality-Music-macOS
           path: |
             desktop/release/*.dmg
+            desktop/release/*.zip
             desktop/release/*.blockmap
 
       - name: Attach macOS assets to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         run: |
-          gh release upload v1.0.0 desktop/release/*.dmg --clobber || true
+          gh release upload v1.0.0 desktop/release/*.dmg desktop/release/*.zip --clobber || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

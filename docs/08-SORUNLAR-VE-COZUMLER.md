@@ -8,10 +8,10 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-11 22:39` |
+| **Son Güncelleme** | `2026-09-11 22:44` |
 | **Proje Sürümü** | `v1.0.0` (Masaüstü: `v1.0.0`, Web: `v1.0.0`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `eae1ad1 - fix(ci): robust 7zip-bin setup for macOS DMG and Windows packaging (5 minutes ago)` |
+| **Son Commit** | `66bdd16 - fix(ci): link 7za and restore 7zip-bin for CI runners (5 minutes ago)` |
 | **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Takip Edilen Sorunlar** | 21 / 21 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->
