@@ -12,6 +12,8 @@
     "predev": "node scripts/update-status.cjs",
     "dev": "npm run dev --workspace=desktop",
     "dev:mobile": "npm run start --workspace=mobile",
+    "mobile": "npm run start --workspace=mobile",
+    "mobile:tunnel": "npm run tunnel --workspace=mobile",
     "prebuild": "node scripts/update-status.cjs",
     "build": "npm run build --workspace=desktop",
     "build:website": "npm run build --workspace=website",
