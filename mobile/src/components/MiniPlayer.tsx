@@ -23,12 +23,21 @@ export const MiniPlayer: React.FC = () => {
   return (
     <TouchableOpacity
       style={styles.container}
-      activeOpacity={0.9}
+      activeOpacity={0.92}
       onPress={openFullPlayer}
     >
+      {/* Üst Kısım: Neon İlerleme Çizgisi */}
+      <View style={styles.progressBackground}>
+        <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+      </View>
+
       <View style={styles.mainRow}>
         <Image
-          source={{ uri: currentSong.thumbnail || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100' }}
+          source={{
+            uri:
+              currentSong.thumbnail ||
+              'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=120'
+          }}
           style={styles.thumbnail}
         />
 
@@ -36,51 +45,64 @@ export const MiniPlayer: React.FC = () => {
           <Text style={styles.title} numberOfLines={1}>
             {currentSong.title}
           </Text>
-          <Text style={styles.artist} numberOfLines={1}>
-            {currentSong.artist}
-          </Text>
+          <View style={styles.artistRow}>
+            <Text style={styles.artist} numberOfLines={1}>
+              {currentSong.artist}
+            </Text>
+            {currentSong.isVideo && (
+              <View style={styles.clipBadge}>
+                <Text style={styles.clipText}>KLİP</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         <View style={styles.controls}>
           <View style={styles.eqBox}>
-            <Equalizer playing={playing} size={15} />
+            <Equalizer playing={playing} size={14} color="#00f0ff" />
           </View>
 
           <TouchableOpacity
-            style={styles.btn}
+            style={styles.iconBtn}
             onPress={(e) => {
               e.stopPropagation();
               playerStore.toggleLike(currentSong.id);
             }}
-            hitSlop={{ top: 8, bottom: 8, left: 6, right: 2 }}
+            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
           >
             <Ionicons
               name={isLiked ? 'heart' : 'heart-outline'}
-              size={22}
-              color={isLiked ? '#1ed760' : '#bbb'}
+              size={20}
+              color={isLiked ? '#00f0ff' : '#64748b'}
             />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.btn, styles.playBtn]}
+            style={[styles.iconBtn, styles.playBtn]}
             onPress={(e) => {
               e.stopPropagation();
               mobilePlayer.togglePlay();
             }}
-            hitSlop={{ top: 8, bottom: 8, left: 2, right: 6 }}
+            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
           >
             <Ionicons
               name={playing ? 'pause' : 'play'}
-              size={22}
-              color="#0b0e14"
+              size={18}
+              color="#06090e"
             />
           </TouchableOpacity>
-        </View>
-      </View>
 
-      {/* İlerleme Çizgisi */}
-      <View style={styles.progressBackground}>
-        <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={(e) => {
+              e.stopPropagation();
+              mobilePlayer.playNext();
+            }}
+            hitSlop={{ top: 6, bottom: 6, left: 4, right: 6 }}
+          >
+            <Ionicons name="play-skip-forward" size={18} color="#94a3b8" />
+          </TouchableOpacity>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -88,28 +110,41 @@ export const MiniPlayer: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#181d26',
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
-    marginHorizontal: 8,
-    marginBottom: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
+    backgroundColor: '#0d1524',
+    borderRadius: 14,
+    marginHorizontal: 10,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 240, 255, 0.22)',
+    shadowColor: '#00f0ff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
     elevation: 8,
     overflow: 'hidden'
+  },
+  progressBackground: {
+    height: 2.5,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    width: '100%'
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#00f0ff'
   },
   mainRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 8
+    paddingHorizontal: 10,
+    paddingVertical: 7
   },
   thumbnail: {
-    width: 44,
-    height: 44,
-    borderRadius: 6,
-    backgroundColor: '#232a36'
+    width: 42,
+    height: 42,
+    borderRadius: 9,
+    backgroundColor: '#161f30',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)'
   },
   textWrap: {
     flex: 1,
@@ -117,41 +152,54 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   title: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600'
+    color: '#f8fafc',
+    fontSize: 13.5,
+    fontWeight: '700'
+  },
+  artistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2
   },
   artist: {
-    color: '#9aa2b1',
-    fontSize: 12,
-    marginTop: 2
+    color: '#8b9bb4',
+    fontSize: 11.5,
+    fontWeight: '500',
+    flexShrink: 1
+  },
+  clipBadge: {
+    backgroundColor: 'rgba(0, 240, 255, 0.15)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginLeft: 5
+  },
+  clipText: {
+    color: '#00f0ff',
+    fontSize: 8,
+    fontWeight: '800'
   },
   controls: {
     flexDirection: 'row',
     alignItems: 'center'
   },
   eqBox: {
-    marginRight: 10
+    marginRight: 6
   },
-  btn: {
+  iconBtn: {
     padding: 6
   },
   playBtn: {
-    backgroundColor: '#1ed760',
-    borderRadius: 20,
+    backgroundColor: '#00f0ff',
+    borderRadius: 18,
     width: 34,
     height: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 4
-  },
-  progressBackground: {
-    height: 2.5,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    width: '100%'
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#1ed760'
+    marginHorizontal: 2,
+    shadowColor: '#00f0ff',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 5
   }
 });

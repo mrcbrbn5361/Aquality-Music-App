@@ -61,7 +61,9 @@ const PLAYER_HTML = `
             playsinline: 1,
             rel: 0,
             iv_load_policy: 3,
-            origin: 'https://youtube.com'
+            enablejsapi: 1,
+            origin: 'https://www.youtube.com',
+            widget_referrer: 'https://www.youtube.com'
           },
           events: {
             onReady: function(e) {
@@ -252,7 +254,8 @@ export const AudioBridge: React.FC = () => {
 
         case 'error':
           console.warn('[AudioBridge] Player error code:', data.code);
-          if (data.code === 101 || data.code === 150) {
+          // 2: Geçersiz parametre, 100: Bulunamadı, 101/150: Yerleştirmeye kapalı
+          if (data.code === 101 || data.code === 150 || data.code === 100 || data.code === 2) {
             mobilePlayer.playNext();
           }
           break;
@@ -273,13 +276,18 @@ export const AudioBridge: React.FC = () => {
         originWhitelist={['*']}
         source={{
           html: PLAYER_HTML,
-          baseUrl: 'https://youtube.com'
+          baseUrl: 'https://www.youtube.com'
         }}
         allowsInlineMediaPlayback={true}
         mediaPlaybackRequiresUserAction={false}
+        allowsFullscreenVideo={false}
+        automaticallyAdjustContentInsets={false}
+        bounces={false}
+        scrollEnabled={false}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         mixedContentMode="always"
+        userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
         style={styles.webView}
         onMessage={handleMessage}
       />
@@ -290,15 +298,15 @@ export const AudioBridge: React.FC = () => {
 const styles = StyleSheet.create({
   hiddenContainer: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    width: 320,
+    top: -1000,
+    left: -1000,
+    width: 240,
     height: 240,
-    opacity: 0.001,
-    zIndex: -9999
+    opacity: 0.01,
+    zIndex: -1
   },
   webView: {
-    width: 320,
+    width: 240,
     height: 240,
     backgroundColor: '#000'
   }

@@ -1,11 +1,22 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, StyleSheet } from 'react-native';
+import { setAudioModeAsync } from 'expo-audio';
 import { AudioBridge } from '../src/components/AudioBridge';
 
 export default function RootLayout() {
+  useEffect(() => {
+    // Expo Go hem Android hem iOS üzerinde arka plan ses çalmayı hazırla
+    setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: true
+    }).catch((err) => {
+      console.warn('[RootLayout] Audio mode init warning:', err);
+    });
+  }, []);
+
   return (
     <SafeAreaProvider>
       <View style={styles.container}>
@@ -13,7 +24,7 @@ export default function RootLayout() {
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: '#0b0e14' }
+            contentStyle: { backgroundColor: '#06090e' }
           }}
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -35,6 +46,6 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0b0e14'
+    backgroundColor: '#06090e'
   }
 });

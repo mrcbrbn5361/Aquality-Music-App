@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
-import { Song } from '../types';
+import { Song, Playlist, ThemeAccent } from '../types';
 
 interface PlayerState {
   currentSong: Song | null;
@@ -15,6 +15,9 @@ interface PlayerState {
   shuffle: boolean;
   repeat: 'off' | 'all' | 'one';
   adBlocker: boolean;
+  playlists: Playlist[];
+  themeAccent: ThemeAccent;
+  audioQuality: 'high' | 'medium' | 'low';
 }
 
 const STORAGE_KEYS = {
@@ -23,7 +26,10 @@ const STORAGE_KEYS = {
   VOLUME: '@aquality_volume',
   ADBLOCK: '@aquality_adblock',
   QUEUE: '@aquality_queue',
-  QUEUE_INDEX: '@aquality_queue_index'
+  QUEUE_INDEX: '@aquality_queue_index',
+  PLAYLISTS: '@aquality_playlists',
+  ACCENT: '@aquality_accent',
+  QUALITY: '@aquality_quality'
 };
 
 class PlayerStore {
@@ -39,7 +45,10 @@ class PlayerStore {
     volume: 80,
     shuffle: false,
     repeat: 'off',
-    adBlocker: true
+    adBlocker: true,
+    playlists: [],
+    themeAccent: 'cyan',
+    audioQuality: 'high'
   };
 
   private listeners = new Set<() => void>();
@@ -51,19 +60,30 @@ class PlayerStore {
 
   private async loadPersistedData() {
     try {
-      const [liked, recent, vol, adblock, queue, queueIndex] = await Promise.all([
+      const [liked, recent, vol, adblock, queue, queueIndex, playlists, accent, quality] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.LIKED),
         AsyncStorage.getItem(STORAGE_KEYS.RECENT),
         AsyncStorage.getItem(STORAGE_KEYS.VOLUME),
         AsyncStorage.getItem(STORAGE_KEYS.ADBLOCK),
         AsyncStorage.getItem(STORAGE_KEYS.QUEUE),
-        AsyncStorage.getItem(STORAGE_KEYS.QUEUE_INDEX)
+        AsyncStorage.getItem(STORAGE_KEYS.QUEUE_INDEX),
+        AsyncStorage.getItem(STORAGE_KEYS.PLAYLISTS),
+        AsyncStorage.getItem(STORAGE_KEYS.ACCENT),
+        AsyncStorage.getItem(STORAGE_KEYS.QUALITY)
       ]);
 
       if (liked) this.state.likedIds = JSON.parse(liked);
       if (recent) this.state.recentlyPlayed = JSON.parse(recent);
       if (vol) this.state.volume = Number(vol);
       if (adblock !== null) this.state.adBlocker = adblock === 'true';
+      if (playlists) {
+        try {
+          this.state.playlists = JSON.parse(playlists);
+        } catch {}
+      }
+      if (accent) this.state.themeAccent = accent as ThemeAccent;
+      if (quality) this.state.audioQuality = quality as 'high' | 'medium' | 'low';
+
       if (queue) {
         try {
           const parsedQueue = JSON.parse(queue);
@@ -240,6 +260,79 @@ class PlayerStore {
   setAdBlocker(enabled: boolean) {
     this.state.adBlocker = enabled;
     AsyncStorage.setItem(STORAGE_KEYS.ADBLOCK, String(enabled)).catch(() => {});
+    this.notify();
+  }
+
+  createPlaylist(name: string): Playlist {
+    const newPlaylist: Playlist = {
+      id: 'pl_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      name: name.trim() || 'Yeni Çalma Listesi',
+      songs: [],
+      createdAt: Date.now()
+    };
+    this.state.playlists.unshift(newPlaylist);
+    this.persistPlaylists();
+    this.notify();
+    return newPlaylist;
+  }
+
+  deletePlaylist(playlistId: string) {
+    this.state.playlists = this.state.playlists.filter((p) => p.id !== playlistId);
+    this.persistPlaylists();
+    this.notify();
+  }
+
+  addSongToPlaylist(playlistId: string, song: Song): boolean {
+    const pl = this.state.playlists.find((p) => p.id === playlistId);
+    if (!pl) return false;
+    if (!pl.songs.some((s) => s.id === song.id)) {
+      pl.songs.unshift(song);
+      if (!pl.thumbnail) pl.thumbnail = song.thumbnail;
+      this.persistPlaylists();
+      this.notify();
+      return true;
+    }
+    return false;
+  }
+
+  removeSongFromPlaylist(playlistId: string, songId: string) {
+    const pl = this.state.playlists.find((p) => p.id === playlistId);
+    if (!pl) return;
+    pl.songs = pl.songs.filter((s) => s.id !== songId);
+    if (pl.songs.length === 0) {
+      pl.thumbnail = undefined;
+    } else {
+      pl.thumbnail = pl.songs[0].thumbnail;
+    }
+    this.persistPlaylists();
+    this.notify();
+  }
+
+  private persistPlaylists() {
+    AsyncStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify(this.state.playlists)).catch(() => {});
+  }
+
+  setThemeAccent(accent: ThemeAccent) {
+    this.state.themeAccent = accent;
+    AsyncStorage.setItem(STORAGE_KEYS.ACCENT, accent).catch(() => {});
+    this.notify();
+  }
+
+  setAudioQuality(quality: 'high' | 'medium' | 'low') {
+    this.state.audioQuality = quality;
+    AsyncStorage.setItem(STORAGE_KEYS.QUALITY, quality).catch(() => {});
+    this.notify();
+  }
+
+  clearRecentlyPlayed() {
+    this.state.recentlyPlayed = [];
+    AsyncStorage.removeItem(STORAGE_KEYS.RECENT).catch(() => {});
+    this.notify();
+  }
+
+  async clearAllCache() {
+    this.state.recentlyPlayed = [];
+    await AsyncStorage.removeItem(STORAGE_KEYS.RECENT).catch(() => {});
     this.notify();
   }
 }

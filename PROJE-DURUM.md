@@ -4,12 +4,12 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-11 22:44` |
+| **Son Güncelleme** | `2026-09-11 23:48` |
 | **Proje Versiyonu** | `v1.0.0` (Masaüstü: `v1.0.0`, Web: `v1.0.0`, Mobil: `v1.0.0`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `66bdd16 - fix(ci): link 7za and restore 7zip-bin for CI runners (5 minutes ago)` |
+| **Son Git Commit** | `7535d53 - fix(ci): keep 7zip-bin in dependencies and disable dmg background for macOS build (64 minutes ago)` |
 | **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
-| **Kod Hacmi (LOC)** | Ana Süreç: ~4465 satır, Arayüz: ~4729 satır, Mobil (Expo): ~3584 satır, Web: ~1069 satır |
+| **Kod Hacmi (LOC)** | Ana Süreç: ~4465 satır, Arayüz: ~4729 satır, Mobil (Expo): ~5145 satır, Web: ~1069 satır |
 
 ---
 
@@ -54,9 +54,7 @@
 
 | Dosya Yolu | Durum |
 |---|---|
-| `.github/workflows/build-mac.yml` | Düzenlendi |
 | `PROJE-DURUM.md` | Düzenlendi |
-| `desktop/package.json` | Düzenlendi |
 | `docs/01-MIMARI-VE-SISTEM-TASARIMI.md` | Düzenlendi |
 | `docs/02-API-VE-STREAM-MOTORU.md` | Düzenlendi |
 | `docs/03-AUTH-VE-GUVENLIK.md` | Düzenlendi |
@@ -68,7 +66,19 @@
 | `docs/09-GELISTIRICI-KILAVUZU.md` | Düzenlendi |
 | `docs/10-MOBIL-EXPO-REHBERI.md` | Düzenlendi |
 | `docs/README.md` | Düzenlendi |
-| `package-lock.json` | Düzenlendi |
+| `mobile/app/(tabs)/_layout.tsx` | Düzenlendi |
+| `mobile/app/(tabs)/library.tsx` | Düzenlendi |
+| `mobile/app/(tabs)/search.tsx` | Düzenlendi |
+| `mobile/app/(tabs)/settings.tsx` | Düzenlendi |
+| `mobile/app/_layout.tsx` | Düzenlendi |
+| `mobile/app/modal/player.tsx` | Düzenlendi |
+| `mobile/src/api/innertube.ts` | Düzenlendi |
+| `mobile/src/components/AudioBridge.tsx` | Düzenlendi |
+| `mobile/src/components/Equalizer.tsx` | Düzenlendi |
+| `mobile/src/components/MiniPlayer.tsx` | Düzenlendi |
+| `mobile/src/components/SongRow.tsx` | Düzenlendi |
+| `mobile/src/store/player-store.ts` | Düzenlendi |
+| `mobile/src/types/index.ts` | Düzenlendi |
 
 ---
 

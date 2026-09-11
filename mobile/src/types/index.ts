@@ -35,8 +35,17 @@ export interface Artist {
 export interface Playlist {
   id: string;
   name: string;
-  songs: string[];
+  songs: Song[];
   createdAt: number;
+  thumbnail?: string;
+}
+
+export interface LyricsData {
+  videoId: string;
+  lines: string[];
+  source?: string;
 }
 
 export type SearchFilter = 'all' | 'songs' | 'videos' | 'albums' | 'artists';
+
+export type ThemeAccent = 'cyan' | 'indigo' | 'amber' | 'emerald';

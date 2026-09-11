@@ -9,7 +9,7 @@ interface EqualizerProps {
 
 export const Equalizer: React.FC<EqualizerProps> = ({
   playing,
-  color = '#1ed760',
+  color = '#00e5ff',
   size = 14
 }) => {
   const bar1 = useRef(new Animated.Value(0.3)).current;

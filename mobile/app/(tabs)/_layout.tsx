@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MiniPlayer } from '../../src/components/MiniPlayer';
 
@@ -11,8 +11,8 @@ export default function TabsLayout() {
         screenOptions={{
           headerShown: false,
           tabBarStyle: styles.tabBar,
-          tabBarActiveTintColor: '#1ed760',
-          tabBarInactiveTintColor: '#8892b0',
+          tabBarActiveTintColor: '#00f0ff',
+          tabBarInactiveTintColor: '#64748b',
           tabBarLabelStyle: styles.tabLabel
         }}
       >
@@ -20,17 +20,17 @@ export default function TabsLayout() {
           name="index"
           options={{
             title: 'Ana Sayfa',
-            tabBarIcon: ({ color, size }: { color: any; size: number }) => (
-              <Ionicons name="home-outline" size={size} color={color} />
+            tabBarIcon: ({ color, focused }: { color: any; focused: boolean }) => (
+              <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
             )
           }}
         />
         <Tabs.Screen
           name="search"
           options={{
-            title: 'Ara',
-            tabBarIcon: ({ color, size }: { color: any; size: number }) => (
-              <Ionicons name="search-outline" size={size} color={color} />
+            title: 'Keşfet & Ara',
+            tabBarIcon: ({ color, focused }: { color: any; focused: boolean }) => (
+              <Ionicons name={focused ? 'search' : 'search-outline'} size={22} color={color} />
             )
           }}
         />
@@ -38,8 +38,8 @@ export default function TabsLayout() {
           name="library"
           options={{
             title: 'Kitaplık',
-            tabBarIcon: ({ color, size }: { color: any; size: number }) => (
-              <Ionicons name="library-outline" size={size} color={color} />
+            tabBarIcon: ({ color, focused }: { color: any; focused: boolean }) => (
+              <Ionicons name={focused ? 'library' : 'library-outline'} size={22} color={color} />
             )
           }}
         />
@@ -47,8 +47,8 @@ export default function TabsLayout() {
           name="settings"
           options={{
             title: 'Ayarlar',
-            tabBarIcon: ({ color, size }: { color: any; size: number }) => (
-              <Ionicons name="settings-outline" size={size} color={color} />
+            tabBarIcon: ({ color, focused }: { color: any; focused: boolean }) => (
+              <Ionicons name={focused ? 'options' : 'options-outline'} size={22} color={color} />
             )
           }}
         />
@@ -65,23 +65,25 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   wrapper: {
     flex: 1,
-    backgroundColor: '#0b0e14'
+    backgroundColor: '#06090e'
   },
   tabBar: {
-    backgroundColor: '#12161f',
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#0a0f1d',
+    borderTopColor: 'rgba(56, 189, 248, 0.12)',
     borderTopWidth: 1,
-    height: 58,
-    paddingBottom: 6,
-    paddingTop: 4
+    height: Platform.OS === 'ios' ? 84 : 64,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+    paddingTop: 8,
+    elevation: 10
   },
   tabLabel: {
-    fontSize: 11,
-    fontWeight: '600'
+    fontSize: 10.5,
+    fontWeight: '700',
+    letterSpacing: 0.3
   },
   miniPlayerAnchor: {
     position: 'absolute',
-    bottom: 58,
+    bottom: Platform.OS === 'ios' ? 84 : 64,
     left: 0,
     right: 0
   }

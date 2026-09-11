@@ -1,4 +1,4 @@
-import { Song, Album, Artist, SearchFilter, HomeSection } from '../types';
+import { Song, Album, Artist, SearchFilter, HomeSection, LyricsData } from '../types';
 
 const BASE_URL = 'https://music.youtube.com/youtubei/v1';
 
@@ -518,6 +518,85 @@ export class InnerTubeMobileApi {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Şarkı sözlerini YouTube Music InnerTube veya LRCLIB üzerinden çeker
+   */
+  async getLyrics(videoId: string, title?: string, artist?: string): Promise<LyricsData | null> {
+    try {
+      // 1. YouTube Music Next endpointinden FEmusic_lyrics browseId'yi bul
+      const nextData = await this.request('next', { videoId });
+      const tabs =
+        nextData?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs || [];
+
+      let lyricsBrowseId = '';
+      for (const tab of tabs) {
+        const bId = tab?.tabRenderer?.endpoint?.browseEndpoint?.browseId;
+        if (
+          bId &&
+          (bId.includes('lyrics') ||
+            bId.startsWith('FEmusic_lyrics') ||
+            tab?.tabRenderer?.title === 'Lyrics' ||
+            tab?.tabRenderer?.title === 'Sözler')
+        ) {
+          lyricsBrowseId = bId;
+          break;
+        }
+      }
+
+      if (lyricsBrowseId) {
+        const lyricsData = await this.request('browse', { browseId: lyricsBrowseId });
+        const contents = lyricsData?.contents?.sectionListRenderer?.contents || [];
+        for (const sec of contents) {
+          const shelf = sec?.musicDescriptionShelfRenderer;
+          if (shelf?.description) {
+            const raw = this.text(shelf.description);
+            if (raw && raw.trim().length > 0) {
+              const lines = raw
+                .split('\n')
+                .map((l: string) => l.trim())
+                .filter((l: string) => l.length > 0);
+              return {
+                videoId,
+                lines,
+                source: 'YouTube Music'
+              };
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[InnerTubeMobile] getLyrics InnerTube error:', e);
+    }
+
+    // 2. Fallback: LRCLIB (açık kaynaklı şarkı sözü servisi)
+    if (title && artist) {
+      try {
+        const cleanTitle = title.replace(/\(.*?\)|\[.*?\]/g, '').trim();
+        const cleanArtist = artist.split(/[•·,]/)[0].trim();
+        const url = `https://lrclib.net/api/get?track_name=${encodeURIComponent(cleanTitle)}&artist_name=${encodeURIComponent(cleanArtist)}`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+        if (res.ok) {
+          const lrcJson = await res.json();
+          if (lrcJson.plainLyrics) {
+            const lines = lrcJson.plainLyrics
+              .split('\n')
+              .map((l: string) => l.trim())
+              .filter((l: string) => l.length > 0);
+            return {
+              videoId,
+              lines,
+              source: 'LRCLIB'
+            };
+          }
+        }
+      } catch {
+        // Sessiz hata toleransı
+      }
+    }
+
+    return null;
   }
 }
 

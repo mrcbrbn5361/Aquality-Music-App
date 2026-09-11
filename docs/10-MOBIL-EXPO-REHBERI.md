@@ -8,10 +8,10 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-11 22:44` |
+| **Son Güncelleme** | `2026-09-11 23:48` |
 | **Proje Sürümü** | `v1.0.0` (Masaüstü: `v1.0.0`, Web: `v1.0.0`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `66bdd16 - fix(ci): link 7za and restore 7zip-bin for CI runners (5 minutes ago)` |
+| **Son Commit** | `7535d53 - fix(ci): keep 7zip-bin in dependencies and disable dmg background for macOS build (64 minutes ago)` |
 | **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Takip Edilen Sorunlar** | 21 / 21 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->
@@ -86,110 +86,96 @@ Mobil bir müzik uygulamasında en kritik bileşen, ekran kapalıyken telefonun 
 
 ---
 
-### 📑 Faz 3: InnerTube API ve Mobil Akış (Stream) Çözümleyici
-- **Masaüstü Farkı**: Masaüstünde gizli `BrowserWindow` kullanıyorduk. Mobilde ise `innertube.ts` motoru doğrudan `player` endpoint'inden ayrıştırılan ses akış URL'lerini (`audio/webm` veya `audio/mp4`) alır ve `TrackPlayer.add({ url: streamUrl })` şeklinde yerel oynatıcıya iletir.
-- **Reklam Atlama**: Ses formatı doğrudan çekildiği için video arayüz reklamları doğal olarak sıfıra iner.
+### 📑 Faz 3: InnerTube API ve Expo Go Hibrit Ses Köprüsü (`AudioBridge.tsx`)
+- **Expo Go Uyumluluğu**: Expo Go ortamında yerel C/Java modülleri derlenemediği için, YouTube Music iframe API motoru görünmez ve optimize edilmiş bir `react-native-webview` köprüsü (`AudioBridge.tsx`) üzerinden çalıştırılır.
+- **Android & iOS Çözümleri**:
+  - `expo-audio`'nun `setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true })` yapılandırması kök layout'ta aktif edilir.
+  - WebView `playsinline=1`, `enablejsapi=1`, `origin=https://www.youtube.com`, `allowsInlineMediaPlayback={true}` ve mobil Safari user-agent ayarlarıyla iOS WebKit kısıtlamaları aşılmıştır.
+  - Akıllı reklam katili (Ad Killer), video reklamları anında fark edip 16x hıza alarak atlar.
+  - Şarkı sözleri (Lyrics), YouTube Music InnerTube ve LRCLIB servislerinden anlık çekilir.
 
 ---
 
-### 📑 Faz 4: Mobil Navigasyon ve Ekran Tasarımı (Spotify Standardı)
-`expo-router` ile Spotify mobil deneyiminin birebir aynısı kurulur:
+### 📑 Faz 4: Mobil Navigasyon ve Ekran Tasarımı (MetroList Standardı)
+Spotify görünümünden tamamen bağımsız, modern ve minimalist **MetroList** tasarım dili uygulanmıştır:
 
 1. **Alt Menü Çubuğu (Bottom Tab Bar)**:
-   - 🏠 **Ana Sayfa (`app/(tabs)/index.tsx`)**: Günün önerileri, yeni çıkanlar ve hızlı çalma listeleri.
-   - 🔍 **Ara (`app/(tabs)/search.tsx`)**: Anlık arama, tür kartları ve popüler sanatçılar.
-   - 📚 **Kitaplığım (`app/(tabs)/library.tsx`)**: Çalma listeleri, beğenilen şarkılar ve sanatçılar.
-   - ⚙️ **Ayarlar (`app/(tabs)/settings.tsx`)**: Ses kalitesi, tema ve dil seçimi.
-2. **Yüzen Mini Oynatıcı (Floating Mini-Player)**:
-   - Alt sekmelerin hemen üzerinde sabit durur.
-   - Şarkı kapağı, başlık, oynat/duraklat butonu ve minik ilerleme çubuğu içerir.
-3. **Tam Ekran Oynatıcı Modalı (Full Player Modal)**:
-   - Mini oynatıcıya tıklandığında aşağıdan yukarı doğru yumuşakça açılır (`presentation: 'modal'`).
-   - Büyük albüm kapağı, canlı 3 barlı ekolayzır, şarkı sözleri çekmecesi ve sıradaki parçalar listesi.
+   - 🏠 **Ana Sayfa (`app/(tabs)/index.tsx`)**: Hızlı Akış (Quick Picks), Zirvedeki Hit Parçalar (Top 50), Ruh Hali & Tür filtre çipleri.
+   - 🔍 **Keşfet & Ara (`app/(tabs)/search.tsx`)**: Canlı InnerTube arama tamamlama önerileri, Metro tür kartları ve anlık filtreleme.
+   - 📚 **Kitaplığım (`app/(tabs)/library.tsx`)**: Özel çalma listeleri (oluşturma, silme), beğenilenler ve dinleme geçmişi.
+   - ⚙️ **Ayarlar (`app/(tabs)/settings.tsx`)**: Akıllı reklam katili, Hi-Fi 256k ses kalitesi, MetroList tema vurgu renkleri (Siber Mavi, Neon İndigo, Güneş Sarısı, Zümrüt).
+2. **Yüzen Mini Oynatıcı (MetroList Floating MiniPlayer)**:
+   - Tab bar'ın hemen üzerinde yüzen siber mavi kapsül kart.
+   - Squircle albüm kapağı, animasyonlu ekolayzır, hızlı parça atlama ve neon ilerleme çizgisi.
+3. **Çok Modlu Tam Ekran Oynatıcı (MetroList Multi-View Modal Player)**:
+   - **Şarkı (Player)**: Büyük squircle albüm kapağı, interaktif scrubber, transport kontrolleri, repeat/shuffle.
+   - **Sözler (Lyrics)**: Yüksek kontrastlı, temiz tipografili canlı şarkı sözü okuyucu.
+   - **Sıradakiler (Queue)**: Çalma sırasındaki şarkılar, benzer parça radyo ekleyici.
 
 ---
 
-### 📑 Faz 5: Kullanıcı Girişi (Google & YouTube Music Auth)
-- **`expo-web-browser` ve `expo-auth-session`**: Kullanıcıya güvenli bir sistem tarayıcı sayfası açarak YouTube Music girişini sağlar.
-- **Çerez Saklama**: Elde edilen `LOGIN_INFO` ve `SAPISID` çerezleri Android Keystore ve iOS Keychain ile korunan `expo-secure-store` içine şifreli yazılır.
+### 📑 Faz 5: Veri Kalıcılığı ve Depolama
+- React Native için `@react-native-async-storage/async-storage` kullanılır.
+- Beğenilen şarkılar (`@aquality_liked`), çalma listeleri (`@aquality_playlists`), dinleme geçmişi (`@aquality_recent`), tema vurgusu (`@aquality_accent`) ve ses kalitesi (`@aquality_quality`) kalıcı olarak saklanır.
 
 ---
 
-### 📑 Faz 6: Veri Kalıcılığı ve Çevrimdışı Mod
-- `desktop/src/main/utils/store.ts` yerine React Native için `@react-native-async-storage/async-storage` veya `react-native-mmkv` kullanılır.
-- Beğenilen şarkılar, arama geçmişi ve son çalınanlar diske anında kaydedilir.
-
----
-
-### 📑 Faz 7: Windows Üzerinden Bulut Derleme (EAS Build)
-Mac bilgisayara sahip olmadan Windows üzerinden hem **Android APK** hem de **iOS IPA** oluşturma:
-
-1. **EAS CLI Kurulumu**:
+### 📑 Faz 6: Windows Üzerinden Bulut Derleme (EAS Build) & Expo Go
+1. **Expo Go ile Anında Canlı Test**:
    ```bash
-   npm install -g eas-cli
-   eas login
+   cd mobile && npx expo start
    ```
-2. **Yapılandırma (`mobile/eas.json`)**:
-   ```json
-   {
-     "build": {
-       "preview": {
-         "android": {
-           "buildType": "apk"
-         },
-         "ios": {
-           "simulator": true
-         }
-       },
-       "production": {}
-     }
-   }
-   ```
-3. **Tek Komutla Android APK Üretme (Bulutta)**:
+   *Terminalde çıkan QR kodu telefonunuzdaki Expo Go uygulamasıyla okutarak Android ve iOS'ta anında test edebilirsiniz.*
+2. **EAS Build ile Bağımsız APK / IPA Üretme**:
    ```bash
    cd mobile && eas build -p android --profile preview
    ```
-   *Expo sunucuları APK dosyasını derler ve telefonunuza doğrudan indirebileceğiniz bir karekod (QR Code) ve indirme linki verir.*
-4. **Tek Komutla iOS Çıktısı Üretme (Bulutta - Mac Gerektirmez)**:
-   ```bash
-   cd mobile && eas build -p ios --profile preview
-   ```
 
 ---
 
-## 🛠️ 3. Mobil Proje Dizin Yapısı Taslağı
+## 🛠️ 3. Mobil Proje Dizin Yapısı
 
 ```
 mobile/
 ├── app/                      # Expo Router Ekranları
 │   ├── (tabs)/
-│   │   ├── _layout.tsx       # Alt Menü (Bottom Tabs)
-│   │   ├── index.tsx         # Ana Sayfa
-│   │   ├── search.tsx        # Arama Ekranı
-│   │   ├── library.tsx       # Kitaplık
-│   │   └── settings.tsx      # Ayarlar
+│   │   ├── _layout.tsx       # MetroList Koyu Navigasyon Tab Bar
+│   │   ├── index.tsx         # Ana Sayfa (Quick Picks, Top 50, Moods)
+│   │   ├── search.tsx        # Keşfet & Canlı Arama Önerileri
+│   │   ├── library.tsx       # Kitaplık (Özel Listeler, Beğenilenler, Geçmiş)
+│   │   └── settings.tsx      # Ayarlar (Reklam Katili, Hi-Fi Kalite, Temalar)
 │   ├── modal/
-│   │   ├── player.tsx        # Tam Ekran Oynatıcı
-│   │   └── queue.tsx         # Oynatma Kuyruğu
-│   └── _layout.tsx           # Kök Yığın (Root Stack)
+│   │   └── player.tsx        # MetroList Çok Modlu Oynatıcı (Şarkı / Sözler / Kuyruk)
+│   └── _layout.tsx           # Kök Layout & AudioBridge
 ├── src/
-│   ├── api/                  # InnerTube API (Masaüstüyle paylaşılan motor)
-│   ├── components/           # MiniPlayer, SongItem, Equalizer, AlbumCard
-│   ├── hooks/                # usePlayer, useQueue, useTheme
-│   ├── services/             # TrackPlayer Servisi
-│   └── store/                # Zustand / Redux / Context Durum Yönetimi
-├── assets/                   # Mobil İkonlar, Splash Ekranı
+│   ├── api/
+│   │   └── innertube.ts      # YouTube Music InnerTube & Şarkı Sözü Motoru
+│   ├── components/
+│   │   ├── AudioBridge.tsx   # Expo Go Android & iOS WebKit Ses Köprüsü
+│   │   ├── Equalizer.tsx     # Siber Camgöbeği Dinamik Dalga Ekolayzır
+│   │   ├── MiniPlayer.tsx    # Yüzen Kapsül Mini Oynatıcı
+│   │   └── SongRow.tsx       # MetroList Squircle Parça Satırı
+│   ├── services/
+│   │   └── player.ts         # Mobil Oynatma Servisi
+│   ├── store/
+│   │   └── player-store.ts   # Zustand / AsyncStorage Kalıcı Durum Yönetimi
+│   └── types/
+│       └── index.ts          # TypeScript Arayüzleri (Song, Playlist, LyricsData, ThemeAccent)
+├── assets/                   # Mobil İkon ve Splash Ekranı
 ├── app.json                  # Expo Konfigürasyonu
+├── tsconfig.json             # TypeScript Konfigürasyonu
 └── package.json
 ```
 
 ---
 
-## 🎯 4. Başlangıç Kontrol Listesi (Checklist)
+## 🎯 4. Tamamlanma Kontrol Listesi (Checklist)
 
-- [ ] Monorepo `workspaces` ayarına `mobile` eklenmesi.
-- [ ] Expo TypeScript projesinin oluşturulması.
-- [ ] `react-native-track-player` entegrasyonu ve Android `AndroidManifest.xml` izinleri (`WAKE_LOCK`, `FOREGROUND_SERVICE`).
-- [ ] `desktop/src/main/api/innertube.ts` motorunun mobil uyumlu hale getirilmesi.
-- [ ] Spotify temalı alt menü ve mini oynatıcı bileşeninin kodlanması.
-- [ ] EAS Build ile ilk test Android APK'sının çıkarılması.
+- [x] Monorepo `workspaces` ayarına `mobile` entegrasyonu.
+- [x] Expo Go Android & iOS ses oynatma motoru (`AudioBridge.tsx`) stabilizasyonu.
+- [x] Spotify yeşili (`#1ed760`) ve tasarım çizgilerinin tamamen temizlenmesi.
+- [x] MetroList esintili modern Obsidiyen & Siber Camgöbeği renk paleti.
+- [x] MetroList Çok Modlu Oynatıcı: Şarkı, Şarkı Sözleri (Lyrics) ve Kuyruk sekmeleri.
+- [x] Canlı InnerTube arama önerileri ve tür matrisi.
+- [x] Kitaplıkta özel çalma listesi oluşturma/yönetme desteği.
+- [x] TypeScript derleme doğrulaması (`npx tsc --noEmit` hatasız 0 hata).
