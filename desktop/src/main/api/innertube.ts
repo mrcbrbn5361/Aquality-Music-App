@@ -1,3 +1,6 @@
+import { session } from 'electron';
+import { MUSIC_PARTITION } from '../auth/music-auth';
+
 const BASE_URL = 'https://music.youtube.com/youtubei/v1';
 
 interface YTClient {
@@ -11,7 +14,7 @@ const WEB_REMIX: YTClient = {
   hl: 'tr',
   gl: 'TR',
   clientName: 'WEB_REMIX',
-  clientVersion: '1.20241001.00.00'
+  clientVersion: '1.20250801.00.00'
 };
 
 export interface Song {
@@ -23,6 +26,7 @@ export interface Song {
   duration: number;
   album?: string;
   albumId?: string;
+  isVideo?: boolean;
 }
 
 export interface Album {
@@ -93,6 +97,16 @@ export class YouTubeAPI {
     this.accessToken = token;
   }
 
+  private async getSessionCookies(): Promise<string> {
+    try {
+      const ses = session.fromPartition(MUSIC_PARTITION);
+      const cookies = await ses.cookies.get({ url: 'https://music.youtube.com' });
+      return cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+    } catch {
+      return '';
+    }
+  }
+
   private async request<T = Record<string, unknown>>(endpoint: string, body: Record<string, unknown>): Promise<T> {
     const payload = {
       context: {
@@ -114,10 +128,23 @@ export class YouTubeAPI {
       'Referer': 'https://music.youtube.com/'
     };
 
+    // Oturum açılmışsa session çerezlerini ve varsa token'ı ekle
+    try {
+      const cookieHeader = await this.getSessionCookies();
+      if (cookieHeader) {
+        headers['Cookie'] = cookieHeader;
+      }
+    } catch {}
+
+    if (this.accessToken) {
+      headers['Authorization'] = `Bearer ${this.accessToken}`;
+    }
+
     const res = await fetch(`${BASE_URL}/${endpoint}`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15000)
     });
 
     if (!res.ok) {
@@ -170,7 +197,12 @@ export class YouTubeAPI {
     let duration = 0;
     let album = this.text(col2);
 
-    // fixedColumns'dan süre oku (browse response'da süre burada: "2:39")
+    // DEBUG: parseSong alanlarını logla
+    const fixedLen = r.fixedColumns?.length || 0;
+    const flexLen = r.flexColumns?.length || 0;
+    console.log(`[parseSong] "${title}" | artist="${artist}" | album="${album}" | fixedCols=${fixedLen} | flexCols=${flexLen} | dur=${duration}`);
+
+    // fixedColumns veya flexColumns'dan süre oku
     if (r.fixedColumns?.length) {
       for (const fc of r.fixedColumns) {
         const fText = fc.musicResponsiveListItemFixedColumnRenderer?.text;
@@ -180,23 +212,40 @@ export class YouTubeAPI {
       }
     }
 
-    // Subtitle'dan süre ve sanatçıyı ayrıştır (search format: "Sanatçı • Albüm • 3:01")
-    if (!duration) {
-      const parts = artist.split('•').map((p: string) => p.trim());
-      if (parts.length >= 2) {
-        const lastPart = parts[parts.length - 1];
-        const durResult = this.duration(lastPart);
-        if (durResult > 0) {
-          duration = durResult;
-          artist = parts[0];
-          if (parts.length >= 3) album = parts[1];
-        } else {
-          artist = parts[0];
-          if (parts.length >= 2) album = parts[1];
+    if (!duration && r.flexColumns?.length) {
+      for (const fc of r.flexColumns) {
+        const fText = fc.musicResponsiveListItemFlexColumnRenderer?.text;
+        const fStr = this.text(fText);
+        if (/^\d+:\d{2}(:\d{2})?$/.test(fStr.trim())) {
+          duration = this.duration(fStr.trim());
+          if (duration > 0) break;
         }
       }
     }
 
+    // Subtitle'dan süre ve sanatçıyı ayrıştır
+    if (artist) {
+      const parts = artist.split(/[•·]/).map((p: string) => p.trim()).filter(Boolean);
+      if (parts.length >= 1) {
+        // Herhangi bir parça süre formatında mı? (örn: 3:24 veya 1:05:30)
+        const durIdx = parts.findIndex((p: string) => /^\d+:\d{2}(:\d{2})?$/.test(p));
+        if (durIdx !== -1) {
+          if (!duration) duration = this.duration(parts[durIdx]);
+          parts.splice(durIdx, 1);
+        }
+
+        // Kalan parçalardan "Video" veya "Şarkı" / "Song" / "Bölüm" filtreleme veya sanatçı belirleme
+        const nonMeta = parts.filter(p => !/^(video|şarkı|song|track|episode|bölüm|album|albüm)$/i.test(p) && !/\bgörüntüleme\b|\bviews\b/i.test(p));
+        if (nonMeta.length >= 1) {
+          artist = nonMeta[0];
+          if (nonMeta.length >= 2 && !album) album = nonMeta[1];
+        } else if (parts.length >= 1) {
+          artist = parts[0];
+        }
+      }
+    }
+
+    console.log(`[parseSong] FINAL: "${title}" dur=${duration}`);
     return {
       id: videoId,
       title,
@@ -220,27 +269,18 @@ export class YouTubeAPI {
     if (nav?.watchEndpoint?.videoId) {
       let duration = 0;
       let album = '';
-      // Subtitle'dan süre ve albüm ayrıştır: "Sanatçı • Album • 3:01" veya "Sanatçı • 3:01"
-      const parts = subtitle.split('•').map((p: string) => p.trim());
-      if (parts.length >= 2) {
-        const lastPart = parts[parts.length - 1];
-        const durMatch = lastPart.match(/^(\d+):(\d{2})$/);
-        if (durMatch) {
-          duration = parseInt(durMatch[1]) * 60 + parseInt(durMatch[2]);
-          // Albüm: süre hariç son eleman (eğer 3+ parça varsa)
-          if (parts.length >= 3) {
-            album = parts[parts.length - 2];
-          }
-        } else {
-          // Süre bulunamadı ama 2+ parça var → ortadaki albüm olabilir
-          if (parts.length >= 3) {
-            album = parts[parts.length - 2];
-          }
-        }
+      // Subtitle'dan süre ve albüm ayrıştır
+      const parts = subtitle.split(/[•·]/).map((p: string) => p.trim()).filter(Boolean);
+      const durIdx = parts.findIndex((p: string) => /^\d+:\d{2}(:\d{2})?$/.test(p));
+      if (durIdx !== -1) {
+        duration = this.duration(parts[durIdx]);
+        parts.splice(durIdx, 1);
       }
+      const nonMeta = parts.filter(p => !/^(video|şarkı|song|track|episode|bölüm|album|albüm)$/i.test(p) && !/\bgörüntüleme\b|\bviews\b/i.test(p));
+      const artist = nonMeta[0] || parts[0] || subtitle;
+      if (nonMeta.length >= 2) album = nonMeta[1];
       // shortBylineText'den artistId
       const artistId = r.shortBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId || '';
-      const artist = parts[0] || subtitle;
       return {
         id: nav.watchEndpoint.videoId,
         title,
@@ -279,7 +319,7 @@ export class YouTubeAPI {
     const browseId: string = nav?.browseEndpoint?.browseId || '';
     const videoId: string = nav?.watchEndpoint?.videoId || '';
     if (browseId.startsWith('MPRE')) {
-      results.albums.push({ browseId, title, artist: subtitle.split('•')[0]?.trim(), thumbnail: thumb });
+      results.albums.push({ browseId, title, artist: subtitle.split(/[•·]/)[0]?.trim(), thumbnail: thumb });
     } else if (browseId.startsWith('UC') || /sanatçı|artist/i.test(subtitle)) {
       if (browseId) results.artists.push({ browseId, name: title, thumbnail: thumb });
     } else if (/albüm|album/i.test(subtitle)) {
@@ -287,7 +327,7 @@ export class YouTubeAPI {
     } else if (/liste|playlist/i.test(subtitle)) {
       if (browseId) results.playlists.push({ browseId, title, thumbnail: thumb });
     } else if (videoId) {
-      results.songs.push({ id: videoId, title, artist: subtitle.split('•')[0]?.trim() || '', artistId: '', thumbnail: thumb, duration: 0 });
+      results.songs.push({ id: videoId, title, artist: subtitle.split(/[•·]/)[0]?.trim() || '', artistId: '', thumbnail: thumb, duration: 0 });
     }
   }
 
@@ -315,7 +355,7 @@ export class YouTubeAPI {
       const title = this.text(r.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text);
       const sub = this.text(r.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text);
       const thumb = this.thumb(r);
-      if (browseId.startsWith('MPRE')) results.albums.push({ browseId, title, artist: sub.split('•')[0]?.trim(), thumbnail: thumb });
+      if (browseId.startsWith('MPRE')) results.albums.push({ browseId, title, artist: sub.split(/[•·]/)[0]?.trim(), thumbnail: thumb });
       else if (browseId.startsWith('UC')) results.artists.push({ browseId, name: title, thumbnail: thumb });
       else if (/^(VL|PL|MPSP|MPED)/.test(browseId)) results.playlists.push({ browseId, title, thumbnail: thumb });
       return;
@@ -380,7 +420,10 @@ export class YouTubeAPI {
         for (const item of (shelf.contents || [])) {
           if (isVideoShelf) {
             const song = this.parseSong(item);
-            if (song) results.videos.push(song);
+            if (song) {
+              song.isVideo = true;
+              results.videos.push(song);
+            }
           } else {
             // Gözatma hedefli öğeler (liste/profil) kovalarına, çalınabilirler şarkılara
             this.bucketSearchItem(item, results);
@@ -566,10 +609,39 @@ export class YouTubeAPI {
     if (Array.isArray(contents)) {
       for (const section of contents) {
         const shelf = section.musicShelfRenderer || section.musicPlaylistShelfRenderer;
-        if (!shelf) continue;
-        for (const item of (shelf.contents || [])) {
-          const song = this.parseSong(item);
-          if (song) items.push(song);
+        if (shelf) {
+          for (const item of (shelf.contents || [])) {
+            const song = this.parseSong(item);
+            if (song) items.push(song);
+          }
+          continue;
+        }
+        // Sanatçı sayfaları: musicCarouselShelfRenderer içinde şarkılar + albümler
+        const carousel = section.musicCarouselShelfRenderer;
+        if (carousel) {
+          for (const item of (carousel.contents || [])) {
+            const parsed = this.parseTwoRow(item);
+            if (parsed && 'id' in parsed) items.push(parsed as Song);
+          }
+          continue;
+        }
+        // sectionListRenderer içindeki content'leri tara (üst üste binen format)
+        const inner = section.sectionListRenderer?.contents || [];
+        for (const sub of inner) {
+          const subShelf = sub.musicShelfRenderer || sub.musicPlaylistShelfRenderer;
+          if (subShelf) {
+            for (const item of (subShelf.contents || [])) {
+              const song = this.parseSong(item);
+              if (song) items.push(song);
+            }
+          }
+          const subCarousel = sub.musicCarouselShelfRenderer;
+          if (subCarousel) {
+            for (const item of (subCarousel.contents || [])) {
+              const parsed = this.parseTwoRow(item);
+              if (parsed && 'id' in parsed) items.push(parsed as Song);
+            }
+          }
         }
       }
     }
@@ -784,7 +856,7 @@ export class YouTubeAPI {
         if (songTitle) {
           const lrcUrl = `https://lrclib.net/api/get?track_name=${encodeURIComponent(songTitle)}&artist_name=${encodeURIComponent(songArtist)}`;
           const lrcRes = await fetch(lrcUrl, {
-            headers: { 'User-Agent': 'AqualityMusic/1.0.0 (https://github.com/aquality-music)' }
+            headers: { 'User-Agent': 'AqualityMusic/1.0.0 (https://github.com/mrcbrbn5361/Aquality-Music-App)' }
           });
           if (lrcRes.ok) {
             const lrcData: any = await lrcRes.json();
@@ -828,7 +900,19 @@ export class YouTubeAPI {
   }
 
   async getLikedSongs(): Promise<Song[]> {
-    const data = await this.request('browse', { browseId: 'VLPLAKBLuBWqGYwwzJL5VdKOlpkUeMn0jKZ' });
+    let targetBrowseId = 'LM'; // YouTube Music varsayılan Liked Music browseId'si
+    try {
+      // Dinamik: Library'den "Beğenilen müzik" playlist'ini bul
+      const playlists = await this.getLibraryPlaylists();
+      const liked = playlists.find((p: any) =>
+        /be[ğg]en(ilen|di[ğg]im)?\s*(müzik|şarkı)|liked\s*music/i.test(p.title)
+      );
+      if (liked && liked.browseId) {
+        targetBrowseId = liked.browseId;
+      }
+    } catch {}
+
+    const data = await this.request('browse', { browseId: targetBrowseId });
     const songs: Song[] = [];
     const contents = (data as any)?.contents?.singleColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents;
 

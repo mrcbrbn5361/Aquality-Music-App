@@ -57,14 +57,14 @@ export class DiscordRPC {
 
       const loginPromise = this.client.login({ clientId: appId });
 
-      // 8 sn timeout — Discord çalışmıyorsa takılmasın
+      // 3 sn timeout — Discord çalışmıyorsa açılışı geciktirmesin
       const timeoutPromise = new Promise<void>((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 8000)
+        setTimeout(() => reject(new Error('timeout')), 3000)
       );
 
       await Promise.race([Promise.all([connectPromise, loginPromise]), timeoutPromise]);
     } catch (err) {
-      console.log('[Discord] Rich Presence bağlanamadı (Discord açık olabilir)');
+      console.log('[Discord] Rich Presence bağlanamadı (Discord açık olmayabilir)');
       this.isConnected = false;
       try { this.client?.destroy(); } catch {}
       this.client = null;
@@ -95,34 +95,37 @@ export class DiscordRPC {
     if (!this.client || !this.isConnected) return;
 
     try {
+      // Discord IPC sınırı: details & state maks 128 karakter
+      const safeDetails = (data.details || '').slice(0, 128);
+      const safeState = (data.state || '').slice(0, 128);
+
       // Kapak çözümleme (ytmdesktop2 referans: RPC'de external http URL direkt denenir)
       const cover = (data.coverUrl || data.largeImageKey || '') as string;
       let largeImage: string | undefined;
       let largeText: string | undefined;
       if (cover && cover.startsWith('http')) {
-        largeImage = cover;
-        largeText = data.largeImageText || data.details || 'Aquality Music';
+        largeImage = cover.slice(0, 256);
+        largeText = (data.largeImageText || data.details || 'Aquality Music').slice(0, 128);
       } else if (typeof data.largeImageKey === 'string' && data.largeImageKey && data.largeImageKey !== '?') {
-        largeImage = data.largeImageKey;
-        largeText = data.largeImageText || 'Aquality Music';
+        largeImage = data.largeImageKey.slice(0, 256);
+        largeText = (data.largeImageText || 'Aquality Music').slice(0, 128);
       } else if (typeof data.coverUrl === 'string' && data.coverUrl) {
-        largeText = data.largeImageText || data.details || 'Aquality Music';
+        largeText = (data.largeImageText || data.details || 'Aquality Music').slice(0, 128);
       }
 
       const assets: Record<string, string> = {};
       if (largeImage) assets.large_image = largeImage;
       if (largeText) assets.large_text = largeText;
       if (typeof data.smallImageKey === 'string' && data.smallImageKey && !data.smallImageKey.startsWith('http')) {
-        assets.small_image = data.smallImageKey;
-        assets.small_text = data.smallImageText || '';
+        assets.small_image = data.smallImageKey.slice(0, 256);
+        assets.small_text = (data.smallImageText || '').slice(0, 128);
       }
 
       const activity: Record<string, unknown> = {
         // 2 = Listening → "Oynuyor" yerine "Dinliyor".
-        // NOT: npm discord-rpc'nin setActivity'si type'ı çöpe attığı için ham gönderilir.
         type: data.type ?? 2,
-        details: data.details,
-        state: data.state || undefined,
+        details: safeDetails,
+        state: safeState || undefined,
         instance: false
       };
       if (typeof data.startTimestamp === 'number' || typeof data.endTimestamp === 'number') {
@@ -133,7 +136,7 @@ export class DiscordRPC {
       }
       if (Object.keys(assets).length > 0) activity.assets = assets;
       if (data.buttons && data.buttons.length > 0) {
-        activity.buttons = data.buttons.map((b) => ({ label: b.label, url: b.url }));
+        activity.buttons = data.buttons.slice(0, 2).map((b) => ({ label: (b.label || '').slice(0, 32), url: b.url }));
       }
 
       try {
@@ -142,8 +145,8 @@ export class DiscordRPC {
         // Discord type'ı reddederse klasik yola düş (Oynuyor görünür ama çalışmaya devam eder)
         console.error('[Discord] Ham activity reddedildi, klasik yola dönülüyor:', rawErr?.message || rawErr);
         await this.client.setActivity({
-          details: data.details,
-          state: data.state,
+          details: safeDetails,
+          state: safeState,
           largeImageKey: largeImage,
           largeImageText: largeText,
           smallImageKey: data.smallImageKey,
@@ -151,7 +154,7 @@ export class DiscordRPC {
           startTimestamp: data.startTimestamp,
           endTimestamp: data.endTimestamp,
           instance: false,
-          buttons: data.buttons
+          buttons: data.buttons?.slice(0, 2).map((b) => ({ label: (b.label || '').slice(0, 32), url: b.url }))
         } as any);
       }
     } catch (err) {
@@ -163,7 +166,7 @@ export class DiscordRPC {
     if (!this.client || !this.isConnected) return;
 
     try {
-      this.client.clearActivity();
+      await this.client.clearActivity();
     } catch (err) {
       console.error('[Discord] Activity temizlenemedi:', err);
     }

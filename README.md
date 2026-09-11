@@ -2,12 +2,12 @@
 
 **⚠️ WORK IN PROGRESS - β Sürüm**
 
-**Premium music streaming experience for Windows 11**
+**Premium music streaming experience for Windows & macOS**
 
 <sub>Proje henüz tamamlama aşamasında. Beklenmedik davranışlar, eksik özellikler veya hatalar olabilir. Katkılar ve özelleştirmeler memmunedir.</sub>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/aquality-music/aquality-music-app/blob/main/LICENSE)
-[![Version: 1.0.0](https://img.shields.io/badge/Version-1.0.0-blue.svg)](https://github.com/aquality-music/aquality-music-app/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/mrcbrbn5361/Aquality-Music-App/blob/main/LICENSE)
+[![Version: 1.0.0](https://img.shields.io/badge/Version-1.0.0-blue.svg)](https://github.com/mrcbrbn5361/Aquality-Music-App/)
 
 ## Overview
 
@@ -88,6 +88,9 @@ npm run build:installer
 
 # Build portable version
 npm run build:portable
+
+# Build macOS app (.dmg & .zip)
+npm run build:mac
 ```
 
 ## Development
@@ -100,7 +103,8 @@ npm run build:portable
 | `npm run build` | Build Electron app |
 | `npm run build:website` | Build static website |
 | `npm run build:installer` | Build NSIS installer |
-| `npm run build:win` | Build Windows installer |
+| `npm run build:win` | Build Windows installer & portable (.exe) |
+| `npm run build:mac` | Build macOS application (.dmg & .zip) |
 | `npm run typecheck` | Run TypeScript type checking |
 
 ### Adding New Features
@@ -137,12 +141,12 @@ Bu proje açık kaynaklı olup, kişisel kullanım, fork'lenme ve özelleştirme
 - `website/` klasöründeki HTML/CSS sayfaları kendi taramanız için uyarlanabilir
 - `package.json` workspace'lar ve script'ler projenizin ihtiyaçlarına göre yeniden yapılandırılabilir
 
-Projeye katkıda bulunmak veya bug raporu vermek için [GitHub Issues](https://github.com/aquality-music/aquality-music-app/issues) sayfasına göz atabilirsiniz.
+Projeye katkıda bulunmak veya bug raporu vermek için [GitHub Issues](https://github.com/mrcbrbn5361/Aquality-Music-App/issues) sayfasına göz atabilirsiniz.
 
 <sub>Bu README, projenin "WORK IN PROGRESS" olarak işaretlenmesi amacıyla güncellenmiştir. Proje henüz tam olarak test edilmemiş ve tüm özelliklerinin eksik olabileceği bir aşamada bulunuyor.</sub>
 
 ## Contact
 
-- GitHub: [https://github.com/aquality-music/aquality-music-app](https://github.com/aquality-music/aquality-music-app)
-- Issues: [https://github.com/aquality-music/aquality-music-app/issues](https://github.com/aquality-music/aquality-music-app/issues)
+- GitHub: [https://github.com/mrcbrbn5361/Aquality-Music-App](https://github.com/mrcbrbn5361/Aquality-Music-App)
+- Issues: [https://github.com/mrcbrbn5361/Aquality-Music-App/issues](https://github.com/mrcbrbn5361/Aquality-Music-App/issues)
 - Discord: [https://discord.gg/aquality](https://discord.gg/aquality)

@@ -1,8 +1,13 @@
-import { BrowserWindow, session } from 'electron';
+import { BrowserWindow, shell } from 'electron';
+import * as crypto from 'crypto';
 import * as http from 'http';
 import { URL } from 'url';
 import Store from 'electron-store';
 import { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } from './google-credentials';
+
+function base64url(buf: Buffer): string {
+  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
 
 interface OAuthTokens {
   access_token: string;
@@ -74,20 +79,25 @@ export class GoogleOAuth {
   }
 
   // ── Google Login ─────────────────────────────
-  async loginGoogle(parentWindow: BrowserWindow, clientId: string, clientSecret: string): Promise<{ success: boolean; user?: UserData; error?: string }> {
+  async loginGoogle(_parentWindow: BrowserWindow, clientId: string, clientSecret: string): Promise<{ success: boolean; user?: UserData; error?: string }> {
     if (!clientId || !clientSecret) {
       return { success: false, error: 'Google Client ID ve Secret girilmemiş. Ayarlar\'dan girin.' };
     }
 
     return new Promise((resolve) => {
       let server: http.Server;
-      let authWindow: BrowserWindow | null = null;
       let callbackHandled = false;
+      let timeoutTimer: NodeJS.Timeout | null = null;
+
+      // PKCE ve CSRF State
+      const verifier = base64url(crypto.randomBytes(64));
+      const challenge = base64url(crypto.createHash('sha256').update(verifier).digest());
+      const expectedState = crypto.randomBytes(32).toString('hex');
 
       const cleanup = () => {
-        if (authWindow && !authWindow.isDestroyed()) {
-          authWindow.close();
-          authWindow = null;
+        if (timeoutTimer) {
+          clearTimeout(timeoutTimer);
+          timeoutTimer = null;
         }
         if (server) {
           try { server.close(); } catch {}
@@ -108,9 +118,25 @@ export class GoogleOAuth {
         callbackHandled = true;
 
         const code = url.searchParams.get('code');
+        const state = url.searchParams.get('state');
         const error = url.searchParams.get('error');
 
         console.log('[Google OAuth] Callback received, code:', code ? 'var' : 'yok', 'error:', error);
+
+        if (state !== expectedState) {
+          res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(`
+            <html><body style="font-family:sans-serif;background:#121212;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
+              <div style="text-align:center">
+                <h1 style="color:#e8364e">Güvenlik Doğrulama Hatası</h1>
+                <p>CSRF state parametresi eşleşmedi.</p>
+              </div>
+            </body></html>
+          `);
+          cleanup();
+          resolve({ success: false, error: 'CSRF state doğrulaması başarısız' });
+          return;
+        }
 
         if (error || !code) {
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -118,8 +144,8 @@ export class GoogleOAuth {
             <html><body style="font-family:sans-serif;background:#121212;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
               <div style="text-align:center">
                 <h1 style="color:#e8364e">Giriş başarısız</h1>
-                <p>${error === 'access_denied' ? 'Giriş iptal edildi.' : error || 'Kod alınamadı'}</p>
-                <p style="color:#666;font-size:12px;margin-top:16px">Bu pencereyi kapatabilirsiniz.</p>
+                <p>${error === 'access_denied' ? 'Giriş iptal edildi.' : 'Kod alınamadı'}</p>
+                <p style="color:#666;font-size:12px;margin-top:16px">Bu sekmeyi kapatabilirsiniz.</p>
               </div>
             </body></html>
           `);
@@ -139,15 +165,20 @@ export class GoogleOAuth {
               client_id: clientId,
               client_secret: clientSecret,
               redirect_uri: `http://127.0.0.1:${(server.address() as any).port}/callback`,
-              grant_type: 'authorization_code'
+              grant_type: 'authorization_code',
+              code_verifier: verifier
             }).toString()
           });
 
           const tokenData = await tokenRes.json() as any;
           console.log('[Google OAuth] Token response:', tokenRes.status, tokenData.error || 'ok');
 
-          if (!tokenRes.ok || tokenData.error) {
+          if (!tokenRes.ok || tokenData.error || !tokenData.access_token) {
             throw new Error(tokenData.error_description || tokenData.error || 'Token exchange başarısız');
+          }
+
+          if (!tokenData.expires_in) {
+            throw new Error('Token süresi alınamadı');
           }
 
           const tokens: OAuthTokens = {
@@ -163,6 +194,9 @@ export class GoogleOAuth {
           const userRes = await fetch(GOOGLE_USERINFO_URL, {
             headers: { Authorization: `Bearer ${tokens.access_token}` }
           });
+          if (!userRes.ok) {
+            throw new Error('Kullanıcı bilgisi alınamadı');
+          }
           const userData = await userRes.json() as any;
           console.log('[Google OAuth] User:', userData.name, userData.email);
 
@@ -182,7 +216,7 @@ export class GoogleOAuth {
               <div style="text-align:center">
                 <h1 style="color:#2ecc71">Giriş başarılı!</h1>
                 <p>${user.name} olarak giriş yapıldı.</p>
-                <p style="color:#666;font-size:12px;margin-top:16px">Bu pencere otomatik kapanacak...</p>
+                <p style="color:#a0a0a0;font-size:14px;margin-top:16px">Bu sekmeyi kapatıp Aquality Music uygulamasına dönebilirsiniz.</p>
               </div>
             </body></html>
           `);
@@ -196,8 +230,8 @@ export class GoogleOAuth {
             <html><body style="font-family:sans-serif;background:#121212;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
               <div style="text-align:center">
                 <h1 style="color:#e8364e">Hata</h1>
-                <p>${err.message}</p>
-                <p style="color:#666;font-size:12px;margin-top:16px">Bu pencere otomatik kapanacak...</p>
+                <p>Giriş sırasında bir hata oluştu: ${err.message}</p>
+                <p style="color:#666;font-size:12px;margin-top:16px">Bu sekmeyi kapatabilirsiniz.</p>
               </div>
             </body></html>
           `);
@@ -220,94 +254,23 @@ export class GoogleOAuth {
           response_type: 'code',
           scope: GOOGLE_SCOPES.join(' '),
           access_type: 'offline',
-          prompt: 'consent'
+          prompt: 'consent',
+          code_challenge: challenge,
+          code_challenge_method: 'S256',
+          state: expectedState
         }).toString()}`;
 
-        authWindow = new BrowserWindow({
-          width: 500,
-          height: 700,
-          parent: parentWindow,
-          modal: true,
-          title: 'Google ile Giriş Yap',
-          backgroundColor: '#0a0a0a',
-          webPreferences: { nodeIntegration: false, contextIsolation: true },
-          autoHideMenuBar: true
-        });
+        // Google'ın disallowed_useragent engelini aşmak için sistem varsayılan tarayıcısını aç
+        shell.openExternal(authUrl);
 
-        authWindow.loadURL(authUrl);
-
-        // Navigate event ile yakala
-        authWindow.webContents.on('did-navigate', (_, navUrl) => {
-          console.log('[Google OAuth] Navigate:', navUrl.substring(0, 80));
-          if (navUrl.startsWith('http://127.0.0.1:')) {
-            const navUrlObj = new URL(navUrl);
-            const navCode = navUrlObj.searchParams.get('code');
-            const navError = navUrlObj.searchParams.get('error');
-
-            if (callbackHandled) return;
-            callbackHandled = true;
-
-            if (navError || !navCode) {
-              cleanup();
-              resolve({ success: false, error: navError || 'Kod alınamadı' });
-              return;
-            }
-
-            // Token exchange manually
-            fetch(GOOGLE_TOKEN_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: new URLSearchParams({
-                code: navCode,
-                client_id: clientId,
-                client_secret: clientSecret,
-                redirect_uri: redirectUri,
-                grant_type: 'authorization_code'
-              }).toString()
-            })
-            .then(r => r.json())
-            .then(async (tokenData: any) => {
-              console.log('[Google OAuth] Token:', tokenData.error || 'ok');
-              if (tokenData.error) throw new Error(tokenData.error);
-
-              const tokens: OAuthTokens = {
-                access_token: tokenData.access_token,
-                refresh_token: tokenData.refresh_token,
-                expires_at: Date.now() + (tokenData.expires_in * 1000),
-                token_type: tokenData.token_type
-              };
-              this.store.set('googleTokens', tokens);
-
-              const userRes = await fetch(GOOGLE_USERINFO_URL, {
-                headers: { Authorization: `Bearer ${tokens.access_token}` }
-              });
-              const ud = await userRes.json() as any;
-              const user: UserData = { id: ud.id, name: ud.name, email: ud.email, picture: ud.picture || '', provider: 'google' };
-              this.store.set('googleUser', user);
-              console.log('[Google OAuth] Başarılı:', user.name);
-              cleanup();
-              resolve({ success: true, user });
-            })
-            .catch((err) => {
-              console.error('[Google OAuth] Token hatası:', err.message);
-              cleanup();
-              resolve({ success: false, error: err.message });
-            });
-          }
-        });
-
-        authWindow.webContents.on('will-redirect', (_, navUrl) => {
-          console.log('[Google OAuth] will-redirect:', navUrl.substring(0, 80));
-        });
-
-        authWindow.on('closed', () => {
-          authWindow = null;
+        // 5 dakika zaman aşımı
+        timeoutTimer = setTimeout(() => {
           if (!callbackHandled) {
             callbackHandled = true;
             cleanup();
-            resolve({ success: false, error: 'Pencere kapatıldı' });
+            resolve({ success: false, error: 'Giriş zaman aşımına uğradı (5 dakika).' });
           }
-        });
+        }, 300000);
       });
 
       server.on('error', (err) => {

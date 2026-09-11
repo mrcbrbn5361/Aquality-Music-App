@@ -1,29 +1,38 @@
 {
   "name": "aquality-music-app",
   "version": "1.0.0",
-  "description": "Aquality Music - Premium music streaming experience for your desktop",
+  "description": "Aquality Music - Premium music streaming experience for Windows & macOS",
   "private": true,
   "workspaces": [
     "desktop",
-    "website"
+    "website",
+    "mobile"
   ],
   "scripts": {
+    "predev": "node scripts/update-status.cjs",
     "dev": "npm run dev --workspace=desktop",
+    "dev:mobile": "npm run start --workspace=mobile",
+    "prebuild": "node scripts/update-status.cjs",
     "build": "npm run build --workspace=desktop",
     "build:website": "npm run build --workspace=website",
     "build:installer": "npm run build:installer --workspace=desktop",
-    "build:win": "npm run build:win --workspace=desktop"
+    "build:portable": "npm run build:portable --workspace=desktop",
+    "build:win": "npm run build:win --workspace=desktop",
+    "build:mac": "npm run build:mac --workspace=desktop",
+    "status:update": "node scripts/update-docs.cjs",
+    "docs:update": "node scripts/update-docs.cjs",
+    "postinstall": "node scripts/update-docs.cjs"
   },
   "author": "Aquality Music Team",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/aquality-music/aquality-music-app"
+    "url": "https://github.com/mrcbrbn5361/Aquality-Music-App.git"
   },
   "devDependencies": {
     "7zip-bin": "^5.2.0",
     "electron-builder": "^24.9.1",
-    "typescript": "^7.0.2"
+    "typescript": "^5.3.3"
   },
   "dependencies": {
     "discord-rpc": "^4.0.1"

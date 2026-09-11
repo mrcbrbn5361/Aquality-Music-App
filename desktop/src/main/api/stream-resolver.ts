@@ -9,7 +9,7 @@ import { MUSIC_PARTITION, CHROME_UA } from '../auth/music-auth';
 const WATCH_URL = 'https://music.youtube.com/watch?v=';
 const POLL_MS = 800;
 
-// Reklam/takipçi domainleri — ağ seviyesinde iptal edilir (oynatma/APi etkilenmez)
+// Reklam/takipçi domainleri — ağ seviyesinde iptal edilir (oynatma/API etkilenmez)
 const AD_BLOCK_PATTERNS = [
   '*://*.doubleclick.net/*',
   '*://*.googleadservices.com/*',
@@ -22,11 +22,114 @@ const AD_BLOCK_PATTERNS = [
   '*://*.youtube.com/pagead/*',
   '*://music.youtube.com/pagead/*',
   '*://*.youtube.com/api/stats/ads*',
-  '*://*.google.com/pagead/*'
+  '*://*.youtube.com/api/stats/qoe*adformat*',
+  '*://*.youtube.com/api/stats/atr*',
+  '*://*.youtube.com/get_midroll_info*',
+  '*://*.youtube.com/ptracking*',
+  '*://static.doubleclick.net/*',
+  '*://pagead2.googlesyndication.com/*',
+  '*://ad.doubleclick.net/*',
+  '*://*.google.com/pagead/*',
+  '*://*.youtube.com/youtubei/v1/att/get*'
 ];
 
-// Gizli pencerede reklam overlay'lerini gizle (yedek katman)
-const ADHIDE_CSS = '.ytp-ad-player-overlay,.ytp-ad-text,.ytp-ad-skip-button-container,.ytp-ad-message-container,.ytp-ad-image-overlay,#player-ads,.ytp-ad-module,.ytp-ad-overlay-container{display:none!important}';
+// Gizli pencerede reklam overlay'lerini ve promosyon pencerelerini gizle
+const ADHIDE_CSS = `
+  .ytp-ad-player-overlay,
+  .ytp-ad-text,
+  .ytp-ad-skip-button-container,
+  .ytp-ad-message-container,
+  .ytp-ad-image-overlay,
+  #player-ads,
+  .ytp-ad-module,
+  .ytp-ad-overlay-container,
+  ytmusic-mealbar-promo-renderer,
+  ytmusic-upsell-dialog-renderer,
+  .mealbar-promo-renderer,
+  ytmusic-statement-banner-renderer {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+`;
+
+// YouTube Music AdBlocker: /youtubei/v1/player JSON cevabındaki adPlacements'i silerek reklamsız müzik sağlar
+const ADBLOCK_INJECTION_JS = `(() => {
+  try {
+    if (window.__aquality_adblock_active) return;
+    window.__aquality_adblock_active = true;
+
+    const cleanPlayerResponse = (data) => {
+      if (!data || typeof data !== 'object') return;
+      try {
+        if (data.adPlacements) delete data.adPlacements;
+        if (data.playerAds) delete data.playerAds;
+        if (data.adSlots) delete data.adSlots;
+      } catch {}
+    };
+
+    if (window.ytInitialPlayerResponse) {
+      cleanPlayerResponse(window.ytInitialPlayerResponse);
+    }
+    let _origInit = window.ytInitialPlayerResponse;
+    Object.defineProperty(window, 'ytInitialPlayerResponse', {
+      get() { return _origInit; },
+      set(v) { cleanPlayerResponse(v); _origInit = v; },
+      configurable: true
+    });
+
+    // Fetch API üzerinden gelen reklam verilerini filtrele
+    const origFetch = window.fetch;
+    window.fetch = async function(...args) {
+      const response = await origFetch.apply(this, args);
+      try {
+        const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url ? args[0].url : '');
+        if (url && (url.includes('/youtubei/v1/player') || url.includes('/youtubei/v1/next'))) {
+          const clone = response.clone();
+          const json = await clone.json();
+          cleanPlayerResponse(json);
+          return new Response(JSON.stringify(json), {
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers
+          });
+        }
+      } catch {}
+      return response;
+    };
+
+    // Reklam butonlarını ve reklam video süresini anında geçme nöbetçisi
+    setInterval(() => {
+      try {
+        const mp = document.getElementById('movie_player');
+        if (mp && typeof mp.skipAd === 'function') {
+          try { mp.skipAd(); } catch {}
+        }
+        const sel = [
+          '.ytp-ad-skip-button',
+          '.ytp-ad-skip-button-modern',
+          '.ytp-skip-ad-button',
+          '.ytp-ad-skip-button-slot button',
+          'button.ytp-ad-skip-button'
+        ];
+        for (const s of sel) {
+          for (const b of document.querySelectorAll(s)) {
+            try { b.click(); } catch {}
+          }
+        }
+        const isAd = (mp && typeof mp.getAdState === 'function' && mp.getAdState() === 1)
+          || (mp && mp.classList && (mp.classList.contains('ad-showing') || mp.classList.contains('ad-interrupting')));
+        if (isAd) {
+          const v = document.querySelector('video');
+          if (v && v.duration && !isNaN(v.duration) && v.duration > 0) {
+            v.muted = true;
+            v.currentTime = v.duration;
+          }
+        }
+      } catch {}
+    }, 250);
+  } catch (e) {}
+})();`;
 
 interface PlaybackUpdate {
   videoId: string;
@@ -54,10 +157,14 @@ const RESOLVE_MEDIA_JS = `(() => {
       let mp = null;
       try { mp = document.getElementById('movie_player'); } catch {}
       if (!mp) {
-        const walk = (root) => {
+        try { mp = document.querySelector('ytmusic-player-bar')?.querySelector('#movie_player') || document.querySelector('ytmusic-player #movie_player'); } catch {}
+      }
+      if (!mp) {
+        const walk = (root, depth = 0) => {
+          if (depth > 4) return null;
           try { const m = root.getElementById('movie_player'); if (m) return m; } catch {}
-          for (const el of root.querySelectorAll('*')) {
-            if (el.shadowRoot) { const r = walk(el.shadowRoot); if (r) return r; }
+          for (const el of root.children || []) {
+            if (el.shadowRoot) { const r = walk(el.shadowRoot, depth + 1); if (r) return r; }
           }
           return null;
         };
@@ -85,7 +192,70 @@ const RESOLVE_MEDIA_JS = `(() => {
         const el = mp.querySelector('video') || mp.querySelector('audio');
         if (el) src = el.currentSrc || el.src || '';
       } catch {}
-      const vid = (vd && vd.video_id) || '';
+
+      // Video ID: URL birincil kaynak (autoplay geçişlerinde getVideoData eski ID döndürebilir)
+      let urlVid = '';
+      try { urlVid = new URLSearchParams(window.location.search).get('v') || ''; } catch {}
+      const apiVid = (vd && vd.video_id) || '';
+      const vid = urlVid || apiVid;
+
+      // Başlık ve sanatçı: çok katmanlı fallback
+      // 1. getVideoData() (ama stale olabilir — apiVid ile urlVid eşleşiyorsa güvenilir)
+      let title = '';
+      let artist = '';
+      const apiDataFresh = !urlVid || !apiVid || urlVid === apiVid;
+      if (apiDataFresh && vd) {
+        title = vd.title || '';
+        artist = vd.author || '';
+      }
+
+      // 2. document.title parse (YT Music her zaman güncel tutar)
+      if (!title) {
+        try {
+          const dt = (document.title || '').trim();
+          // Format: "Şarkı Adı - Sanatçı - YouTube Music" veya "Şarkı • Sanatçı • Albüm - YouTube Music"
+          let cleaned = dt.replace(/\\s*[|\\-–]\\s*YouTube Music\\s*$/i, '').trim();
+          if (cleaned && cleaned !== 'YouTube Music') {
+            const dashIdx = cleaned.indexOf(' - ');
+            if (dashIdx > 0 && dashIdx < cleaned.length - 3) {
+              // "Sanatçı - Şarkı" veya "Şarkı - Sanatçı" formatı
+              // YouTube Music genellikle: "Şarkı - Sanatçı"
+              const beforeDash = cleaned.substring(0, dashIdx).trim();
+              const afterDash = cleaned.substring(dashIdx + 3).trim();
+              // Sondaki kanal/albüm/izlenme bilgisini temizle
+              const afterParts = afterDash.split(/\\s*[|,•·]\\s*/);
+              title = beforeDash;
+              if (!artist) artist = afterParts[0] || '';
+            } else {
+              const parts = cleaned.split(/\\s*[•·]\\s*/).filter(Boolean);
+              if (parts.length >= 2) {
+                title = parts[0];
+                if (!artist) artist = parts[1];
+              } else {
+                title = cleaned;
+              }
+            }
+          }
+        } catch {}
+      }
+
+      // 3. ytmusic-player-bar DOM (en son başvuru)
+      if (!title || !artist) {
+        try {
+          const pb = document.querySelector('ytmusic-player-bar');
+          if (pb) {
+            const tEl = pb.querySelector('.title, .byline + .title');
+            const bEl = pb.querySelector('.byline');
+            if (!title && tEl) title = (tEl.textContent || '').trim();
+            if (!artist && bEl) {
+              const t = (bEl.textContent || '').trim();
+              const parts = t.split(/[•·]/).map((s) => s.trim());
+              artist = parts[0] || t;
+            }
+          }
+        } catch {}
+      }
+
       return {
         ok: true, via: 'api',
         currentTime: cur || 0,
@@ -94,8 +264,8 @@ const RESOLVE_MEDIA_JS = `(() => {
         playerState: pstate,
         isAd,
         src,
-        title: (vd && vd.title) || '',
-        artist: (vd && vd.author) || '',
+        title,
+        artist,
         thumbnail: vid ? ('https://i.ytimg.com/vi/' + vid + '/hqdefault.jpg') : '',
         videoId: vid
       };
@@ -136,7 +306,7 @@ const RESOLVE_MEDIA_JS = `(() => {
       if (tEl) title = (tEl.textContent || '').trim();
       if (bEl) {
         const t = (bEl.textContent || '').trim();
-        const parts = t.split('•').map((s) => s.trim());
+        const parts = t.split(/[•·]/).map((s) => s.trim());
         artist = parts[0] || t;
       }
       if (imgEl) thumbnail = imgEl.currentSrc || imgEl.src || '';
@@ -171,13 +341,35 @@ const RESOLVE_MEDIA_JS = `(() => {
         title = parts[0];
       }
     }
-    // Thumbnail yedek: video element'in poster'ı veya i.ytimg.com
     if (!thumbnail && el.poster) thumbnail = el.poster;
     if (!thumbnail) {
-      // YouTube watch sayfasının og:image meta tag'ı genelde thumbnail'ı içerir
       const ogImg = document.querySelector('meta[property="og:image"]');
       if (ogImg && ogImg.content) thumbnail = ogImg.content;
     }
+
+    let fallbackVid = '';
+    try {
+      const u = new URL(location.href);
+      fallbackVid = u.searchParams.get('v') || '';
+    } catch {}
+
+    let isVideo = false;
+    try {
+      const toggle = document.querySelector('#song-video-toggle');
+      if (toggle) {
+        const activeBtn = toggle.querySelector('[aria-selected="true"], .selected, [active]');
+        if (activeBtn && /video/i.test(activeBtn.textContent || activeBtn.getAttribute('aria-label') || '')) {
+          isVideo = true;
+        }
+      }
+      const playerPage = document.querySelector('ytmusic-player-page, #player-page, ytmusic-player');
+      if (playerPage && (playerPage.hasAttribute('video-mode_') || playerPage.classList.contains('video-mode'))) {
+        isVideo = true;
+      }
+      if (el.videoWidth > 0 && el.videoHeight > 0 && Math.abs(el.videoWidth - el.videoHeight) > 40) {
+        isVideo = true;
+      }
+    } catch {}
 
     return {
       ok: true,
@@ -188,7 +380,9 @@ const RESOLVE_MEDIA_JS = `(() => {
       src: el.currentSrc || el.src || '',
       title,
       artist,
-      thumbnail
+      thumbnail,
+      videoId: fallbackVid,
+      isVideo
     };
   } catch (e) { return { ok: false, err: String(e) }; }
 })()`;
@@ -199,7 +393,7 @@ export class StreamResolver {
   private currentVideoId = '';
   private pollTimer: any = null;
   private listeners: Set<UpdateListener> = new Set();
-  private volume = 0.8;
+  private volume = 0.5;
   private _loggedNoMedia = false;
   // YT Music bazen otomatik resume ediyor — kullanıcı isteğini hatırla
   private userWantsPaused = false;
@@ -208,6 +402,7 @@ export class StreamResolver {
   private _adPosition = 0;
   private _wasAd = false;
   private _destroyed = false;
+  private adCssHookedWindows = new WeakSet<BrowserWindow>();
 
   constructor() {
     this.installAdblock();
@@ -242,22 +437,26 @@ export class StreamResolver {
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
-        autoplayPolicy: 'no-user-gesture-required',
-        additionalArguments: ['--disable-gpu', '--disable-gpu-compositing']
+        autoplayPolicy: 'no-user-gesture-required'
       }
     });
     this.win.webContents.setAudioMuted(false);
     this.win.webContents.setUserAgent(CHROME_UA);
     this.win.webContents.on('before-input-event', (e) => e.preventDefault());
-    // Reklam overlay CSS'i (pencere başına bir kez)
-    if (!(this.win as any).__adCssHooked) {
-      (this.win as any).__adCssHooked = true;
+    // Reklam engelleme CSS ve Script enjeksiyonu (pencere başına bir kez hook)
+    if (!this.adCssHookedWindows.has(this.win)) {
+      this.adCssHookedWindows.add(this.win);
+      this.win.webContents.on('did-start-navigation', () => {
+        try { this.win?.webContents.executeJavaScript(ADBLOCK_INJECTION_JS, true).catch(() => {}); } catch {}
+      });
       this.win.webContents.on('dom-ready', () => {
         try { this.win?.webContents.insertCSS(ADHIDE_CSS).catch(() => {}); } catch {}
+        try { this.win?.webContents.executeJavaScript(ADBLOCK_INJECTION_JS, true).catch(() => {}); } catch {}
       });
     }
     // Yükleme bitince metadata çekmeyi dene
     this.win.webContents.on('did-finish-load', () => {
+      try { this.win?.webContents.executeJavaScript(ADBLOCK_INJECTION_JS, true).catch(() => {}); } catch {}
       setTimeout(() => this.pollOnce(), 500);
     });
     // İlk yükleme: ana sayfa
@@ -291,24 +490,32 @@ export class StreamResolver {
   }
 
   // Reklam başladı: kullanıcı hiçbir şey duymadan/görmeden geç
+  // Reklam başladı: kullanıcı hiçbir şey duymadan sessize al ve güvenle atla
   private onAdStart(): void {
     try { this.win?.webContents.setAudioMuted(true); } catch {}
-    // Atlama butonu varsa tıkla, yoksa sona sar + 16x hızlandır
     this.skipAd().catch(() => {});
-    try {
-      this.win?.webContents.executeJavaScript(
-        `(() => { try { const v = document.querySelector('video'); if (v) v.playbackRate = 16; } catch {} try { const mp = document.getElementById('movie_player'); if (mp && mp.setPlaybackRate) mp.setPlaybackRate(16); } catch {} return true; })()`,
-        true
-      ).catch(() => {});
-    } catch {}
   }
 
-  // Reklam bitti: sesi ve hızı normale döndür
+  // Reklam bitti: sesi aç ve oynatma hızını kesin olarak 1x yap
   private onAdEnd(): void {
     try { this.win?.webContents.setAudioMuted(false); } catch {}
+    this.execCmd('volume', String(this.volume)).catch(() => {});
     try {
       this.win?.webContents.executeJavaScript(
-        `(() => { try { const v = document.querySelector('video'); if (v && v.playbackRate !== 1) v.playbackRate = 1; } catch {} try { const mp = document.getElementById('movie_player'); if (mp && mp.setPlaybackRate) mp.setPlaybackRate(1); } catch {} return true; })()`,
+        `(() => {
+          try {
+            const v = document.querySelector('video');
+            if (v) {
+              v.playbackRate = 1;
+              v.muted = false;
+            }
+            const mp = document.getElementById('movie_player');
+            if (mp && typeof mp.setPlaybackRate === 'function') {
+              mp.setPlaybackRate(1);
+            }
+          } catch {}
+          return true;
+        })()`,
         true
       ).catch(() => {});
     } catch {}
@@ -385,7 +592,7 @@ export class StreamResolver {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36'
         },
         body: JSON.stringify({
-          context: { client: { hl: 'tr', gl: 'TR', clientName: 'WEB_REMIX', clientVersion: '1.20241001.00.00' } }
+          context: { client: { hl: 'tr', gl: 'TR', clientName: 'WEB_REMIX', clientVersion: '1.20250801.00.00' } }
         })
       });
       if (!res.ok) {
@@ -464,9 +671,20 @@ export class StreamResolver {
     if (!videoId) return;
     this.currentVideoId = videoId;
     this.userWantsPaused = false;
+    if (this._pauseEnforceInterval) { clearInterval(this._pauseEnforceInterval); this._pauseEnforceInterval = null; }
     let win: BrowserWindow;
     try {
       win = this.ensureWindow();
+      // Yeni şarkı yüklenirken eski şarkıyı duraklat ve sesini kıs
+      try {
+        await win.webContents.executeJavaScript(`(() => {
+          try {
+            const mp = document.getElementById('movie_player');
+            if (mp && typeof mp.pauseVideo === 'function') mp.pauseVideo();
+            for (const v of document.querySelectorAll('video, audio')) { v.pause(); }
+          } catch {}
+        })()`, true).catch(() => {});
+      } catch {}
     } catch {
       return;
     }
@@ -483,6 +701,9 @@ export class StreamResolver {
       }
     }
     if (!loaded) return;
+    try { await win.webContents.executeJavaScript(ADBLOCK_INJECTION_JS, true).catch(() => {}); } catch {}
+    // Ses seviyesini sayfa yüklenir yüklenmez YouTube Music'e uygula (Chromium'un %100 varsayılanını engelle)
+    await this.execCmd('volume', String(this.volume)).catch(() => {});
     this.startPolling();
     // İlk birkaç saniye boyunca play tetikle (autoplay bazen bloklanır)
     // Ama video zaten oynuyorsa (state=1) hemen dur
@@ -492,6 +713,8 @@ export class StreamResolver {
       // Araya daha yeni bir play girdiyse eski şarkıyı kurcalama (kuyruk çakışması)
       if (this.currentVideoId !== videoId || gen !== this.playGen) return;
       if (this.userWantsPaused) break;
+      // Sesi her kontrolde tekrar garantiye al
+      await this.execCmd('volume', String(this.volume)).catch(() => {});
       try {
         const alreadyPlaying = await win.webContents.executeJavaScript(
           `(() => {
@@ -696,25 +919,72 @@ export class StreamResolver {
     } catch {}
   }
 
-  // Reklamı atla — buton varsa tıkla, yoksa sona sar + hızlandır (durdurmadan)
+  // Reklamı atla — buton varsa tıkla, yalnızca reklam oynuyorsa sona sar (asıl şarkıya asla dokunma)
   async skipAd(): Promise<void> {
     const win = this.win;
     if (!win || win.isDestroyed()) return;
     try {
       await win.webContents.executeJavaScript(
         `(() => {
-          const selectors=['.ytp-ad-skip-button','.ytp-ad-skip-button-modern','.ytp-skip-ad-button','[aria-label*="Skip" i]','[aria-label*="Geç" i]','[aria-label*="Atla" i]'];
-          for(const s of selectors){ const b=document.querySelector(s); if(b){ b.click(); return true; } }
-          const btns=document.querySelectorAll('button, [role="button"]');
-          for(const b of btns){ const t=(b.textContent||'').toLowerCase(); if(t.includes('skip')||t.includes('geç')||t.includes('atla')){ b.click(); return true; } }
           try {
-            const mp=document.getElementById('movie_player');
-            if(mp && typeof mp.skipAd==='function'){ try{ mp.skipAd(); }catch{} }
-            let dur=0; try{ dur=mp&&mp.getDuration?mp.getDuration():0; }catch{}
-            if(!dur){ const v=document.querySelector('video'); if(v&&v.duration) dur=v.duration; }
-            if(mp&&typeof mp.seekTo==='function'&&dur>0){ mp.seekTo(Math.max(0,dur-0.3),true); return true; }
-            const v=document.querySelector('video');
-            if(v&&v.duration){ v.playbackRate=16; v.currentTime=Math.max(0,v.duration-0.3); v.play().catch(()=>{}); return true; }
+            const mp = document.getElementById('movie_player');
+            // 1) movie_player resmi skipAd API
+            if (mp && typeof mp.skipAd === 'function') {
+              try { mp.skipAd(); return true; } catch {}
+            }
+
+            // 2) Shadow DOM derin buton tıklama
+            const clickSkip = (root) => {
+              const selectors = [
+                '.ytp-ad-skip-button',
+                '.ytp-ad-skip-button-modern',
+                '.ytp-skip-ad-button',
+                '.ytp-ad-skip-button-slot button',
+                'button.ytp-ad-skip-button',
+                '[class*="skip-button"]',
+                '[aria-label*="Skip" i]',
+                '[aria-label*="Geç" i]',
+                '[aria-label*="Atla" i]'
+              ];
+              for (const s of selectors) {
+                const list = root.querySelectorAll(s);
+                for (const b of list) {
+                  try {
+                    b.click();
+                    b.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                    return true;
+                  } catch {}
+                }
+              }
+              for (const el of root.querySelectorAll('*')) {
+                if (el.shadowRoot && clickSkip(el.shadowRoot)) return true;
+              }
+              return false;
+            };
+            if (clickSkip(document)) return true;
+
+            // 3) KESİN KONTROL: Sadece reklam oynuyorsa süreyi sona sar
+            const isAd = (mp && typeof mp.getAdState === 'function' && mp.getAdState() === 1)
+              || (mp && mp.classList && (mp.classList.contains('ad-showing') || mp.classList.contains('ad-interrupting')))
+              || !!document.querySelector('.ad-showing, .ad-interrupting, .ytp-ad-player-overlay');
+
+            if (isAd) {
+              const v = document.querySelector('video');
+              if (v && v.duration && !isNaN(v.duration) && v.duration > 0) {
+                v.muted = true;
+                v.currentTime = v.duration;
+                // Butonu tekrar dene
+                setTimeout(() => clickSkip(document), 100);
+                return true;
+              }
+            } else {
+              // Reklam yoksa video hızını ve sesini normale döndür
+              const v = document.querySelector('video');
+              if (v) {
+                if (v.playbackRate !== 1) v.playbackRate = 1;
+                v.muted = false;
+              }
+            }
           } catch {}
           return false;
         })()`,
@@ -737,10 +1007,9 @@ export class StreamResolver {
   destroy(): void {
     this._destroyed = true;
     this.stopPolling();
+    this.listeners.clear();
     if (this._pauseEnforceInterval) { clearInterval(this._pauseEnforceInterval); this._pauseEnforceInterval = null; }
-    // force destroy — close() event'leri tetikleyebilir, destroy() doğrudan kapatır
     try { this.win?.destroy(); } catch {}
-    try { this.win?.close(); } catch {}
     this.win = null;
   }
 }

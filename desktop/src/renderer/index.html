@@ -26,13 +26,13 @@
         </div>
       </div>
       <div class="titlebar-controls">
-        <button class="tb-btn" id="tbMinimize" title="Küçült">
+        <button class="tb-btn" id="tbMinimize" title="Küçült" aria-label="Küçült">
           <svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="currentColor"/></svg>
         </button>
-        <button class="tb-btn" id="tbMaximize" title="Büyüt">
+        <button class="tb-btn" id="tbMaximize" title="Büyüt" aria-label="Büyüt">
           <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" stroke="currentColor" fill="none"/></svg>
         </button>
-        <button class="tb-btn tb-close" id="tbClose" title="Kapat">
+        <button class="tb-btn tb-close" id="tbClose" title="Kapat" aria-label="Kapat">
           <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 1L9 9M1 9L9 1" stroke="currentColor" stroke-width="1.2"/></svg>
         </button>
       </div>
@@ -45,19 +45,19 @@
         <div class="sidebar-section">
           <a class="nav-link active" data-page="home" href="#">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-            <span>Ana Sayfa</span>
+            <span data-i18n="nav.home">Ana Sayfa</span>
           </a>
           <a class="nav-link" data-page="search" href="#">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <span>Ara</span>
+            <span data-i18n="nav.search">Ara</span>
           </a>
           <a class="nav-link" data-page="library" href="#">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-            <span>Kütüphane</span>
+            <span data-i18n="nav.library">Kütüphane</span>
           </a>
           <a class="nav-link" data-page="liked" href="#">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-            <span>Beğenilenler</span>
+            <span data-i18n="nav.liked">Beğenilenler</span>
           </a>
         </div>
 
@@ -65,13 +65,13 @@
 
         <div class="sidebar-section sidebar-playlists">
           <div class="sidebar-section-header">
-            <span>Oynatma Listeleri</span>
+            <span data-i18n="nav.playlists">Oynatma Listeleri</span>
             <button class="icon-btn-sm" id="btnNewPlaylist" title="Yeni Liste">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
           </div>
           <div class="playlists-container" id="playlistsContainer">
-            <div class="empty-hint">Henüz liste yok</div>
+            <div class="empty-hint" data-i18n="nav.emptyPlaylists">Henüz liste yok</div>
           </div>
         </div>
 
@@ -80,7 +80,7 @@
           <div id="userSection" class="user-section">
             <button class="nav-link" id="btnAuthLogin" style="display:flex">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              <span>Giriş Yap</span>
+              <span data-i18n="nav.login">Giriş Yap</span>
             </button>
             <div id="userInfo" class="user-info" style="display:none">
               <div class="user-avatar" id="userAvatar">
@@ -102,7 +102,7 @@
           </div>
           <a class="nav-link" data-page="settings" href="#">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            <span>Ayarlar</span>
+            <span data-i18n="nav.settings">Ayarlar</span>
           </a>
         </div>
       </nav>
@@ -112,17 +112,9 @@
         <!-- Home Page -->
         <section class="page active" data-page="home">
           <div class="page-toolbar">
-            <h1 class="page-title">Hoş Geldiniz</h1>
+            <h1 class="page-title">Ana Sayfa</h1>
           </div>
           <div class="page-scroll" id="homeContent">
-            <div class="welcome-message" style="text-align:center; padding:48px 32px; color:var(--c-text-2); background:var(--c-bg-1); border:1px solid var(--c-border); border-radius:var(--r-xl); max-width:520px; margin:24px auto;">
-              <div style="width:72px;height:72px;margin:0 auto 20px;background:var(--c-accent-subtle);border-radius:var(--r-xl);display:flex;align-items:center;justify-content:center;color:var(--c-accent)">
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M9 9a4 4 0 0 1 6 0"/><circle cx="12" cy="15" r="1.8" fill="currentColor" stroke="none"/></svg>
-              </div>
-              <h2 style="color:var(--c-text-0);font-size:20px;margin-bottom:8px">Aquality Music'e Hoş Geldiniz</h2>
-              <p style="font-size:13px;line-height:1.6;max-width:36ch;margin:0 auto">YouTube Music hesabınızla giriş yapın, kütüphaneniz ve çalma listeleriniz anında senkronize olsun.</p>
-              <button class="btn btn-primary" id="btnStartWelcome" style="margin-top:20px;padding:10px 22px">Giriş Yap</button>
-            </div>
             <div class="skeleton-grid">
               <div class="skeleton-card"></div>
               <div class="skeleton-card"></div>
@@ -221,6 +213,16 @@
                   <option value="system">Sistem</option>
                 </select>
               </div>
+              <div class="setting-row">
+                <div class="setting-label">
+                  <span class="setting-name" id="labelSettingLanguage">Dil / Language</span>
+                  <span class="setting-desc" id="descSettingLanguage">Uygulama arayüz dilini seçin</span>
+                </div>
+                <select class="setting-select" id="settingLanguage">
+                  <option value="tr">Türkçe</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
             </div>
             <div class="settings-group">
               <h3 class="settings-group-title">Oynatma</h3>
@@ -244,6 +246,15 @@
                   <input type="checkbox" id="settingAutoPlay" checked>
                   <span class="toggle-slider"></span>
                 </label>
+              </div>
+            <div class="settings-group">
+              <h3 class="settings-group-title">Reklam Engelleyici</h3>
+              <div class="setting-row">
+                <div class="setting-label">
+                  <span class="setting-name">Akıllı Reklam Koruması</span>
+                  <span class="setting-desc">Video ve ses reklamlarını ağ seviyesinde filtreler, kesintisiz dinleme sağlar</span>
+                </div>
+                <span class="setting-value" style="color:var(--c-accent);font-weight:600">✓ Aktif (Reklamsız)</span>
               </div>
             </div>
             <div class="settings-group">
@@ -386,7 +397,7 @@
         </div>
         <div class="player-progress">
           <span class="time" id="timeNow">0:00</span>
-          <div class="scrubber" id="scrubber">
+          <div class="scrubber" id="scrubber" role="slider" aria-label="Şarkı ilerleme çubuğu" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
             <div class="scrubber-track">
               <div class="scrubber-fill" id="scrubberFill"></div>
             </div>
@@ -398,17 +409,17 @@
       </div>
 
       <div class="player-right">
-        <button class="icon-btn" id="btnLyrics" title="Şarkı Sözleri">
+        <button class="icon-btn" id="btnLyrics" title="Şarkı Sözleri" aria-label="Şarkı Sözleri">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
         </button>
-        <button class="icon-btn" id="btnQueue" title="Sıra">
+        <button class="icon-btn" id="btnQueue" title="Sıra" aria-label="Oynatma Sırası">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
         </button>
         <div class="volume-group">
-          <button class="icon-btn" id="btnVolume" title="Ses">
+          <button class="icon-btn" id="btnVolume" title="Ses" aria-label="Ses kontrolü">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
           </button>
-          <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="80">
+          <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="80" aria-label="Ses seviyesi">
         </div>
       </div>
     </footer>

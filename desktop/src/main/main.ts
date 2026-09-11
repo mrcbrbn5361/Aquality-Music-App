@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain, nativeTheme, shell, Menu, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeTheme, shell, Menu, dialog, screen } from 'electron';
 import * as path from 'path';
+import * as fs from 'fs';
 import { YouTubeAPI } from './api/innertube';
 import { StoreManager } from './utils/store';
 import { DiscordRPC } from './utils/discord';
@@ -14,10 +15,28 @@ import { autoUpdater } from 'electron-updater';
 
 // Gizli çözücü penceresinde otomatik oynatmaya izin ver (kullanıcı hareketi gerekmesin)
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
-// Google girişi için Client Hints desteği
-app.commandLine.appendSwitch('enable-features', 'ClientHints,UserAgentClientHint');
-// Electron'un kendi gizli User Data klasörünü kullan (Chrome ile çakışmasın)
-const userData = path.join(app.getPath('appData'), 'Aquality Music');
+// Google girişi için Client Hints desteği (mevcut enable-features değerini koru)
+const existingFeatures = app.commandLine.getSwitchValue('enable-features');
+app.commandLine.appendSwitch('enable-features', existingFeatures ? `${existingFeatures},ClientHints,UserAgentClientHint` : 'ClientHints,UserAgentClientHint');
+
+// Portable mod kontrolü (electron-builder portable çalıştırıldığında PORTABLE_EXECUTABLE_DIR atanır)
+const portableDir = process.env.PORTABLE_EXECUTABLE_DIR;
+let userData: string;
+
+if (portableDir) {
+  userData = path.join(portableDir, 'data');
+  if (!fs.existsSync(userData)) {
+    try {
+      fs.mkdirSync(userData, { recursive: true });
+    } catch (e) {
+      console.error('[Main] Portable data klasörü oluşturulamadı, appData fallback:', e);
+      userData = path.join(app.getPath('appData'), 'Aquality Music');
+    }
+  }
+} else {
+  // Standart kurulum modu: Electron'un kendi gizli User Data klasörünü kullan (Chrome ile çakışmasın)
+  userData = path.join(app.getPath('appData'), 'Aquality Music');
+}
 app.setPath('userData', userData);
 
 let mainWindow: BrowserWindow | null = null;
@@ -28,16 +47,47 @@ let discordOAuth: DiscordOAuth;
 let googleAuth: GoogleOAuth;
 let musicAuth: MusicAuth;
 let streamResolver: StreamResolver;
-let resolverListenerSet = false;
 
 const isDev = !app.isPackaged;
 
+function isSafeExternalUrl(url: string): boolean {
+  try {
+    const u = new URL(String(url));
+    if (u.protocol !== 'https:') return false;
+    const allowed = ['music.youtube.com', 'youtube.com', 'www.youtube.com', 'github.com', 'accounts.google.com', 'discord.gg', 'discord.com', 'ytimg.com'];
+    return allowed.some(h => u.hostname === h || u.hostname.endsWith('.' + h));
+  } catch {
+    return false;
+  }
+}
+
 function createWindow(): void {
-  // Kaydedilmiş pencere konumu varsa geri yükle
+  // Kaydedilmiş pencere konumu varsa ve ekran üzerinde görünür durumdaysa geri yükle
   const saved = storeManager?.getWindowBounds();
-  const bounds = (saved && saved.width >= 800 && saved.height >= 500)
-    ? { x: saved.x, y: saved.y, width: saved.width, height: saved.height }
-    : { width: 1280, height: 820 };
+  let bounds: { x?: number; y?: number; width: number; height: number } = { width: 1280, height: 820 };
+
+  if (saved && saved.width >= 800 && saved.height >= 500) {
+    if (typeof saved.x === 'number' && typeof saved.y === 'number') {
+      const displays = screen.getAllDisplays();
+      const isVisible = displays.some(d => {
+        const b = d.bounds;
+        return (
+          saved.x! >= b.x - 50 &&
+          saved.x! + saved.width <= b.x + b.width + 50 &&
+          saved.y! >= b.y - 50 &&
+          saved.y! + saved.height <= b.y + b.height + 50
+        );
+      });
+      if (isVisible) {
+        bounds = { x: saved.x, y: saved.y, width: saved.width, height: saved.height };
+      } else {
+        bounds = { width: saved.width, height: saved.height };
+      }
+    } else {
+      bounds = { width: saved.width, height: saved.height };
+    }
+  }
+
   mainWindow = new BrowserWindow({
     ...bounds,
     minWidth: 960,
@@ -50,13 +100,13 @@ function createWindow(): void {
     roundedCorners: true,
     thickFrame: true,
     icon: path.join(__dirname, '../../assets/icon.png'),
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        preload: path.join(__dirname, 'preload.js'),
-        webSecurity: true,
-        sandbox: false
-      }
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
+      webSecurity: true,
+      sandbox: false
+    }
   });
 
   if (isDev) {
@@ -85,8 +135,6 @@ function createWindow(): void {
         storeManager?.saveWindowBounds(b);
       }
     } catch {}
-    try { streamResolver?.destroy(); } catch {}
-    try { discordRPC?.disconnect(); } catch {}
   });
 
   mainWindow.on('maximize', () => {
@@ -97,7 +145,9 @@ function createWindow(): void {
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (isSafeExternalUrl(url)) {
+      shell.openExternal(url);
+    }
     return { action: 'deny' };
   });
 
@@ -173,6 +223,13 @@ function setupIPC(): void {
       mainWindow?.maximize();
     }
   });
+  ipcMain.on('win:fullscreen', () => {
+    if (mainWindow?.isFullScreen()) {
+      mainWindow.setFullScreen(false);
+    } else {
+      mainWindow?.setFullScreen(true);
+    }
+  });
   ipcMain.on('win:close', () => mainWindow?.close());
   ipcMain.handle('win:isMaximized', () => mainWindow?.isMaximized() ?? false);
 
@@ -181,12 +238,18 @@ function setupIPC(): void {
     console.log('[UI]', msg);
   });
 
+  // Central StreamResolver update listener to ensure UI stays in sync
+  streamResolver.onUpdate((u) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('player:update', u);
+    }
+  });
+
   // YouTube API
   ipcMain.handle('yt:search', async (_, query: string, filter?: string) => {
     try {
       const result = await youtubeAPI.search(query, filter || 'all');
-      console.log('[Main] Search:', query, 'songs:', result.songs?.length || 0, 'videos:', result.videos?.length || 0);
-      console.log('[Main] Search first song:', JSON.stringify(result.songs?.[0]));
+      console.log('[Main] Search:', query, 'songs:', result.songs?.length || 0, 'videos:', result.videos?.length || 0, 'albums:', result.albums?.length || 0, 'artists:', result.artists?.length || 0);
       return result;
     } catch (err) {
       console.error('[Main] Search error:', err);
@@ -197,15 +260,6 @@ function setupIPC(): void {
     // Girişli session ile gizli pencerede şarkıyı oynat
     if (!(await musicAuth.isAuthenticated())) {
       return { error: 'not_authenticated', id: videoId };
-    }
-    // Event listener'ı kur (ilk IPC çağrısı için)
-    if (!resolverListenerSet) {
-      resolverListenerSet = true;
-      streamResolver.onUpdate((u) => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('player:update', u);
-        }
-      });
     }
     // Oynatmayı başlat (fire & forget — ana pencere state'i update event'iyle alır)
     streamResolver.play(videoId).catch((err) => console.error('[Player] play error:', err));
@@ -221,11 +275,18 @@ function setupIPC(): void {
     return true;
   });
   ipcMain.handle('player:seek', async (_, seconds: number) => {
-    await streamResolver.seek(seconds);
+    const safeSec = Math.max(0, Number(seconds) || 0);
+    await streamResolver.seek(safeSec);
     return true;
   });
   ipcMain.handle('player:setVolume', async (_, vol: number) => {
-    await streamResolver.setVolume(vol);
+    const raw = Number(vol) || 0;
+    let normalized = raw > 1 ? raw / 100 : raw;
+    normalized = Math.max(0, Math.min(1, normalized));
+    if (volumeRatioProvider.isEnabled()) {
+      normalized = Math.max(0, Math.min(1, normalized * volumeRatioProvider.getRatio()));
+    }
+    await streamResolver.setVolume(normalized);
     return true;
   });
   ipcMain.handle('player:next', async () => {
@@ -244,9 +305,6 @@ function setupIPC(): void {
     try {
       const result = await youtubeAPI.getHome();
       console.log('[Main] Home items:', result.items?.length || 0);
-      if (result.items?.length) {
-        console.log('[Main] Home first item:', JSON.stringify(result.items[0]));
-      }
       return result;
     } catch (err) {
       console.error('[Main] Home error:', err);
@@ -269,7 +327,12 @@ function setupIPC(): void {
     try { return await youtubeAPI.getSearchSuggestions(input); } catch { return []; }
   });
   ipcMain.handle('yt:lyrics', async (_, videoId: string) => {
-    try { return await youtubeAPI.getLyrics(videoId); } catch { return null; }
+    try {
+      if (!lyricsProvider.isEnabled()) return null;
+      return await youtubeAPI.getLyrics(videoId);
+    } catch {
+      return null;
+    }
   });
   ipcMain.handle('yt:libraryPlaylists', async () => {
     try { return await youtubeAPI.getLibraryPlaylists(); } catch { return []; }
@@ -289,12 +352,8 @@ function setupIPC(): void {
   ipcMain.handle('store:set', (_, key: string, value: unknown) => { storeManager.set(key as any, value); });
   ipcMain.handle('shell:openExternal', (_, url: string) => {
     try {
-      const u = new URL(String(url));
-      if (u.protocol !== 'https:') return;
-      if (['music.youtube.com','youtube.com','www.youtube.com','github.com'].some(h => u.hostname === h || u.hostname.endsWith('.'+h)) || u.hostname === 'music.youtube.com') {
-        shell.openExternal(u.toString());
-      } else if (u.hostname.endsWith('youtube.com') || u.hostname.endsWith('ytimg.com')) {
-        shell.openExternal(u.toString());
+      if (isSafeExternalUrl(url)) {
+        shell.openExternal(url);
       }
     } catch {}
   });
@@ -321,20 +380,10 @@ function setupIPC(): void {
 
   ipcMain.handle('auth:isGoogleAuthenticated', () => googleAuth.isGoogleAuthenticated());
   ipcMain.handle('auth:getGoogleUser', () => googleAuth.getGoogleUser());
-  ipcMain.handle('auth:getGoogleAccessToken', () => googleAuth.getGoogleAccessToken());
-
-  ipcMain.handle('auth:setGoogleConfig', (_, { clientId, clientSecret }: { clientId: string; clientSecret: string }) => {
-    googleAuth.setGoogleConfig(clientId, clientSecret);
-  });
-  ipcMain.handle('auth:getGoogleConfig', () => googleAuth.getGoogleConfig());
 
   // ── YouTube Music cookie girişi IPC ──────────
   ipcMain.handle('auth:openChromeLogin', async () => {
     return await musicAuth.openChromeLogin();
-  });
-  ipcMain.handle('auth:getLoginUrl', () => musicAuth.getLoginUrl());
-  ipcMain.handle('auth:importFromExternalChrome', async (_e, targetId?: string) => {
-    return await musicAuth.importFromExternalChrome(targetId);
   });
   ipcMain.handle('auth:importFromChrome', async () => {
     let result = await musicAuth.importFromChrome();
@@ -443,7 +492,7 @@ function setupIPC(): void {
 
   ipcMain.handle('auto:getUpdateStatus', () => {
     return {
-      version: (autoUpdater as any).currentVersion || '1.0.0',
+      version: app.getVersion(),
       releaseNotes: null,
       releaseDate: null,
       forced: false
@@ -452,7 +501,9 @@ function setupIPC(): void {
 }
 
 const gotLock = app.requestSingleInstanceLock();
-if (!gotLock) app.quit();
+if (!gotLock) {
+  app.exit(0);
+}
 
 app.whenReady().then(async () => {
   if (!gotLock) return;
@@ -506,7 +557,6 @@ app.on('before-quit', () => {
   for (const win of BrowserWindow.getAllWindows()) {
     try { win.destroy(); } catch {}
   }
-  setTimeout(() => process.exit(0), 500);
 });
 
 app.on('second-instance', (_e, argv) => {

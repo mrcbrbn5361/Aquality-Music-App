@@ -521,31 +521,91 @@ input, select { font: inherit; color: inherit; }
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 6px 10px;
+  padding: 8px 12px;
   border-radius: var(--r-md);
   cursor: pointer;
   transition: background var(--t-fast);
+  position: relative;
 }
 
-.song-row:hover { background: var(--c-bg-2); border-color: var(--c-border-light); }
-.song-row.playing { background: var(--c-accent-subtle); border-color: rgba(29,185,84,0.2); }
-.song-row.playing .song-title { color: var(--c-accent); }
+.song-row:hover { background: var(--c-bg-2); }
+.song-row.playing { background: rgba(29, 185, 84, 0.12); }
+.song-row.playing .song-title { color: var(--c-accent); font-weight: 600; }
+
+.song-num-col {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+}
 
 .song-num {
-  width: 28px;
-  text-align: center;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--c-text-3);
-  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  transition: opacity var(--t-fast);
+}
+
+.song-play-icon {
+  position: absolute;
+  color: var(--c-text-0);
+  opacity: 0;
+  transition: opacity var(--t-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.song-row:hover .song-num { display: none; }
+.song-row:hover .song-play-icon { opacity: 1; }
+
+/* Spotify Canlı Ekolayzır */
+.equalizer-icon {
+  display: none;
+  position: absolute;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  height: 14px;
+  width: 14px;
+}
+
+.eq-bar {
+  width: 3px;
+  background: var(--c-accent);
+  border-radius: 1px;
+  animation: eq-bounce 0.8s ease-in-out infinite alternate;
+}
+
+.eq-bar:nth-child(1) { height: 10px; animation-duration: 0.5s; }
+.eq-bar:nth-child(2) { height: 14px; animation-duration: 0.7s; animation-delay: 0.15s; }
+.eq-bar:nth-child(3) { height: 8px; animation-duration: 0.6s; animation-delay: 0.3s; }
+
+.song-row.playing .song-num { display: none !important; }
+.song-row.playing .equalizer-icon { display: flex; }
+.song-row.playing:hover .equalizer-icon { display: none; }
+.song-row.playing:hover .song-play-icon { opacity: 1; }
+.song-row.playing.paused .eq-bar {
+  animation-play-state: paused;
+  height: 4px;
+}
+
+@keyframes eq-bounce {
+  0% { height: 3px; }
+  100% { height: 14px; }
 }
 
 .song-thumb {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--r-sm);
   object-fit: cover;
   background: var(--c-bg-3);
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
 .song-meta {
@@ -554,13 +614,14 @@ input, select { font: inherit; color: inherit; }
 }
 
 .song-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--c-text-0);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.4;
+  letter-spacing: -0.01em;
 }
 
 .song-artist {
@@ -570,19 +631,24 @@ input, select { font: inherit; color: inherit; }
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.4;
+  margin-top: 2px;
 }
+
+.song-artist:hover { color: var(--c-text-0); text-decoration: underline; }
 
 .song-dur {
   font-size: 12px;
   color: var(--c-text-3);
   flex-shrink: 0;
-  min-width: 36px;
+  min-width: 38px;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .song-actions {
   display: flex;
-  gap: 2px;
+  align-items: center;
+  gap: 4px;
   opacity: 0;
   transition: opacity var(--t-fast);
 }
@@ -590,51 +656,108 @@ input, select { font: inherit; color: inherit; }
 .song-row:hover .song-actions { opacity: 1; }
 
 /* ============================================
-   Card Grid
+   Spotify Card Grid & Floating Play Button
    ============================================ */
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: 20px;
   align-items: start;
 }
 
 .card {
-  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02)), var(--c-bg-1);
-  border-radius: var(--r-lg);
+  background: #181818;
+  border-radius: var(--r-md);
   padding: 14px;
   cursor: pointer;
-  transition: transform var(--t-normal), box-shadow var(--t-normal), border-color var(--t-normal);
-  border: 1px solid rgba(255,255,255,.06);
+  transition: background-color var(--t-normal), transform var(--t-fast);
+  border: 1px solid transparent;
+  position: relative;
 }
 
-.card:hover { background: var(--c-bg-2); transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,0,0,.45); border-color: rgba(255,255,255,.10); }
+.card:hover {
+  background: #282828;
+  transform: translateY(-2px);
+}
+
+.card-thumb-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--r-sm);
+  margin-bottom: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  overflow: hidden;
+}
 
 .card-thumb {
   width: 100%;
-  aspect-ratio: 1;
-  border-radius: var(--r-md);
+  height: 100%;
   object-fit: cover;
   background: var(--c-bg-3);
-  margin-bottom: 10px;
+  transition: transform var(--t-normal);
+  display: block;
+}
+
+.card:hover .card-thumb {
+  transform: scale(1.02);
+}
+
+/* Spotify Floating Green Play Button */
+.card-play-btn {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--c-accent);
+  color: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity var(--t-fast), transform var(--t-fast), background-color var(--t-fast), box-shadow var(--t-fast);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.35);
+  z-index: 5;
+  border: none;
+  cursor: pointer;
+}
+
+.card:hover .card-play-btn {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.card-play-btn:hover {
+  transform: scale(1.08) translateY(0);
+  background: #1ed760;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.5);
+}
+
+.card-play-btn:active {
+  transform: scale(0.96) translateY(0);
 }
 
 .card-title {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--c-text-0);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
+  line-height: 1.3;
 }
 
 .card-sub {
-  font-size: 11px;
-  color: var(--c-text-3);
+  font-size: 12px;
+  color: var(--c-text-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.4;
 }
 
 /* ============================================
@@ -894,9 +1017,20 @@ input, select { font: inherit; color: inherit; }
   cursor: pointer;
   display: block;
 }
-.volume-slider::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; }
 
-.volume-slider::-webkit-slider-thumb { box-shadow: 0 1px 6px rgba(0,0,0,0.5); border: 2px solid var(--c-bg-1);
+.volume-slider:hover {
+  background: linear-gradient(to right, var(--c-accent) 0%, var(--c-accent) var(--vol-pct, 80%), var(--c-bg-3) var(--vol-pct, 80%), var(--c-bg-3) 100%);
+}
+
+.volume-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  box-shadow: 0 1px 6px rgba(0,0,0,0.5);
+  border: none;
   -webkit-appearance: none;
   width: 12px;
   height: 12px;
@@ -906,6 +1040,7 @@ input, select { font: inherit; color: inherit; }
   transition: transform 0.15s;
   margin-top: -4px;
 }
+
 .volume-slider:hover::-webkit-slider-thumb {
   transform: scale(1.2);
 }

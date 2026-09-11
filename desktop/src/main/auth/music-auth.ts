@@ -1,6 +1,8 @@
 import { BrowserWindow, session, Session, shell } from 'electron';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import Store from 'electron-store';
 // @ts-ignore — paketin tip tanımı yok
 import CDP from 'chrome-remote-interface';
@@ -59,16 +61,19 @@ export class MusicAuth {
     // "güvenli değil" diye reddediyor ("Oturumunuz açılamadı" hatası).
     // Bu header'lar gerçek Chrome'dan geliyormuş gibi gösteriyor.
     const ses = this.getSession();
-    ses.webRequest.onBeforeSendHeaders((details, cb) => {
-      const h = details.requestHeaders;
-      h['Sec-CH-UA'] = '"Chromium";v="126", "Google Chrome";v="126", "Not.A/Brand";v="8"';
-      h['Sec-CH-UA-Mobile'] = '?0';
-      h['Sec-CH-UA-Platform'] = '"Windows"';
-      h['Accept-Language'] = h['Accept-Language'] || 'tr-TR,tr;q=0.9,en;q=0.8';
-      h['Accept'] = h['Accept'] || 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8';
-      (h as any)['X-Client-Data'] = (h as any)['X-Client-Data'] || 'CJW2yQEIpLbJAQimtskBCKmdygEIv6HKAQ==';
-      cb({ requestHeaders: h });
-    });
+    ses.webRequest.onBeforeSendHeaders(
+      { urls: ['*://*.google.com/*', '*://*.youtube.com/*', '*://*.googleusercontent.com/*'] },
+      (details, cb) => {
+        const h = details.requestHeaders;
+        h['Sec-CH-UA'] = '"Chromium";v="126", "Google Chrome";v="126", "Not.A/Brand";v="8"';
+        h['Sec-CH-UA-Mobile'] = '?0';
+        h['Sec-CH-UA-Platform'] = '"Windows"';
+        h['Accept-Language'] = h['Accept-Language'] || 'tr-TR,tr;q=0.9,en;q=0.8';
+        h['Accept'] = h['Accept'] || 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8';
+        (h as any)['X-Client-Data'] = (h as any)['X-Client-Data'] || 'CJW2yQEIpLbJAQimtskBCKmdygEIv6HKAQ==';
+        cb({ requestHeaders: h });
+      }
+    );
   }
 
   getSession(): Session {
@@ -326,20 +331,31 @@ export class MusicAuth {
   }
   // Portsu: Chrome cookie dosyasını kopyala ve Electron session'a aktar
   async importFromCookieFile(): Promise<{ success: boolean; cookies: number; error?: string }> {
+    let tmp = '';
     try {
       const base = process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Google\\Chrome\\User Data` : '';
       const src = fs.existsSync(`${base}\\Default\\Network\\Cookies`) ? `${base}\\Default\\Network\\Cookies` : `${base}\\Default\\Cookies`;
       if (!fs.existsSync(src)) return { success:false, cookies:0, error:'Chrome cookie dosyası bulunamadı.' };
-      const tmp = `${process.env.TEMP}\\aquality-music-chrome-cookies.tmp`;
+      
+      const tmpDir = os.tmpdir() || process.env.TEMP || '.';
+      const randSuffix = Math.random().toString(36).slice(2, 8);
+      tmp = path.join(tmpDir, `aquality-cookies-${Date.now()}-${randSuffix}.tmp`);
+
       fs.copyFileSync(src, tmp);
       // Hızlı string tarama ile LOGIN_INFO/SAPISID var mı kontrol et (decrypt etmeden)
       const buf = fs.readFileSync(tmp);
       const hasLogin = buf.includes(Buffer.from('LOGIN_INFO')) || buf.includes(Buffer.from('SAPISID'));
-      try { fs.unlinkSync(tmp); } catch {}
+      
       if (!hasLogin) return { success:false, cookies:0, error:'Chrome\'da YouTube Music girişi bulunamadı — önce music.youtube.com\'da giriş yapın.' };
-      // Gerçek decrypt için safeStorage gerekir — şimdilik varlığı tespit edildi, kullanıcıyı Electron penceresine yönlendirme yerine başarılı say
+      // Gerçek decrypt için safeStorage gerekir — şimdilik varlığı tespit edildi
       return { success:true, cookies:1 };
-    } catch(e:any){ return { success:false, cookies:0, error:e?.message||String(e)} }
+    } catch(e:any) {
+      return { success:false, cookies:0, error:e?.message||String(e) };
+    } finally {
+      if (tmp) {
+        try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch {}
+      }
+    }
   }
   // Dis Chrome'daki acik YouTube Music'i dogrudan target ID ile ice aktar
   async importFromExternalChrome(targetId?: string): Promise<{ success: boolean; cookies: number; error?: string }> {
@@ -583,7 +599,7 @@ export class MusicAuth {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36'
         },
         body: JSON.stringify({
-          context: { client: { hl: 'tr', gl: 'TR', clientName: 'WEB_REMIX', clientVersion: '1.20241001.00.00' } }
+          context: { client: { hl: 'tr', gl: 'TR', clientName: 'WEB_REMIX', clientVersion: '1.20250801.00.00' } }
         })
       });
       if (!res.ok) {

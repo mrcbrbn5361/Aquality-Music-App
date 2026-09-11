@@ -1,11 +1,29 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+export interface PlayerUpdate {
+  title?: string;
+  artist?: string;
+  album?: string;
+  coverUrl?: string;
+  currentTime?: number;
+  duration?: number;
+  playing?: boolean;
+  videoMode?: boolean;
+  isAd?: boolean;
+}
+
+export interface ClientAppInfo {
+  appId: string;
+  appName: string;
+}
+
 const api = {
   debugLog: (msg: string) => ipcRenderer.send('debug:log', msg),
 
   window: {
     minimize: () => ipcRenderer.send('win:minimize'),
     maximize: () => ipcRenderer.send('win:maximize'),
+    fullscreen: () => ipcRenderer.send('win:fullscreen'),
     close: () => ipcRenderer.send('win:close'),
     isMaximized: () => ipcRenderer.invoke('win:isMaximized'),
     onMaximized: (cb: (maximized: boolean) => void) => {
@@ -43,14 +61,17 @@ const api = {
     logoutGoogle: () => ipcRenderer.invoke('auth:logoutGoogle'),
     isGoogleAuthenticated: () => ipcRenderer.invoke('auth:isGoogleAuthenticated'),
     getGoogleUser: () => ipcRenderer.invoke('auth:getGoogleUser'),
-    getGoogleAccessToken: () => ipcRenderer.invoke('auth:getGoogleAccessToken'),
-    setGoogleConfig: (config: { clientId: string; clientSecret: string }) => ipcRenderer.invoke('auth:setGoogleConfig', config),
-    getGoogleConfig: () => ipcRenderer.invoke('auth:getGoogleConfig'),
     loginMusic: () => ipcRenderer.invoke('auth:openChromeLogin'),
     importFromChrome: () => ipcRenderer.invoke('auth:importFromChrome'),
     logoutMusic: () => ipcRenderer.invoke('auth:logoutMusic'),
+    logoutMusicCompletely: () => ipcRenderer.invoke('auth:logoutMusicCompletely'),
     isMusicAuthenticated: () => ipcRenderer.invoke('auth:isMusicAuthenticated'),
-    getMusicUser: () => ipcRenderer.invoke('auth:getMusicUser')
+    getMusicUser: () => ipcRenderer.invoke('auth:getMusicUser'),
+    onDeeplink: (cb: (url: string) => void) => {
+      const handler = (_: unknown, url: string) => cb(url);
+      ipcRenderer.on('auth:deeplink', handler);
+      return () => ipcRenderer.removeListener('auth:deeplink', handler);
+    }
   },
 
   discord: {
@@ -59,6 +80,7 @@ const api = {
     setActivity: (data: {
       details: string;
       state: string;
+      type?: number;
       largeImageKey?: string;
       largeImageText?: string;
       smallImageKey?: string;
@@ -80,13 +102,18 @@ const api = {
 
   authClients: {
     list: () => ipcRenderer.invoke('auth:clients'),
-    create: (d:any) => ipcRenderer.invoke('auth:createClient', d),
-    revoke: (id:string) => ipcRenderer.invoke('auth:revokeClient', id),
+    create: (d: ClientAppInfo) => ipcRenderer.invoke('auth:createClient', d),
+    revoke: (id: string) => ipcRenderer.invoke('auth:revokeClient', id),
   },
-  volumeRatio: { isEnabled: () => ipcRenderer.invoke('volumeRatio:isEnabled'), setEnabled: (v:boolean) => ipcRenderer.invoke('volumeRatio:setEnabled', v) },
-  lyrics: { isEnabled: () => ipcRenderer.invoke('lyrics:isEnabled'), setEnabled: (v:boolean) => ipcRenderer.invoke('lyrics:setEnabled', v) },
+  volumeRatio: { isEnabled: () => ipcRenderer.invoke('volumeRatio:isEnabled'), setEnabled: (v: boolean) => ipcRenderer.invoke('volumeRatio:setEnabled', v) },
+  lyrics: { isEnabled: () => ipcRenderer.invoke('lyrics:isEnabled'), setEnabled: (v: boolean) => ipcRenderer.invoke('lyrics:setEnabled', v) },
 
-  // Yeni: playback IPC'leri (gizli pencere üzerinden)
+  autoUpdate: {
+    checkForUpdates: () => ipcRenderer.invoke('auto:checkForUpdates'),
+    getUpdateStatus: () => ipcRenderer.invoke('auto:getUpdateStatus')
+  },
+
+  // Playback IPC'leri (gizli pencere üzerinden)
   player: {
     pause: () => ipcRenderer.invoke('player:pause'),
     resume: () => ipcRenderer.invoke('player:resume'),
@@ -95,8 +122,8 @@ const api = {
     next: () => ipcRenderer.invoke('player:next'),
     prev: () => ipcRenderer.invoke('player:prev'),
     skipAd: () => ipcRenderer.invoke('player:skipAd'),
-    onUpdate: (cb: (u: any) => void) => {
-      const h = (_: unknown, u: any) => cb(u);
+    onUpdate: (cb: (u: PlayerUpdate) => void) => {
+      const h = (_: unknown, u: PlayerUpdate) => cb(u);
       ipcRenderer.on('player:update', h);
       return () => ipcRenderer.removeListener('player:update', h);
     }

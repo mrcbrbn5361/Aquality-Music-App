@@ -14,7 +14,9 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         ozellikler: resolve(__dirname, 'ozellikler.html'),
         indir: resolve(__dirname, 'indir.html'),
-        sss: resolve(__dirname, 'sss.html')
+        sss: resolve(__dirname, 'sss.html'),
+        gizlilik: resolve(__dirname, 'gizlilik.html'),
+        kosullar: resolve(__dirname, 'kosullar.html')
       }
     }
   },

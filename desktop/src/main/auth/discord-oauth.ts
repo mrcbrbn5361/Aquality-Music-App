@@ -51,16 +51,16 @@ function avatarUrl(id: string, avatar: string | null): string {
 const SUCCESS_HTML = (name: string) => `
   <html><body style="font-family:sans-serif;background:#121212;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
     <div style="text-align:center">
-      <h1 style="color:#2ecc71">Giriş başarılı!</h1>
-      <p>${name} olarak giriş yapıldı.</p>
+      <h1 style="color:#2ecc71">Giris basarili!</h1>
+      <p>Giris basariyla tamamlandi.</p>
       <p style="color:#666;font-size:12px;margin-top:16px">Bu pencere otomatik kapanacak...</p>
     </div>
   </body></html>`;
 const ERROR_HTML = (msg: string) => `
   <html><body style="font-family:sans-serif;background:#121212;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
     <div style="text-align:center">
-      <h1 style="color:#e8364e">Giriş başarısız</h1>
-      <p>${msg}</p>
+      <h1 style="color:#e8364e">Giris basarisiz</h1>
+      <p>Giris sirasinda bir hata olustu.</p>
       <p style="color:#666;font-size:12px;margin-top:16px">Bu pencereyi kapatabilirsiniz.</p>
     </div>
   </body></html>`;
@@ -93,12 +93,18 @@ export class DiscordOAuth {
       let server: http.Server;
       let authWindow: BrowserWindow | null = null;
       let callbackHandled = false;
+      let timeoutId: NodeJS.Timeout | null = null;
 
       // PKCE: secret'sız desktop akışı
       const verifier = base64url(crypto.randomBytes(64));
       const challenge = base64url(crypto.createHash('sha256').update(verifier).digest());
+      const state = crypto.randomBytes(32).toString('hex');
 
       const cleanup = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
         if (authWindow && !authWindow.isDestroyed()) {
           authWindow.close();
           authWindow = null;
@@ -114,6 +120,11 @@ export class DiscordOAuth {
         cleanup();
         resolve({ success: false, error: msg });
       };
+
+      // 5 dakikalık zaman aşımı
+      timeoutId = setTimeout(() => {
+        finishError('Giriş işlemi zaman aşımına uğradı (5 dakika).');
+      }, 5 * 60 * 1000);
 
       const exchangeAndFetchUser = async (code: string): Promise<void> => {
         if (callbackHandled) return;
@@ -173,6 +184,14 @@ export class DiscordOAuth {
           res.end('Not found');
           return;
         }
+        const returnedState = url.searchParams.get('state');
+        if (!returnedState || returnedState !== state) {
+          res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(ERROR_HTML('Güvenlik doğrulaması başarısız (Geçersiz CSRF State).'));
+          finishError('Geçersiz OAuth State parametresi.');
+          return;
+        }
+
         const code = url.searchParams.get('code');
         const error = url.searchParams.get('error');
         if (error || !code) {
@@ -201,6 +220,7 @@ export class DiscordOAuth {
           redirect_uri: REDIRECT_URI,
           response_type: 'code',
           scope: DISCORD_SCOPES.join(' '),
+          state,
           code_challenge: challenge,
           code_challenge_method: 'S256',
           prompt: 'consent'
@@ -218,22 +238,6 @@ export class DiscordOAuth {
         });
 
         authWindow.loadURL(authUrl);
-
-        // Redirect loopback'e dönerse kodla yakala (sunucu zaten dinliyor)
-        authWindow.webContents.on('did-navigate', (_, navUrl) => {
-          if (navUrl.startsWith(REDIRECT_URI)) {
-            try {
-              const navUrlObj = new URL(navUrl);
-              const navCode = navUrlObj.searchParams.get('code');
-              const navError = navUrlObj.searchParams.get('error');
-              if (navError || !navCode) {
-                finishError(navError || 'Kod alınamadı');
-                return;
-              }
-              void exchangeAndFetchUser(navCode);
-            } catch {}
-          }
-        });
 
         authWindow.on('closed', () => {
           authWindow = null;
