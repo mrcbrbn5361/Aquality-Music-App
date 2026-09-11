@@ -8,10 +8,10 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-11 23:52` |
+| **Son Güncelleme** | `2026-09-12 00:03` |
 | **Proje Sürümü** | `v1.0.0` (Masaüstü: `v1.0.0`, Web: `v1.0.0`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `6f3a3ba - feat(mobile): overhaul Expo Go with MetroList architecture, lyrics, and iOS/Android playback (3 minutes ago)` |
+| **Son Commit** | `267136d - chore(mobile): add monorepo metro config and root tunnel scripts (10 minutes ago)` |
 | **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Takip Edilen Sorunlar** | 21 / 21 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->
@@ -121,11 +121,18 @@ Spotify görünümünden tamamen bağımsız, modern ve minimalist **MetroList**
 ---
 
 ### 📑 Faz 6: Windows Üzerinden Bulut Derleme (EAS Build) & Expo Go
-1. **Expo Go ile Anında Canlı Test**:
+1. **Expo Go ile Anında Canlı Test (Tünel Modu)**:
+   > ⚠️ **Önemli Not**: Proje bir monorepo yapısında olduğundan, kök dizinde `npx expo start` çalıştırmak yerine aşağıdaki yöntemlerden birini kullanmalısınız:
    ```bash
-   cd mobile && npx expo start
+   # Yöntem 1 (Kök dizinden - En Kolay ve Önerilen):
+   npm run mobile:tunnel
+
+   # Yöntem 2 (mobile dizininden):
+   cd mobile
+   npx expo start --tunnel
    ```
-   *Terminalde çıkan QR kodu telefonunuzdaki Expo Go uygulamasıyla okutarak Android ve iOS'ta anında test edebilirsiniz.*
+   *Terminalde çıkan QR kodu telefonunuzdaki Expo Go uygulamasıyla (Android kamera/Expo Go, iOS Kamera) okutarak anında test edebilirsiniz.*
+
 2. **EAS Build ile Bağımsız APK / IPA Üretme**:
    ```bash
    cd mobile && eas build -p android --profile preview

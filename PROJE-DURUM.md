@@ -4,10 +4,10 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-11 23:52` |
+| **Son Güncelleme** | `2026-09-12 00:03` |
 | **Proje Versiyonu** | `v1.0.0` (Masaüstü: `v1.0.0`, Web: `v1.0.0`, Mobil: `v1.0.0`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `6f3a3ba - feat(mobile): overhaul Expo Go with MetroList architecture, lyrics, and iOS/Android playback (3 minutes ago)` |
+| **Son Git Commit** | `267136d - chore(mobile): add monorepo metro config and root tunnel scripts (10 minutes ago)` |
 | **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Kod Hacmi (LOC)** | Ana Süreç: ~4465 satır, Arayüz: ~4729 satır, Mobil (Expo): ~5165 satır, Web: ~1069 satır |
 
@@ -66,9 +66,6 @@
 | `docs/09-GELISTIRICI-KILAVUZU.md` | Düzenlendi |
 | `docs/10-MOBIL-EXPO-REHBERI.md` | Düzenlendi |
 | `docs/README.md` | Düzenlendi |
-| `mobile/package.json` | Düzenlendi |
-| `package.json` | Düzenlendi |
-| `mobile/metro.config.js` | Yeni Dosya |
 
 ---
 

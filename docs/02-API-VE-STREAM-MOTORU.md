@@ -8,10 +8,10 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-11 23:52` |
+| **Son Güncelleme** | `2026-09-12 00:03` |
 | **Proje Sürümü** | `v1.0.0` (Masaüstü: `v1.0.0`, Web: `v1.0.0`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `6f3a3ba - feat(mobile): overhaul Expo Go with MetroList architecture, lyrics, and iOS/Android playback (3 minutes ago)` |
+| **Son Commit** | `267136d - chore(mobile): add monorepo metro config and root tunnel scripts (10 minutes ago)` |
 | **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Takip Edilen Sorunlar** | 21 / 21 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->
