@@ -28,8 +28,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build desktop and package macOS (.dmg & .zip)
-        run: npm run build:mac
+      - name: Build desktop and package macOS DMG
+        run: |
+          mkdir -p node_modules/7zip-bin/mac/arm64 2>/dev/null || true
+          [ -f node_modules/7zip-bin/mac/x64/7za ] && cp node_modules/7zip-bin/mac/x64/7za node_modules/7zip-bin/mac/arm64/7za 2>/dev/null || true
+          npm run build:mac
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -39,12 +42,11 @@ jobs:
           name: Aquality-Music-macOS
           path: |
             desktop/release/*.dmg
-            desktop/release/*.zip
             desktop/release/*.blockmap
 
       - name: Attach macOS assets to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         run: |
-          gh release upload v1.0.0 desktop/release/*.dmg desktop/release/*.zip --clobber || true
+          gh release upload v1.0.0 desktop/release/*.dmg --clobber || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
