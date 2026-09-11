@@ -4,10 +4,10 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-11 22:15` |
+| **Son Güncelleme** | `2026-09-11 22:32` |
 | **Proje Versiyonu** | `v1.0.0` (Masaüstü: `v1.0.0`, Web: `v1.0.0`, Mobil: `v1.0.0`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `66d3b7c - feat: Aquality Music v1.0.0 - Windows ve macOS destegi, ses optimizasyonu ve kapsamli gelistirmeler (0 seconds ago)` |
+| **Son Git Commit** | `443cd06 - fix(ci): optimize macos dmg build without 7zip-bin (5 minutes ago)` |
 | **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Kod Hacmi (LOC)** | Ana Süreç: ~4465 satır, Arayüz: ~4729 satır, Mobil (Expo): ~3584 satır, Web: ~1069 satır |
 
@@ -52,7 +52,9 @@
 
 ## 📁 3. Son Değiştirilen / İzlenen Dosyalar (Git Status)
 
-_Çalışma ağacı temiz. İzlenen herhangi bir kaydedilmemiş değişiklik bulunmuyor._
+| Dosya Yolu | Durum |
+|---|---|
+| `package-lock.json` | Düzenlendi |
 
 ---
 

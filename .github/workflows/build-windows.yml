@@ -26,7 +26,9 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm install
+          npm install 7zip-bin --no-save
 
       - name: Typecheck Desktop
         run: npm --workspace=desktop run typecheck
