@@ -2377,6 +2377,165 @@
     });
   }
 
+  function setupDiscordBot() {
+    const serverStatusEl = $('#discordBotServerStatus');
+    const processStatusEl = $('#discordBotProcessStatus');
+    const openUrlBtn = $('#btnOpenBotStateUrl');
+    const copyUrlBtn = $('#btnCopyBotStateUrl');
+    const startBotBtn = $('#btnStartDiscordBot');
+    const stopBotBtn = $('#btnStopDiscordBot');
+    const tokenInput = $('#discordBotTokenInput') as HTMLInputElement;
+    const logsEl = $('#discordBotLogs');
+    const openDocsBtn = $('#btnOpenBotDocs');
+    const openFolderBtn = $('#btnOpenBotFolder');
+
+    const STATE_URL = 'http://127.0.0.1:9863/api/v1/state';
+
+    // 1. REST API Durumu
+    async function checkServerStatus() {
+      try {
+        const running = await (api as any).botServer?.isRunning?.();
+        if (serverStatusEl) {
+          if (running) {
+            serverStatusEl.textContent = '● Aktif (Port: 9863)';
+            serverStatusEl.style.color = '#10b981';
+          } else {
+            serverStatusEl.textContent = '○ Kapalı';
+            serverStatusEl.style.color = 'var(--c-text-3)';
+          }
+        }
+      } catch {}
+    }
+    checkServerStatus();
+
+    // 2. Butonlar: URL Aç & Kopyala
+    openUrlBtn?.addEventListener('click', () => {
+      api.shell?.openExternal?.(STATE_URL);
+    });
+
+    copyUrlBtn?.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(STATE_URL);
+        showToast('REST API adresi panoya kopyalandı!', 'success');
+      } catch {
+        showToast('Kopyalama başarısız oldu.', 'error');
+      }
+    });
+
+    // 3. Doküman & Klasör
+    openDocsBtn?.addEventListener('click', () => {
+      api.shell?.openExternal?.('https://aquality-music-app-desktop.vercel.app/bot');
+    });
+
+    openFolderBtn?.addEventListener('click', async () => {
+      const res = await (api as any).botServer?.openFolder?.();
+      if (res?.success) {
+        showToast('Bot klasörü açıldı.', 'info');
+      } else {
+        showToast(res?.error || 'Bot klasörü açılamadı.', 'error');
+      }
+    });
+
+    // 4. Token Yükleme ve Kaydetme
+    api.store.get('discordBotToken').then((val: any) => {
+      if (val && typeof val === 'string' && tokenInput) {
+        tokenInput.value = val;
+      }
+    });
+
+    tokenInput?.addEventListener('change', () => {
+      api.store.set('discordBotToken', tokenInput.value.trim());
+    });
+
+    // 5. Bot Süreci Durum Senkronizasyonu
+    function appendLog(line: string) {
+      if (!logsEl) return;
+      logsEl.style.display = 'block';
+      logsEl.textContent = ((logsEl.textContent || '') + '\n' + line).trim().slice(-1500);
+      logsEl.scrollTop = logsEl.scrollHeight;
+    }
+
+    async function refreshBotProcessStatus() {
+      try {
+        const info = await (api as any).botServer?.getBotStatus?.();
+        if (!info) return;
+
+        if (processStatusEl) {
+          if (info.status === 'running' || info.isRunning) {
+            processStatusEl.textContent = '● Bot Çalışıyor';
+            processStatusEl.style.color = '#10b981';
+            if (startBotBtn) startBotBtn.style.display = 'none';
+            if (stopBotBtn) stopBotBtn.style.display = 'inline-block';
+          } else if (info.status === 'starting') {
+            processStatusEl.textContent = '⏳ Başlatılıyor...';
+            processStatusEl.style.color = '#f59e0b';
+          } else if (info.status === 'error') {
+            processStatusEl.textContent = '✕ Hata: ' + (info.error || 'Bilinmiyor');
+            processStatusEl.style.color = '#ef4444';
+            if (startBotBtn) startBotBtn.style.display = 'inline-block';
+            if (stopBotBtn) stopBotBtn.style.display = 'none';
+          } else {
+            processStatusEl.textContent = 'Durduruldu';
+            processStatusEl.style.color = 'var(--c-text-3)';
+            if (startBotBtn) startBotBtn.style.display = 'inline-block';
+            if (stopBotBtn) stopBotBtn.style.display = 'none';
+          }
+        }
+      } catch {}
+    }
+
+    refreshBotProcessStatus();
+
+    // Event listener'lar (IPC)
+    (api as any).botServer?.onLog?.((log: string) => {
+      appendLog(log);
+    });
+
+    (api as any).botServer?.onStatusChanged?.(() => {
+      refreshBotProcessStatus();
+    });
+
+    // Başlat butonu
+    startBotBtn?.addEventListener('click', async () => {
+      const token = tokenInput?.value?.trim();
+      if (!token) {
+        showToast('Lütfen geçerli bir Discord Bot Token girin!', 'error');
+        tokenInput?.focus();
+        return;
+      }
+      await api.store.set('discordBotToken', token);
+
+      if (processStatusEl) {
+        processStatusEl.textContent = '⏳ Başlatılıyor...';
+        processStatusEl.style.color = '#f59e0b';
+      }
+      if (logsEl) {
+        logsEl.style.display = 'block';
+        logsEl.textContent = 'Bot işlemi başlatılıyor...\n';
+      }
+
+      const res = await (api as any).botServer?.startBot?.(token);
+      if (res?.success) {
+        showToast('Discord botu başarıyla başlatıldı!', 'success');
+        refreshBotProcessStatus();
+      } else {
+        showToast(res?.error || 'Bot başlatılamadı.', 'error');
+        refreshBotProcessStatus();
+      }
+    });
+
+    // Durdur butonu
+    stopBotBtn?.addEventListener('click', async () => {
+      const res = await (api as any).botServer?.stopBot?.();
+      if (res?.success) {
+        showToast('Discord botu durduruldu.', 'info');
+        refreshBotProcessStatus();
+      } else {
+        showToast(res?.error || 'Bot durdurulamadı.', 'error');
+      }
+    });
+  }
+
   // ── Init ───────────────────────────────────
   async function init() {
     console.log('[Renderer] init() starting...');
@@ -2398,6 +2557,7 @@
     setupSettings();
     setupAuth();
     setupDiscord();
+    setupDiscordBot();
     setupVolumeLyricsAuthUI();
     setupKeyboardShortcuts();
     setupMediaSession();

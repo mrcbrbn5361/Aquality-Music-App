@@ -323,6 +323,45 @@
               </div>
             </div>
             <div class="settings-group">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                <h3 class="settings-group-title" style="margin:0">🤖 Discord Bot & Yerel REST API</h3>
+                <span class="setting-value" id="discordBotServerStatus" style="color:#10b981;font-weight:600;font-size:11px">● Aktif (Port: 9863)</span>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label">
+                  <span class="setting-name">Yerel Durum API (REST)</span>
+                  <span class="setting-desc">Bot ve harici araçların dinlenen parçayı anlık çektiği JSON endpoint'i</span>
+                </div>
+                <div style="display:flex;gap:6px">
+                  <button class="btn btn-ghost" id="btnOpenBotStateUrl" style="font-size:11px;padding:5px 10px">Tarayıcıda Aç ↗</button>
+                  <button class="btn btn-ghost" id="btnCopyBotStateUrl" style="font-size:11px;padding:5px 10px">URL Kopyala</button>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label">
+                  <span class="setting-name">Dahili Discord Botu</span>
+                  <span class="setting-desc">Sunucunda .aqua, .spo, .har komutlarıyla dinlediğin şarkıyı afiş olarak göster</span>
+                </div>
+                <span class="setting-value" id="discordBotProcessStatus" style="font-size:11px;color:var(--c-text-3)">Durduruldu</span>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+                <input type="password" id="discordBotTokenInput" placeholder="Discord Bot Tokeninizi girin (MT...)" style="flex:1;background:var(--c-bg-3);border:1px solid var(--c-border);border-radius:6px;padding:7px 10px;font-size:12px;color:var(--c-text-1)">
+                <button class="btn btn-primary" id="btnStartDiscordBot" style="font-size:11px;padding:7px 14px;white-space:nowrap">Botu Başlat</button>
+                <button class="btn btn-ghost" id="btnStopDiscordBot" style="font-size:11px;padding:7px 14px;display:none;color:#ef4444;white-space:nowrap">Durdur</button>
+              </div>
+              <div id="discordBotLogs" style="display:none;margin-top:8px;padding:8px;background:rgba(0,0,0,0.3);border-radius:6px;font-family:monospace;font-size:11px;color:var(--c-text-2);max-height:80px;overflow-y:auto;white-space:pre-wrap"></div>
+              <div class="setting-row" style="margin-top:12px">
+                <div class="setting-label">
+                  <span class="setting-name">Bot Dokümanı & Kaynak Kodları</span>
+                  <span class="setting-desc">Kurulum rehberi, komut listesi ve açık kaynak bot projesi</span>
+                </div>
+                <div style="display:flex;gap:6px">
+                  <button class="btn btn-ghost" id="btnOpenBotDocs" style="font-size:11px;padding:5px 10px">Web Dokümanı ↗</button>
+                  <button class="btn btn-ghost" id="btnOpenBotFolder" style="font-size:11px;padding:5px 10px">Bot Kodlarını Aç 📁</button>
+                </div>
+              </div>
+            </div>
+            <div class="settings-group">
               <h3 class="settings-group-title">Ses</h3>
               <div class="setting-row">
                 <div class="setting-label"><span class="setting-name">Ses Normalizasyonu</span><span class="setting-desc">Parçalar arası ses dengesini korur (VolumeRatio)</span></div>

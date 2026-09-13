@@ -33,6 +33,7 @@ interface StoreData {
   shuffle: boolean;
   repeat: 'off' | 'all' | 'one';
   discordEnabled?: boolean;
+  discordBotToken?: string;
 }
 
 const defaults: StoreData = {

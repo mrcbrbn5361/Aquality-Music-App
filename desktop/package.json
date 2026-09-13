@@ -55,6 +55,13 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "../scripts/discord-bot/",
+        "to": "discord-bot/",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "publish": {

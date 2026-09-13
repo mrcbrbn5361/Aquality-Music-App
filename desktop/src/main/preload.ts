@@ -113,11 +113,25 @@ const api = {
     getUpdateStatus: () => ipcRenderer.invoke('auto:getUpdateStatus')
   },
 
-  // Bot REST API (Port 9863)
+  // Bot REST API (Port 9863) & Discord Bot Runner
   botServer: {
     getState: () => ipcRenderer.invoke('bot-server:get-state'),
     updateState: (partial: unknown) => ipcRenderer.invoke('bot-server:update-state', partial),
-    isRunning: () => ipcRenderer.invoke('bot-server:is-running')
+    isRunning: () => ipcRenderer.invoke('bot-server:is-running'),
+    openFolder: () => ipcRenderer.invoke('bot-server:open-bot-folder'),
+    startBot: (token?: string) => ipcRenderer.invoke('bot-server:start-bot', token),
+    stopBot: () => ipcRenderer.invoke('bot-server:stop-bot'),
+    getBotStatus: () => ipcRenderer.invoke('bot-server:get-bot-status'),
+    onLog: (cb: (log: string) => void) => {
+      const h = (_: unknown, log: string) => cb(log);
+      ipcRenderer.on('bot-server:log', h);
+      return () => ipcRenderer.removeListener('bot-server:log', h);
+    },
+    onStatusChanged: (cb: (data: any) => void) => {
+      const h = (_: unknown, data: any) => cb(data);
+      ipcRenderer.on('bot-server:status-changed', h);
+      return () => ipcRenderer.removeListener('bot-server:status-changed', h);
+    }
   },
 
   // Playback IPC'leri (gizli pencere üzerinden)

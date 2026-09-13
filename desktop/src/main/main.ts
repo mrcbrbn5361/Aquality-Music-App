@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, shell, Menu, dialog, screen } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as child_process from 'child_process';
 import { YouTubeAPI } from './api/innertube';
 import { StoreManager } from './utils/store';
 import { DiscordRPC } from './utils/discord';
@@ -50,13 +51,40 @@ let musicAuth: MusicAuth;
 let streamResolver: StreamResolver;
 let botServer: BotServer;
 
+// Discord Bot Çalıştırıcı (scripts/discord-bot) State
+let discordBotProcess: child_process.ChildProcess | null = null;
+let discordBotLogs: string[] = [];
+let discordBotStatus: 'stopped' | 'running' | 'starting' | 'error' = 'stopped';
+let discordBotError: string | null = null;
+
+function findBotDir(): string | null {
+  const candidates = [
+    path.join(process.resourcesPath, 'discord-bot'),
+    path.resolve(__dirname, '../../../scripts/discord-bot'),
+    path.resolve(__dirname, '../../../../scripts/discord-bot'),
+    path.resolve(process.cwd(), 'scripts/discord-bot'),
+    path.resolve(process.cwd(), '../scripts/discord-bot'),
+    path.resolve(app.getAppPath(), '../scripts/discord-bot'),
+    path.resolve(app.getAppPath(), '../../scripts/discord-bot'),
+  ];
+  for (const dir of candidates) {
+    try {
+      if (fs.existsSync(dir) && fs.existsSync(path.join(dir, 'index.js'))) {
+        return dir;
+      }
+    } catch {}
+  }
+  return null;
+}
+
 const isDev = !app.isPackaged;
 
 function isSafeExternalUrl(url: string): boolean {
   try {
     const u = new URL(String(url));
+    if (u.protocol === 'http:' && (u.hostname === '127.0.0.1' || u.hostname === 'localhost')) return true;
     if (u.protocol !== 'https:') return false;
-    const allowed = ['music.youtube.com', 'youtube.com', 'www.youtube.com', 'github.com', 'accounts.google.com', 'discord.gg', 'discord.com', 'ytimg.com'];
+    const allowed = ['music.youtube.com', 'youtube.com', 'www.youtube.com', 'github.com', 'accounts.google.com', 'discord.gg', 'discord.com', 'ytimg.com', 'vercel.app'];
     return allowed.some(h => u.hostname === h || u.hostname.endsWith('.' + h));
   } catch {
     return false;
@@ -126,6 +154,7 @@ function createWindow(): void {
     // Gizli oynatıcı penceresi window-all-closed'ı engeller — burada kapat
     try { streamResolver?.destroy(); } catch {}
     try { discordRPC?.disconnect(); } catch {}
+    try { discordBotProcess?.kill(); } catch {}
     if (process.platform !== 'darwin') app.quit();
   });
 
@@ -247,13 +276,154 @@ function setupIPC(): void {
     }
   });
 
-  // Bot REST API (Port 9863) IPC
+  // Bot REST API (Port 9863) & Discord Bot Runner IPC
   ipcMain.handle('bot-server:get-state', () => botServer?.getState());
   ipcMain.handle('bot-server:update-state', (_, partial) => {
     botServer?.updateState(partial);
     return botServer?.getState();
   });
   ipcMain.handle('bot-server:is-running', () => botServer?.isRunning());
+
+  ipcMain.handle('bot-server:open-bot-folder', async () => {
+    const botDir = findBotDir();
+    if (botDir && fs.existsSync(botDir)) {
+      shell.openPath(botDir);
+      return { success: true, path: botDir };
+    }
+    return { success: false, error: 'Bot klasörü bulunamadı.' };
+  });
+
+  ipcMain.handle('bot-server:get-bot-status', () => {
+    return {
+      status: discordBotStatus,
+      isRunning: !!discordBotProcess && !discordBotProcess.killed,
+      error: discordBotError,
+      logs: discordBotLogs
+    };
+  });
+
+  ipcMain.handle('bot-server:stop-bot', async () => {
+    if (discordBotProcess) {
+      try {
+        discordBotProcess.kill();
+        discordBotProcess = null;
+        discordBotStatus = 'stopped';
+        return { success: true };
+      } catch (e: any) {
+        return { success: false, error: e?.message || String(e) };
+      }
+    }
+    discordBotStatus = 'stopped';
+    return { success: true };
+  });
+
+  ipcMain.handle('bot-server:start-bot', async (_, customToken?: string) => {
+    if (discordBotProcess && !discordBotProcess.killed) {
+      return { success: true, message: 'Bot zaten çalışıyor.' };
+    }
+
+    const botDir = findBotDir();
+    if (!botDir) {
+      discordBotStatus = 'error';
+      discordBotError = 'Bot script dosyaları (scripts/discord-bot) bulunamadı.';
+      return { success: false, error: discordBotError };
+    }
+
+    const scriptPath = path.join(botDir, 'index.js');
+    if (!fs.existsSync(scriptPath)) {
+      discordBotStatus = 'error';
+      discordBotError = 'index.js bulunamadı.';
+      return { success: false, error: discordBotError };
+    }
+
+    let token = (customToken || '').trim();
+    if (!token && storeManager) {
+      try {
+        const stored = await storeManager.get('discordBotToken');
+        if (stored && typeof stored === 'string') token = stored.trim();
+      } catch {}
+    }
+    if (!token && process.env.DISCORD_TOKEN) {
+      token = process.env.DISCORD_TOKEN.trim();
+    }
+
+    if (!token) {
+      discordBotStatus = 'error';
+      discordBotError = 'Discord Bot Token girilmedi. Lütfen Ayarlar > Discord Bot bölümünden token girin.';
+      return { success: false, error: discordBotError };
+    }
+
+    try {
+      discordBotStatus = 'starting';
+      discordBotError = null;
+      discordBotLogs = [`[${new Date().toLocaleTimeString()}] Bot başlatılıyor...`];
+
+      let cmd = 'node';
+      const extraEnv: Record<string, string> = {};
+      try {
+        child_process.execSync('node -v', { stdio: 'ignore' });
+        cmd = 'node';
+      } catch {
+        cmd = process.execPath;
+        extraEnv['ELECTRON_RUN_AS_NODE'] = '1';
+      }
+
+      const env = {
+        ...process.env,
+        DISCORD_TOKEN: token,
+        ...extraEnv
+      };
+
+      discordBotProcess = child_process.spawn(cmd, [scriptPath], {
+        cwd: botDir,
+        env,
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      discordBotStatus = 'running';
+
+      discordBotProcess.stdout?.on('data', (data) => {
+        const lines = data.toString().split('\n').map((l: string) => l.trim()).filter(Boolean);
+        for (const line of lines) {
+          discordBotLogs.push(line);
+          if (discordBotLogs.length > 60) discordBotLogs.shift();
+          mainWindow?.webContents.send('bot-server:log', line);
+        }
+      });
+
+      discordBotProcess.stderr?.on('data', (data) => {
+        const lines = data.toString().split('\n').map((l: string) => l.trim()).filter(Boolean);
+        for (const line of lines) {
+          discordBotLogs.push(`[Hata] ${line}`);
+          if (discordBotLogs.length > 60) discordBotLogs.shift();
+          mainWindow?.webContents.send('bot-server:log', `[Hata] ${line}`);
+        }
+      });
+
+      discordBotProcess.on('exit', (code, signal) => {
+        discordBotStatus = 'stopped';
+        const msg = `[${new Date().toLocaleTimeString()}] Bot durdu (Kod: ${code ?? 'yok'}, Sinyal: ${signal ?? 'yok'})`;
+        discordBotLogs.push(msg);
+        mainWindow?.webContents.send('bot-server:status-changed', { status: 'stopped', code });
+        discordBotProcess = null;
+      });
+
+      discordBotProcess.on('error', (err) => {
+        discordBotStatus = 'error';
+        discordBotError = err.message;
+        const msg = `[${new Date().toLocaleTimeString()}] Bot hatası: ${err.message}`;
+        discordBotLogs.push(msg);
+        mainWindow?.webContents.send('bot-server:status-changed', { status: 'error', error: err.message });
+        discordBotProcess = null;
+      });
+
+      return { success: true };
+    } catch (err: any) {
+      discordBotStatus = 'error';
+      discordBotError = err?.message || String(err);
+      return { success: false, error: discordBotError };
+    }
+  });
 
   // YouTube API
   ipcMain.handle('yt:search', async (_, query: string, filter?: string) => {
@@ -561,6 +731,7 @@ app.on('window-all-closed', () => {
   try { streamResolver?.destroy(); } catch {}
   try { discordRPC?.disconnect(); } catch {}
   try { botServer?.stop(); } catch {}
+  try { discordBotProcess?.kill(); } catch {}
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -568,6 +739,7 @@ app.on('before-quit', () => {
   try { streamResolver?.destroy(); } catch {}
   try { discordRPC?.disconnect(); } catch {}
   try { botServer?.stop(); } catch {}
+  try { discordBotProcess?.kill(); } catch {}
   for (const win of BrowserWindow.getAllWindows()) {
     try { win.destroy(); } catch {}
   }

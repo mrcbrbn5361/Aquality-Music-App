@@ -39,7 +39,7 @@ export class BotServer {
   private active: boolean = false;
   private state: BotServerState = {
     app: 'Aquality Music',
-    version: '1.0.0',
+    version: '1.0.1',
     status: 'stopped',
     isPlaying: false,
     track: null,
@@ -99,7 +99,7 @@ export class BotServer {
 
         if (url === '/api/v1/health' || url === '/health') {
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(JSON.stringify({ status: 'ok', app: 'Aquality Music', version: '1.0.0', port: this.port }));
+          res.end(JSON.stringify({ status: 'ok', app: 'Aquality Music', version: '1.0.1', port: this.port }));
           return;
         }
 
