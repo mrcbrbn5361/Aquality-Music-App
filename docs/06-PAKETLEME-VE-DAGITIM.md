@@ -8,10 +8,10 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-13 18:16` |
+| **Son Güncelleme** | `2026-09-13 18:33` |
 | **Proje Sürümü** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `9525e24 - feat(web): add Discord bot documentation page, mobile Expo Go guide, and update all pages to v1.0.1 (3 minutes ago)` |
+| **Son Commit** | `27ff2ce - feat(desktop): add Discord bot management UI, in-app runner and REST API controls (1 second ago)` |
 | **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Takip Edilen Sorunlar** | 24 / 24 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->

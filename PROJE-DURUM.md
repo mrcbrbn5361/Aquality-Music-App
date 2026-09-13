@@ -4,12 +4,12 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-13 18:16` |
+| **Son Güncelleme** | `2026-09-13 18:33` |
 | **Proje Versiyonu** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`, Mobil: `v1.0.1`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `9525e24 - feat(web): add Discord bot documentation page, mobile Expo Go guide, and update all pages to v1.0.1 (3 minutes ago)` |
+| **Son Git Commit** | `27ff2ce - feat(desktop): add Discord bot management UI, in-app runner and REST API controls (1 second ago)` |
 | **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
-| **Kod Hacmi (LOC)** | Ana Süreç: ~4626 satır, Arayüz: ~4792 satır, Mobil (Expo): ~5210 satır, Web: ~1585 satır |
+| **Kod Hacmi (LOC)** | Ana Süreç: ~4813 satır, Arayüz: ~4991 satır, Mobil (Expo): ~5210 satır, Web: ~1585 satır |
 
 ---
 
@@ -55,10 +55,7 @@
 
 ## 📁 3. Son Değiştirilen / İzlenen Dosyalar (Git Status)
 
-| Dosya Yolu | Durum |
-|---|---|
-| `.github/workflows/build-mac.yml` | Düzenlendi |
-| `.github/workflows/build-windows.yml` | Düzenlendi |
+_Çalışma ağacı temiz. İzlenen herhangi bir kaydedilmemiş değişiklik bulunmuyor._
 
 ---
 
