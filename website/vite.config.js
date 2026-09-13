@@ -5,7 +5,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   root: resolve(__dirname),
-  base: './',
+  base: '/',
   build: {
     outDir: resolve(__dirname, 'dist'),
     emptyOutDir: true,
@@ -16,7 +16,8 @@ export default defineConfig({
         indir: resolve(__dirname, 'indir.html'),
         sss: resolve(__dirname, 'sss.html'),
         gizlilik: resolve(__dirname, 'gizlilik.html'),
-        kosullar: resolve(__dirname, 'kosullar.html')
+        kosullar: resolve(__dirname, 'kosullar.html'),
+        notFound: resolve(__dirname, '404.html')
       }
     }
   },
