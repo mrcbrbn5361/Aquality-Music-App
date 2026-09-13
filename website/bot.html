@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Aquality Music Discord Botu, Discord Rich Presence (RPC) ve Yerel REST API (Port 9863) dokümantasyonu.">
+  <title>Discord Bot & RPC Dokümantasyonu - Aquality Music</title>
+  <link rel="icon" type="image/png" href="./assets/favicon.png">
+  <link rel="stylesheet" href="./css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <a href="index.html" class="logo"><div class="logo-icon">A</div><span>Aquality Music</span></a>
+      <div class="nav-links">
+        <a href="ozellikler.html">Özellikler</a>
+        <a href="bot.html" class="active">Discord Bot</a>
+        <a href="indir.html">İndir</a>
+        <a href="sss.html">SSS</a>
+      </div>
+      <div class="nav-actions"><a href="indir.html" class="btn btn-primary">İndir</a></div>
+      <button class="mobile-menu-btn" id="mobileMenuBtn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <section class="page-hero">
+    <div class="container">
+      <div class="hero-badge">v1.0.1 - Discord & API Entegrasyonu</div>
+      <h1>Discord Bot & <span class="highlight">RPC Sistemi</span></h1>
+      <p>Aquality Music'te dinlediğiniz şarkıyı Discord profilinizde zengin durum (RPC) olarak sergileyin, sunucunuz için Canvas kartlı Discord botunu kurun veya Yerel REST API ile entegrasyonlar geliştirin.</p>
+      <div class="hero-buttons" style="justify-content: center; margin-top: 24px;">
+        <a href="#kurulum" class="btn btn-primary btn-lg">Bot Kurulum Rehberi</a>
+        <a href="#api-endpoints" class="btn btn-secondary btn-lg">Yerel REST API</a>
+        <a href="https://github.com/mrcbrbn5361/Aquality-Music-App/tree/master/scripts/discord-bot" target="_blank" rel="noopener" class="btn btn-secondary btn-lg">GitHub Kaynak Kodları ↗</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Discord RPC Bölümü -->
+  <section class="doc-section">
+    <div class="doc-container">
+      <div class="section-header">
+        <h2>1. Discord Rich Presence (RPC)</h2>
+        <p>Masaüstü oynatıcı çalışırken Discord uygulamanıza otomatik bağlanır ve çalan müziği anlık yayınlar.</p>
+      </div>
+      <div class="doc-grid">
+        <div class="doc-card">
+          <h3>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+            Otomatik IPC Bağlantısı
+          </h3>
+          <p>Masaüstü uygulamasını açtığınız anda Discord IPC soketi (<code>\\?\pipe\discord-ipc-0</code>) üzerinden yerel Discord istemcinizle el sıkışılır. Kullanıcı adı veya şifre girmenize gerek kalmaz.</p>
+          <ul style="color: var(--text-secondary); font-size: 13.5px; padding-left: 20px; line-height: 1.8;">
+            <li><strong>Aktivite Türü:</strong> Dinliyor (Listening)</li>
+            <li><strong>Zaman Damgası:</strong> Gerçek zamanlı dinamik geri sayım çubuğu</li>
+            <li><strong>Görsel Detaylar:</strong> Yüksek çözünürlüklü albüm kapağı ve Aquality rozeti</li>
+            <li><strong>Harmonic Desteği:</strong> Çift Application ID desteği ile tam uyum</li>
+          </ul>
+        </div>
+        <div class="doc-card">
+          <h3>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="var(--accent)"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            Application ID Bilgileri
+          </h3>
+          <p>Kendi Discord botunuzu veya RPC profilinizi yapılandırırken kullanabileceğiniz doğrulanmış Discord Application ID'leri:</p>
+          <div class="code-box">
+            <div class="code-header"><span>Application ID Tanımları</span></div>
+            <pre class="code-content"><code>// Aquality Music Resmi RPC ID
+APPLICATION_ID = "1547602880427724841";
+
+// Harmonic Teması RPC ID
+HARMONIC_APP_ID = "1545832861435830432";</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Discord Botu & Canvas Kartı -->
+  <section class="doc-section" style="background: var(--bg-secondary); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+    <div class="doc-container">
+      <div class="section-header">
+        <h2>2. Discord Botu & Canvas Müzik Kartı</h2>
+        <p>Discord.js v14 ve @napi-rs/canvas ile geliştirilmiş ultra yüksek kaliteli çalan şarkı kartı ve buton sistemi.</p>
+      </div>
+
+      <div style="margin-bottom: 40px;">
+        <div class="bot-mockup">
+          <div class="bot-card-top">
+            <div class="bot-album-art">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="#fff"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+            </div>
+            <div class="bot-card-info">
+              <div class="bot-card-title">Ağlama Yar</div>
+              <div class="bot-card-artist">Nurettin Rençber — Eski Yara</div>
+              <div class="bot-card-progress">
+                <div class="bot-progress-bar"><div class="bot-progress-fill" style="width: 52%;"></div></div>
+                <div class="bot-card-times"><span>02:30</span><span>04:47</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="bot-buttons-row">
+            <div class="bot-btn"><span>Aquality'de Aç ↗</span></div>
+            <div class="bot-btn"><span>Şarkı Sözleri</span></div>
+            <div class="bot-btn" style="background: rgba(29,185,84,.15); border-color: rgba(29,185,84,.3);"><span>1. Söyle Sunam ↗</span></div>
+            <div class="bot-btn" style="background: rgba(29,185,84,.15); border-color: rgba(29,185,84,.3);"><span>2. İçimdeki Ateş ↗</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="doc-grid">
+        <div class="doc-card">
+          <h3>💬 Desteklenen Bot Komutları</h3>
+          <p>Sunucunuzdaki metin kanallarında dinlediğiniz şarkıyı anında sorgulamak için aşağıdaki komutları kullanabilirsiniz:</p>
+          <div class="command-list">
+            <span class="command-badge">.aqua</span>
+            <span class="command-badge">.aquality</span>
+            <span class="command-badge">.spo</span>
+            <span class="command-badge">.har</span>
+            <span class="command-badge">.harmonic</span>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted);">Komut verildiğinde bot, kullanıcının Discord Presence durumunu ve Port 9863 yerel REST API'sini tarayarak çalan şarkıyı yüksek çözünürlüklü Canvas görseliyle döndürür.</p>
+        </div>
+        <div class="doc-card">
+          <h3>🎵 İki Sıralı İnteraktif Butonlar</h3>
+          <p>Discord mesajı altına eklenen dinamik butonlar ile hem dinleyiciler hem de sunucu üyeleri parçaya anında erişir:</p>
+          <ul style="color: var(--text-secondary); font-size: 13.5px; padding-left: 20px; line-height: 1.8;">
+            <li><strong>1. Satır:</strong> Doğrudan şarkı linki ve senkronize şarkı sözleri.</li>
+            <li><strong>2. Satır (Öneriler):</strong> Kullanıcının sıradaki şarkıları veya iTunes API üzerinden çalınan sanatçının en popüler parçaları.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Yerel REST API -->
+  <section class="doc-section" id="api-endpoints">
+    <div class="doc-container">
+      <div class="section-header">
+        <h2>3. Yerel REST API Sunucusu (Port 9863)</h2>
+        <p>Aquality Music masaüstü uygulaması açıldığında yerel makinenizde hafif bir HTTP REST API ayağa kaldırır.</p>
+      </div>
+
+      <div class="endpoint-item">
+        <div class="endpoint-left">
+          <span class="method-badge get">GET</span>
+          <span class="endpoint-path">http://127.0.0.1:9863/api/v1/state</span>
+        </div>
+        <span class="endpoint-desc">Çalan parça, sanatçı, süre sayaçları, ilerleme oranı ve sıradaki önerileri döner.</span>
+      </div>
+
+      <div class="endpoint-item">
+        <div class="endpoint-left">
+          <span class="method-badge get">GET</span>
+          <span class="endpoint-path">http://127.0.0.1:9863/query</span>
+        </div>
+        <span class="endpoint-desc">Geriye dönük uyumluluk için <code>/api/v1/state</code> ile aynı JSON verisini döndüren kısayol.</span>
+      </div>
+
+      <div class="endpoint-item">
+        <div class="endpoint-left">
+          <span class="method-badge get">GET</span>
+          <span class="endpoint-path">http://127.0.0.1:9863/api/v1/health</span>
+        </div>
+        <span class="endpoint-desc">REST API sunucusunun aktif ve dinlemede olduğunu doğrulamak için sağlık kontrolü.</span>
+      </div>
+
+      <div class="code-box" style="margin-top: 24px;">
+        <div class="code-header"><span>Örnek API JSON Yanıtı (GET /api/v1/state)</span></div>
+        <pre class="code-content"><code>{
+  "app": "Aquality Music",
+  "version": "1.0.1",
+  "status": "playing",
+  "isPlaying": true,
+  "track": {
+    "id": "abc123xyz",
+    "title": "Ağlama Yar",
+    "artist": "Nurettin Rençber",
+    "album": "Eski Yara",
+    "thumbnail": "https://i.ytimg.com/vi/abc123xyz/hqdefault.jpg",
+    "duration": 287,
+    "durationFormatted": "04:47",
+    "currentTime": 150,
+    "currentTimeFormatted": "02:30",
+    "progress": 0.522,
+    "url": "https://music.youtube.com/watch?v=abc123xyz"
+  },
+  "recommendations": [
+    { "title": "Söyle Sunam", "artist": "Nurettin Rençber", "url": "https://music.youtube.com/watch?v=..." },
+    { "title": "İçimdeki Ateş", "artist": "Nurettin Rençber", "url": "https://music.youtube.com/watch?v=..." },
+    { "title": "Yürürüm", "artist": "Nurettin Rençber", "url": "https://music.youtube.com/watch?v=..." }
+  ],
+  "updatedAt": 1789312200000
+}</code></pre>
+      </div>
+
+      <div class="code-box">
+        <div class="code-header"><span>Terminalden Test Edin (cURL)</span></div>
+        <pre class="code-content"><code>curl -s http://127.0.0.1:9863/api/v1/state | jq</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Kurulum Rehberi -->
+  <section class="doc-section" id="kurulum" style="background: var(--bg-secondary); border-top: 1px solid var(--border);">
+    <div class="doc-container">
+      <div class="section-header">
+        <h2>4. Bot Kurulum ve Çalıştırma Rehberi</h2>
+        <p>Aquality Discord botunu kendi Discord sunucunuzda 5 dakikada yayına alın.</p>
+      </div>
+
+      <div class="steps-grid" style="margin-bottom: 40px;">
+        <div class="step">
+          <div class="step-num">1</div>
+          <h4>Bot Dizinine Geçin</h4>
+          <p>Terminalinizde <code>scripts/discord-bot</code> klasörüne gidin.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <h4>Paketleri Yükleyin</h4>
+          <p><code>npm install</code> komutu ile discord.js ve canvas paketlerini kurun.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <h4>Token Belirleyin</h4>
+          <p><code>.env</code> dosyasında botunuzun <code>DISCORD_TOKEN</code> değerini tanımlayın.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <h4>Başlatın</h4>
+          <p><code>node index.js</code> komutuyla botu sunucunuzda aktif hale getirin.</p>
+        </div>
+      </div>
+
+      <div class="doc-card">
+        <h3>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+          Önemli: Discord Developer Portal Intent Ayarları
+        </h3>
+        <p>Botun sunucudaki kullanıcıların müzik dinleme durumunu ve komutlarını okuyabilmesi için Developer Portal üzerinden şu 3 iznin açık olması zorunludur:</p>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 14px;">
+          <div style="background: rgba(29,185,84,.1); border: 1px solid rgba(29,185,84,.25); padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--accent-2);">✅ PRESENCE INTENT (Aktif)</div>
+          <div style="background: rgba(29,185,84,.1); border: 1px solid rgba(29,185,84,.25); padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--accent-2);">✅ SERVER MEMBERS INTENT (Aktif)</div>
+          <div style="background: rgba(29,185,84,.1); border: 1px solid rgba(29,185,84,.25); padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--accent-2);">✅ MESSAGE CONTENT INTENT (Aktif)</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="page-cta">
+    <div class="container">
+      <h2>Müziğinizi Topluluğunuzla Paylaşmaya Başlayın</h2>
+      <p>Aquality Music'i masaüstünüze indirin, Discord RPC ve bot özellikleriyle müzik zevkinizi herkese gösterin.</p>
+      <div style="display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;">
+        <a href="indir.html" class="btn btn-primary btn-lg">Uygulamayı İndir</a>
+        <a href="https://github.com/mrcbrbn5361/Aquality-Music-App" target="_blank" rel="noopener" class="btn btn-secondary btn-lg">GitHub'da İncele ↗</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <div class="logo"><div class="logo-icon">A</div><span>Aquality Music</span></div>
+          <p>Windows, macOS ve Mobil için premium müzik deneyimi.</p>
+          <div class="footer-social">
+            <a href="https://github.com/mrcbrbn5361/Aquality-Music-App/releases" target="_blank" rel="noopener" class="social-link" aria-label="GitHub">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+            </a>
+            <a href="https://discord.gg/aquality" target="_blank" rel="noopener" class="social-link" aria-label="Discord">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.79 19.79 0 00-4.885-1.515.074.074 0 00-.079.037 c-.21.375-.444.865-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25 a.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.319 13.58.099 18.058a.082.082 0 00.031.056 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028 13.09 13.09 0 001.226-1.994.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 01.078-.01c3.928 1.793 8.18 1.793 12.061 0a.074.074 0 01.079.009c.12.099.246.198.373.292a.077.077 0 01-.006.128 12.3 12.3 0 01-1.873.891.077.077 0 00-.041.107c.36.698.772 1.363 1.225 1.993a.076.076 0 00.084.029 19.84 19.84 0 006.002-3.03.077.077 0 00.031-.055c.5-5.177-.838-9.674-3.548-13.66a.061.061 0 00-.031-.029zM8.02 15.331c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.211 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.211 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+            </a>
+          </div>
+        </div>
+        <div class="footer-links">
+          <div class="footer-column">
+            <h4>Ürün</h4>
+            <a href="ozellikler.html">Özellikler</a>
+            <a href="bot.html">Discord Bot</a>
+            <a href="indir.html">İndir</a>
+          </div>
+          <div class="footer-column">
+            <h4>Kaynaklar</h4>
+            <a href="bot.html#api-endpoints">REST API</a>
+            <a href="sss.html">SSS</a>
+            <a href="sss.html">Destek</a>
+          </div>
+          <div class="footer-column">
+            <h4>Topluluk</h4>
+            <a href="https://github.com/mrcbrbn5361/Aquality-Music-App" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://discord.gg/aquality" target="_blank" rel="noopener">Discord</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 Aquality Music. Tüm hakları saklıdır.</p>
+        <div class="footer-bottom-links">
+          <a href="gizlilik.html">Gizlilik Politikası</a>
+          <a href="kosullar.html">Lisans</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>

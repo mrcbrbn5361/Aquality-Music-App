@@ -17,6 +17,7 @@ export default defineConfig({
         sss: resolve(__dirname, 'sss.html'),
         gizlilik: resolve(__dirname, 'gizlilik.html'),
         kosullar: resolve(__dirname, 'kosullar.html'),
+        bot: resolve(__dirname, 'bot.html'),
         notFound: resolve(__dirname, '404.html')
       }
     }

@@ -17,6 +17,7 @@
       <a href="index.html" class="logo"><div class="logo-icon">A</div><span>Aquality Music</span></a>
       <div class="nav-links">
         <a href="ozellikler.html">Özellikler</a>
+        <a href="bot.html">Discord Bot</a>
         <a href="indir.html">İndir</a>
         <a href="sss.html" class="active">SSS</a>
       </div>
@@ -29,8 +30,9 @@
 
   <section class="page-hero">
     <div class="container">
+      <div class="hero-badge" style="margin-bottom: 14px;">v1.0.1 - Destek & Bilgi Merkezi</div>
       <h1>Sıkça Sorulan <span class="highlight">Sorular</span></h1>
-      <p>Merak ettiğiniz her şeyin cevabı burada.</p>
+      <p>Masaüstü, mobil ve Discord entegrasyonu hakkında merak ettiğiniz her şey burada.</p>
     </div>
   </section>
 
@@ -48,11 +50,38 @@
         </div>
         <div class="faq-item">
           <button class="faq-question">
-            <span>YouTube Music hesabıma giriş yapabilir miyim?</span>
+            <span>Hangi işletim sistemleri destekleniyor?</span>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>
           </button>
           <div class="faq-answer">
-            <p>Aquality Music, YouTube Music'in dahili API'sini kullanır. Şu anda doğrudan Google hesabı ile giriş desteği eklenmektedir. Yakında kullanıma sunulacaktır.</p>
+            <p>Aquality Music; Windows 11 ve Windows 10 (64-bit), macOS (Apple Silicon ve Intel) ile Mobil cihazlar için Expo Go (Android ve iOS) üzerinde eksiksiz olarak desteklenmektedir.</p>
+          </div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question">
+            <span>Mobil uygulamayı (Expo Go) nasıl kullanırım?</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>
+          </button>
+          <div class="faq-answer">
+            <p>Telefonunuza App Store veya Google Play üzerinden <strong>Expo Go</strong> uygulamasını indirin. Bilgisayarınızdaki proje dizininde <code>npx expo start --tunnel</code> komutunu çalıştırın ve ekranda beliren QR kodu telefonunuzla taratın. Metrolist mimarili bağımsız müzik deneyimi anında açılır.</p>
+          </div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question">
+            <span>Discord Rich Presence (RPC) ve Discord Botu nasıl çalışır?</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>
+          </button>
+          <div class="faq-answer">
+            <p>Masaüstü uygulaması açıldığında Discord IPC soketi üzerinden otomatik bağlanır ve profilinizde dinlediğiniz parçayı gerçek zamanlı süre sayacıyla yayınlar. Kendi sunucunuz için <code>scripts/discord-bot</code> klasöründeki botu çalıştırarak <code>.aqua</code> komutuyla Canvas müzik kartları ve şarkı öneri butonları paylaşabilirsiniz.</p>
+          </div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question">
+            <span>Yerel REST API (Port 9863) nedir?</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>
+          </button>
+          <div class="faq-answer">
+            <p>Masaüstü uygulaması çalışırken yerel ağınızda <code>http://127.0.0.1:9863/api/v1/state</code> adresinde hafif bir HTTP REST API sunucusu açar. Çalan şarkı, sanatçı, süre sayaçları ve sıradaki önerileri JSON formatında okuyabilir, kendi bot veya arayüzlerinizi bağlayabilirsiniz.</p>
           </div>
         </div>
         <div class="faq-item">
@@ -61,25 +90,7 @@
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>
           </button>
           <div class="faq-answer">
-            <p>Evet, müzikler YouTube Music üzerinden aktarıldığı için internet bağlantısı gereklidir. Gelecek sürümlerde çevrimdışı dinleme desteği planlanmaktadır.</p>
-          </div>
-        </div>
-        <div class="faq-item">
-          <button class="faq-question">
-            <span>Hangi işletim sistemleri destekleniyor?</span>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>
-          </button>
-          <div class="faq-answer">
-            <p>Aquality Music şu anda yalnızca Windows 11 (64-bit) desteklemektedir. Gelecek sürümlerde macOS ve Linux desteği eklenmesi planlanmaktadır.</p>
-          </div>
-        </div>
-        <div class="faq-item">
-          <button class="faq-question">
-            <span>Şarkı sözleri nasıl çalışıyor?</span>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>
-          </button>
-          <div class="faq-answer">
-            <p>Aquality Music, birden fazla şarkı sözü sağlayıcısını kullanarak eşzamanlı şarkı sözleri sunar. Şarkı sözleri otomatik olarak yüklenir ve ekranda görüntülenir.</p>
+            <p>Evet, müzikler YouTube Music altyapısı üzerinden yüksek kalitede aktarıldığı için aktif bir internet bağlantısı gereklidir.</p>
           </div>
         </div>
         <div class="faq-item">
@@ -88,16 +99,7 @@
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>
           </button>
           <div class="faq-answer">
-            <p>Aquality Music açık kaynaklıdır ve tüm işlemler yerel olarak bilgisayarınızda yapılır. Hiçbir kişisel veri toplanmaz veya üçüncü taraflarla paylaşılmaz.</p>
-          </div>
-        </div>
-        <div class="faq-item">
-          <button class="faq-question">
-            <span>Nasıl güncelleyebilirim?</span>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>
-          </button>
-          <div class="faq-answer">
-            <p>Aquality Music otomatik olarak yeni sürümleri kontrol eder. Yeni bir sürüm mevcutsa uygulama içinde bildirim alırsınız. Manuel olarak da sitemizden güncel versiyonu indirebilirsiniz.</p>
+            <p>Aquality Music açık kaynaklıdır ve tüm işlemler yerel olarak cihazınızda gerçekleşir. Hiçbir kişisel veri toplanmaz veya üçüncü taraflarla paylaşılmaz.</p>
           </div>
         </div>
       </div>
@@ -107,8 +109,11 @@
   <section class="page-cta">
     <div class="container">
       <h2>Sorunuz mu var?</h2>
-      <p>Destek ekibimizle iletişime geçin.</p>
-      <a href="indir.html" class="btn btn-primary btn-lg">Aquality Music'i İndirin</a>
+      <p>Topluluğumuza katılın veya uygulamayı hemen deneyin.</p>
+      <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+        <a href="indir.html" class="btn btn-primary btn-lg">Aquality Music'i İndirin</a>
+        <a href="bot.html" class="btn btn-secondary btn-lg">Discord Bot Dokümanı</a>
+      </div>
     </div>
   </section>
 
@@ -117,16 +122,34 @@
       <div class="footer-content">
         <div class="footer-brand">
           <div class="logo"><div class="logo-icon">A</div><span>Aquality Music</span></div>
-          <p>Windows 11 için premium müzik deneyimi.</p>
+          <p>Windows, macOS ve Mobil için premium müzik deneyimi.</p>
         </div>
         <div class="footer-links">
-          <div class="footer-column"><h4>Ürün</h4><a href="ozellikler.html">Özellikler</a><a href="indir.html">İndir</a></div>
-          <div class="footer-column"><h4>Kaynaklar</h4><a href="sss.html">SSS</a><a href="sss.html">Destek</a></div>
-          <div class="footer-column"><h4>Topluluk</h4><a href="https://github.com/mrcbrbn5361/Aquality-Music-App" target="_blank" rel="noopener">GitHub</a><a href="https://discord.gg/aquality" target="_blank" rel="noopener">Discord</a></div>
+          <div class="footer-column">
+            <h4>Ürün</h4>
+            <a href="ozellikler.html">Özellikler</a>
+            <a href="bot.html">Discord Bot</a>
+            <a href="indir.html">İndir</a>
+          </div>
+          <div class="footer-column">
+            <h4>Kaynaklar</h4>
+            <a href="bot.html#api-endpoints">REST API</a>
+            <a href="sss.html">SSS</a>
+            <a href="sss.html">Destek</a>
+          </div>
+          <div class="footer-column">
+            <h4>Topluluk</h4>
+            <a href="https://github.com/mrcbrbn5361/Aquality-Music-App" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://discord.gg/aquality" target="_blank" rel="noopener">Discord</a>
+          </div>
         </div>
       </div>
       <div class="footer-bottom">
         <p>&copy; 2026 Aquality Music. Tüm hakları saklıdır.</p>
+        <div class="footer-bottom-links">
+          <a href="gizlilik.html">Gizlilik Politikası</a>
+          <a href="kosullar.html">Lisans</a>
+        </div>
       </div>
     </div>
   </footer>
