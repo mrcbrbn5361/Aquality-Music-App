@@ -4,19 +4,19 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-12 00:12` |
-| **Proje Versiyonu** | `v1.0.0` (Masaüstü: `v1.0.0`, Web: `v1.0.0`, Mobil: `v1.0.0`) |
+| **Son Güncelleme** | `2026-09-13 17:50` |
+| **Proje Versiyonu** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`, Mobil: `v1.0.1`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `05f8ef9 - fix(mobile): update expo start guide and kill stale dev server processes (8 minutes ago)` |
+| **Son Git Commit** | `c1ef2e5 - chore: ignore local private documentation files (28 minutes ago)` |
 | **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
-| **Kod Hacmi (LOC)** | Ana Süreç: ~4465 satır, Arayüz: ~4729 satır, Mobil (Expo): ~5210 satır, Web: ~1069 satır |
+| **Kod Hacmi (LOC)** | Ana Süreç: ~4626 satır, Arayüz: ~4792 satır, Mobil (Expo): ~5210 satır, Web: ~1069 satır |
 
 ---
 
 ## 📊 1. Proje Genel Durumu ve Sağlık Özeti
 
-- **Toplam Takip Edilen Sorun**: 21
-- **Çözülen / İyileştirilen**: 21 (100%)
+- **Toplam Takip Edilen Sorun**: 24
+- **Çözülen / İyileştirilen**: 24 (100%)
 - **Açık / İncelenen**: 0
 - **Build Durumu**: Masaüstü (Vite + Electron + TS) & Web Sitesi (Vite) entegrasyonu aktif.
 
@@ -47,6 +47,9 @@
 | `UX-01` | **Arayüz / UX** | `YÜKSEK` | **Spotify Standardı Arayüz ve Dinamik Etkileşimler (Ekolayzır & Kart Oynatma)**<br>_Eski düz liste görünümü ve kartlarda dinamik oynat düğmesinin olmaması_ | ✅ DÜZELTİLDİ | 3 barlı canlı yeşil ekolayzır, hover oynat ikonları, kart hover yüzen yeşil oynat butonları eklendi. |
 | `PKG-01` | **Paketleme & Dağıtım** | `YÜKSEK` | **Portable sürüm veri izolasyonu ve USB taşınabilirliği eksikliği**<br>_Portable modda çalıştırıldığında verilerin yerel %APPDATA% içine sızması_ | ✅ DÜZELTİLDİ | PORTABLE_EXECUTABLE_DIR tespit edilerek userData klasörü exe yanındaki data/ klasörüne izole edildi. |
 | `PKG-02` | **Paketleme & Dağıtım** | `ORTA` | **Kurulum sihirbazı (NSIS) kısayol parametreleri, kaldırma temizliği ve dil eksiklikleri**<br>_Kısayol çalışma dizini eksikliği, uninstaller sonrası artık dosyalar_ | ✅ DÜZELTİLDİ | installer.nsh içinde SetOutPath $INSTDIR ve kapsamlı uninstaller temizliği eklendi; tr_TR dili bağlandı. |
+| `BOT-01` | **Discord & Bot** | `YÜKSEK` | **Aquality Music Port 9863 Yerel Bot REST API ve Canvas Kart Motoru Eksikliği**<br>_Discord botlarının çalan şarkıyı, süreyi ve önerileri çekememesi_ | ✅ DÜZELTİLDİ | Port 9863 HTTP REST API (/api/v1/state) sunucusu, preload köprüsü, app.ts senkronizasyonu ve @napi-rs/canvas oynatıcı kartı bot motoru eklendi. |
+| `REL-01` | **Kararlılık** | `ORTA` | **Çoklu monitör bağlantısı kesildiğinde pencerenin ekran dışı koordinatlarda kalması**<br>_İkinci ekran çıkarıldığında uygulamanın görünmeyen koordinatlarda açılması_ | ✅ DÜZELTİLDİ | screen.getAllDisplays() ile pencere koordinatlarının aktif monitör alanı içinde olduğu doğrulanarak ekran dışı kalma engellendi. |
+| `SEC-07` | **Güvenlik** | `ORTA` | **Discord OAuth rastgele CSRF state doğrulaması ve port çakışması koruması**<br>_Oturum açma sırasında CSRF riski ve port kilitlenmesi_ | ✅ DÜZELTİLDİ | Kriptografik 32-byte CSRF state parametresi, PKCE doğrulaması ve EADDRINUSE hata yakalaması eklendi. |
 
 ---
 
@@ -55,6 +58,11 @@
 | Dosya Yolu | Durum |
 |---|---|
 | `PROJE-DURUM.md` | Düzenlendi |
+| `app.json` | Düzenlendi |
+| `desktop/package.json` | Düzenlendi |
+| `desktop/src/main/main.ts` | Düzenlendi |
+| `desktop/src/main/preload.ts` | Düzenlendi |
+| `desktop/src/renderer/components/app.ts` | Düzenlendi |
 | `docs/01-MIMARI-VE-SISTEM-TASARIMI.md` | Düzenlendi |
 | `docs/02-API-VE-STREAM-MOTORU.md` | Düzenlendi |
 | `docs/03-AUTH-VE-GUVENLIK.md` | Düzenlendi |
@@ -66,13 +74,16 @@
 | `docs/09-GELISTIRICI-KILAVUZU.md` | Düzenlendi |
 | `docs/10-MOBIL-EXPO-REHBERI.md` | Düzenlendi |
 | `docs/README.md` | Düzenlendi |
-| `mobile/app/modal/player.tsx` | Düzenlendi |
-| `mobile/src/components/MiniPlayer.tsx` | Düzenlendi |
-| `mobile/src/store/player-store.ts` | Düzenlendi |
-| `App.tsx` | Yeni Dosya |
-| `app.json` | Yeni Dosya |
-| `babel.config.js` | Yeni Dosya |
-| `metro.config.js` | Yeni Dosya |
+| `mobile/app.json` | Düzenlendi |
+| `mobile/package.json` | Düzenlendi |
+| `package.json` | Düzenlendi |
+| `scripts/update-docs.cjs` | Düzenlendi |
+| `website/index.html` | Düzenlendi |
+| `website/indir.html` | Düzenlendi |
+| `website/package.json` | Düzenlendi |
+| `desktop/src/main/api/bot-server.ts` | Yeni Dosya |
+| `docs/11-DISCORD-BOT-VE-RPC-ENTEGRASYONU.md` | Yeni Dosya |
+| `scripts/discord-bot/` | Yeni Dosya |
 
 ---
 
@@ -90,4 +101,5 @@ Projenin detaylı alt dokümanlarına [`docs/`](docs/README.md) klasöründen ul
 - [08. Sorunlar ve Çözümler Matrisi](docs/08-SORUNLAR-VE-COZUMLER.md)
 - [09. Geliştirici Kılavuzu](docs/09-GELISTIRICI-KILAVUZU.md)
 - [10. Mobil (Expo - Android & iOS) Rehberi](docs/10-MOBIL-EXPO-REHBERI.md)
+- [11. Discord Bot ve RPC Entegrasyonu](docs/11-DISCORD-BOT-VE-RPC-ENTEGRASYONU.md)
 

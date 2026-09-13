@@ -8,12 +8,12 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-12 00:12` |
-| **Proje Sürümü** | `v1.0.0` (Masaüstü: `v1.0.0`, Web: `v1.0.0`) |
+| **Son Güncelleme** | `2026-09-13 17:50` |
+| **Proje Sürümü** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `05f8ef9 - fix(mobile): update expo start guide and kill stale dev server processes (8 minutes ago)` |
+| **Son Commit** | `c1ef2e5 - chore: ignore local private documentation files (28 minutes ago)` |
 | **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
-| **Takip Edilen Sorunlar** | 21 / 21 Çözüldü (%100 Başarı) |
+| **Takip Edilen Sorunlar** | 24 / 24 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->
 
 ---

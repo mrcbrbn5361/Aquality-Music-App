@@ -8,12 +8,35 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-12 00:12` |
-| **Proje Sürümü** | `v1.0.0` (Masaüstü: `v1.0.0`, Web: `v1.0.0`) |
+| **Son Güncelleme** | `2026-09-13 17:50` |
+| **Proje Sürümü** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `05f8ef9 - fix(mobile): update expo start guide and kill stale dev server processes (8 minutes ago)` |
+| **Son Commit** | `c1ef2e5 - chore: ignore local private documentation files (28 minutes ago)` |
 | **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
-| **Takip Edilen Sorunlar** | 21 / 21 Çözüldü (%100 Başarı) |
+| **Takip Edilen Sorunlar** | 24 / 24 Çözüldü (%100 Başarı) |
+<!-- AUTO-UPDATE:STATUS-END -->
+
+---
+
+## 🔍 Kapsamlı Sorun ve Çözüm Tablosu
+
+| ID | Kategori | Öncelik | Sorun Tanımı ve Etkisi | Durum | Uygulanan Çözüm ve Aksiyon |
+|---|---|---|---|---|---|
+| `SEC-01` | **Güvenlik** | `KRİTİK` | **Google OAuth Client Secret renderer maruziyeti**<br>_İstemci tarafında yetkisiz token erişimi riski_ | ✅ DÜZELTİLDİ | Client Secret renderer preload exposure'dan kaldırıldı, güvenli ana süreçte tutuldu. |
+| `SEC-02` | **Güvenlik** | `KRİTİK` | **XSS & HTML Injection açıkları (kartlar, playlist isimleri, OAuth)**<br>_Kullanıcı verisi ve browse yanıtları üzerinden DOM XSS_ | ✅ DÜZELTİLDİ | `escapeHtml` genişletildi, tüm dinamik kartlara ve OAuth URI parse adımlarına uygulandı. |
+| `SEC-03` | **Güvenlik** | `YÜKSEK` | **Chrome Cookie dosyası kilitlenmesi ve geçici dosya sızıntısı riski**<br>_Chrome açıkken EBUSY/EPERM hatası; temp dosyada cookie kalma riski_ | ✅ DÜZELTİLDİ | `os.tmpdir()`, benzersiz geçici UUID dosya adı ve `try-finally` ile garantili disk temizliği sağlandı. |
+| `SEC-04` | **Güvenlik** | `YÜKSEK` | **login.html bağımsız penceresinde Preload/CSP uyumsuzluğu ve ölü kod**<br>_Preload olmadan window.api tanımsız kalır ve pencere kilitlenir_ | ✅ DÜZELTİLDİ | Kullanılmayan `login.html` kaldırıldı; oturum akışı tam izole `MusicAuth` penceresi üzerinden netleştirildi. |
+| `SEC-05` | **Güvenlik** | `YÜKSEK` | **setWindowOpenHandler ve shell:openExternal güvensiz protokol riski**<br>_Zararlı URL şemalarının (javascript:, file:) işletim sisteminde yürütülmesi_ | ✅ DÜZELTİLDİ | `isSafeExternalUrl` ortak fonksiyonu ile yalnızca https ve izin verilen alan adları açılacak şekilde filtrelendi. |
+| `ARC-01` | **Mimari** | `ORTA` | **stream-resolver.ts pencere nesnesine __adCssHooked ataması**<br>_BrowserWindow nesnesine dinamik özellik atanması, tip karmaşası_ | ✅ DÜZELTİLDİ | `BrowserWindow` `WeakSet` (`adCssHookedWindows`) ile tip güvenli ve bellek sızıntısız yapıya geçirildi. |
+| `ARC-02` | **Mimari** | `YÜKSEK` | **InnerTube clientVersion eskimesi riski**<br>_1.20241001 sürümünün YouTube tarafından drop edilmesi ve 400 Bad Request_ | ✅ DÜZELTİLDİ | `clientVersion` `1.20250801.00.00` sürümüne güncellendi (`innertube`, `stream-resolver`, `music-auth`). |
+| `ARC-03` | **Mimari** | `YÜKSEK` | **Liked Songs dinamik aramada Türkçe regex hatası ve sabit ID eksikliği**<br>_Beğenilen şarkılar listesinin Türkçe YouTube Music kullanıcılarında boş gelmesi_ | ✅ DÜZELTİLDİ | Regex Türkçe diline uyarlandı ve dinamik arama başarısız olursa yerleşik `LM` (Liked Music) doğrudan fallback'i eklendi. |
+| `ARC-04` | **Mimari** | `ORTA` | **music-auth onBeforeSendHeaders cleanup ve kapsam eksikliği**<br>_Session header listener'ının filtrelenmemiş tüm istekleri modifiye etmesi_ | ✅ DÜZELTİLDİ | Hedef Google/YouTube URL filtrelemesi ve izole header ekleme yapısı uygulandı. |
+| `DAT-01` | **Veri & Durum** | `ORTA` | **store.ts queue tipinde duration ve artistId alanlarının eksikliği**<br>_TypeScript tip uyuşmazlığı; kuyruk kaydında duration/artistId kaybı riski_ | ✅ DÜZELTİLDİ | `StoreData` arayüzünde `queue` ve `recentlyPlayed` modellerine `duration` ve `artistId` tanımlandı. |
+| `DAT-02` | **Veri & Durum** | `ORTA` | **Playlist ID çakışma (collision) riski**<br>_Hızlı ardışık çalma listesi oluşturmada veri ezilmesi_ | ✅ DÜZELTİLDİ | Timestamp + rastgele UUID türevi benzersiz ID üretimi (`pl_${Date.now()}_...`) eklendi. |
+| `UI-01` | **Arayüz / UX** | `YÜKSEK` | **Arama sonuçlarında albüm ve sanatçı kartlarına tıklanamaması**<br>_Kullanıcının arama sonuçlarından sanatçı veya albüme gidememesi_ | ✅ DÜZELTİLDİ | `openBrowseCard` ortak fonksiyonu yazıldı ve arama kartlarına click handler eklendi. |
+| `UI-02` | **Arayüz / UX** | `YÜKSEK` | **Giriş yapılmadan şarkıya tıklandığında sessizce durması**<br>_Kullanıcının neden çalmama olduğunu anlamaması (kötü UX)_ | ✅ DÜZELTİLDİ | `playSong` içinde giriş kontrolü ve yönlendirici modal/toast eklendi. |
+| `UI-03` | **Arayüz / UX** | `ORTA` | **Uygulama dilinin sabit Türkçe olması (i18n eksikliği)**<br>_Uluslararası kullanıcılar için dil seçeneği bulunmaması_ | ✅ DÜZELTİLDİ | Ayarlar sekmesine Türkçe (`tr`) ve İngilizce (`en`) dil seçeneği eklendi; `i18nDict` ve `applyLanguage` entegrasyonu tamamlandı. |
+| **Takip Edilen Sorunlar** | 24 / 24 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->
 
 ---
@@ -43,3 +66,6 @@
 | `UX-01` | **Arayüz / UX** | `YÜKSEK` | **Spotify Standardı Arayüz ve Dinamik Etkileşimler (Ekolayzır & Kart Oynatma)**<br>_Eski düz liste görünümü ve kartlarda dinamik oynat düğmesinin olmaması_ | ✅ DÜZELTİLDİ | 3 barlı canlı yeşil ekolayzır, hover oynat ikonları, kart hover yüzen yeşil oynat butonları eklendi. |
 | `PKG-01` | **Paketleme & Dağıtım** | `YÜKSEK` | **Portable sürüm veri izolasyonu ve USB taşınabilirliği eksikliği**<br>_Portable modda çalıştırıldığında verilerin yerel %APPDATA% içine sızması_ | ✅ DÜZELTİLDİ | `PORTABLE_EXECUTABLE_DIR` tespit edilerek `userData` klasörü exe yanındaki `data/` klasörüne izole edildi. |
 | `PKG-02` | **Paketleme & Dağıtım** | `ORTA` | **Kurulum sihirbazı (NSIS) kısayol parametreleri, kaldırma temizliği ve dil eksiklikleri**<br>_Kısayol çalışma dizini eksikliği, uninstaller sonrası artık dosyalar_ | ✅ DÜZELTİLDİ | `installer.nsh` içinde `SetOutPath $INSTDIR` ve kapsamlı uninstaller temizliği eklendi; `tr_TR` dili bağlandı. |
+| `BOT-01` | **Discord & Bot** | `YÜKSEK` | **Aquality Music Port 9863 Yerel Bot REST API ve Canvas Kart Motoru Eksikliği**<br>_Discord botlarının çalan şarkıyı, süreyi ve önerileri çekememesi_ | ✅ DÜZELTİLDİ | Port 9863 HTTP REST API (`/api/v1/state`) sunucusu, preload köprüsü, `app.ts` senkronizasyonu ve `@napi-rs/canvas` oynatıcı kartı bot motoru eklendi. |
+| `REL-01` | **Kararlılık** | `ORTA` | **Çoklu monitör bağlantısı kesildiğinde pencerenin ekran dışı koordinatlarda kalması**<br>_İkinci ekran çıkarıldığında uygulamanın görünmeyen koordinatlarda açılması_ | ✅ DÜZELTİLDİ | `screen.getAllDisplays()` ile pencere koordinatlarının aktif monitör alanı içinde olduğu doğrulanarak ekran dışı kalma engellendi. |
+| `SEC-07` | **Güvenlik** | `ORTA` | **Discord OAuth rastgele CSRF state doğrulaması ve port çakışması koruması**<br>_Oturum açma sırasında CSRF riski ve port kilitlenmesi_ | ✅ DÜZELTİLDİ | Kriptografik 32-byte CSRF state parametresi, PKCE doğrulaması ve `EADDRINUSE` hata yakalaması eklendi. |

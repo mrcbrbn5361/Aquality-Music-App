@@ -310,6 +310,33 @@ const issues = [
     priority: 'ORTA',
     status: '✅ DÜZELTİLDİ',
     solution: 'installer.nsh içinde SetOutPath $INSTDIR ve kapsamlı uninstaller temizliği eklendi; tr_TR dili bağlandı.'
+  },
+  {
+    id: 'BOT-01',
+    category: 'Discord & Bot',
+    title: 'Aquality Music Port 9863 Yerel Bot REST API ve Canvas Kart Motoru Eksikliği',
+    impact: 'Discord botlarının çalan şarkıyı, süreyi ve önerileri çekememesi',
+    priority: 'YÜKSEK',
+    status: '✅ DÜZELTİLDİ',
+    solution: 'Port 9863 HTTP REST API (/api/v1/state) sunucusu, preload köprüsü, app.ts senkronizasyonu ve @napi-rs/canvas oynatıcı kartı bot motoru eklendi.'
+  },
+  {
+    id: 'REL-01',
+    category: 'Kararlılık',
+    title: 'Çoklu monitör bağlantısı kesildiğinde pencerenin ekran dışı koordinatlarda kalması',
+    impact: 'İkinci ekran çıkarıldığında uygulamanın görünmeyen koordinatlarda açılması',
+    priority: 'ORTA',
+    status: '✅ DÜZELTİLDİ',
+    solution: 'screen.getAllDisplays() ile pencere koordinatlarının aktif monitör alanı içinde olduğu doğrulanarak ekran dışı kalma engellendi.'
+  },
+  {
+    id: 'SEC-07',
+    category: 'Güvenlik',
+    title: 'Discord OAuth rastgele CSRF state doğrulaması ve port çakışması koruması',
+    impact: 'Oturum açma sırasında CSRF riski ve port kilitlenmesi',
+    priority: 'ORTA',
+    status: '✅ DÜZELTİLDİ',
+    solution: 'Kriptografik 32-byte CSRF state parametresi, PKCE doğrulaması ve EADDRINUSE hata yakalaması eklendi.'
   }
 ];
 
@@ -375,7 +402,8 @@ function updateRootStatusFile() {
   md += `- [07. Web Sitesi ve Dağıtım](docs/07-WEB-SITESI-VE-SEO.md)\n`;
   md += `- [08. Sorunlar ve Çözümler Matrisi](docs/08-SORUNLAR-VE-COZUMLER.md)\n`;
   md += `- [09. Geliştirici Kılavuzu](docs/09-GELISTIRICI-KILAVUZU.md)\n`;
-  md += `- [10. Mobil (Expo - Android & iOS) Rehberi](docs/10-MOBIL-EXPO-REHBERI.md)\n\n`;
+  md += `- [10. Mobil (Expo - Android & iOS) Rehberi](docs/10-MOBIL-EXPO-REHBERI.md)\n`;
+  md += `- [11. Discord Bot ve RPC Entegrasyonu](docs/11-DISCORD-BOT-VE-RPC-ENTEGRASYONU.md)\n\n`;
 
   fs.writeFileSync(statusFilePath, md, 'utf8');
 }

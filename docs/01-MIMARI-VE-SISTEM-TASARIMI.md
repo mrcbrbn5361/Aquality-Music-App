@@ -8,12 +8,12 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-12 00:12` |
-| **Proje Sürümü** | `v1.0.0` (Masaüstü: `v1.0.0`, Web: `v1.0.0`) |
+| **Son Güncelleme** | `2026-09-13 17:50` |
+| **Proje Sürümü** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `05f8ef9 - fix(mobile): update expo start guide and kill stale dev server processes (8 minutes ago)` |
+| **Son Commit** | `c1ef2e5 - chore: ignore local private documentation files (28 minutes ago)` |
 | **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
-| **Takip Edilen Sorunlar** | 21 / 21 Çözüldü (%100 Başarı) |
+| **Takip Edilen Sorunlar** | 24 / 24 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->
 
 ---
@@ -79,6 +79,16 @@ Ana süreç ile Renderer süreci arasındaki tüm haberleşme kanalları şunlar
 | `player:update` | `send` | Oynatma zamanı, süresi, reklam durumu ve şarkı bilgisini renderer'a yayınlar. |
 | `store:get` / `store:set` | `invoke` | Kalıcı kullanıcı verilerini (`electron-store`) okur ve yazar. |
 | `discord:updateActivity` | `invoke` | Discord Rich Presence durumunu günceller. |
+| `bot-server:get-state` | `invoke` | Yerel REST API (Port 9863) aktif parça ve kuyruk durumunu döner. |
+| `bot-server:update-state` | `invoke` | Renderer'dan çalan şarkı, süre ve önerileri BotServer'a iletir. |
+| `bot-server:is-running` | `invoke` | Bot REST API HTTP sunucusunun çalışma durumunu döner. |
+
+---
+
+### 1.4 Yerel Bot REST API & Discord Gateway Mimarisi
+- **Port 9863**: Masaüstü istemcisinde Node.js yerleşik HTTP modülü ile `127.0.0.1:9863` üzerinde dinleme yapılır.
+- **Bot Entegrasyonu**: Discord botları Gateway Presence (`GuildPresences`) veya localhost REST API (`/api/v1/state`) üzerinden müzik durumunu çeker.
+- **Canvas Kart Motoru**: `@napi-rs/canvas` ile sunucuda Discord Embed içinde yüksek çözünürlüklü oynatıcı kartı üretilir.
 
 ---
 

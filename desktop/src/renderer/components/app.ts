@@ -1284,12 +1284,75 @@
       (payload as any).buttons = btns.slice(0, 2);
     }
     api.discord.setActivity(payload).catch((e: any) => dlog('Discord hatası:', String(e)));
+    syncBotServer();
+  }
+
+  function syncBotServer() {
+    if (!api?.botServer?.updateState) return;
+    const song = state.currentSong;
+    if (!song || !state.playing) {
+      api.botServer.updateState({
+        status: state.paused ? 'paused' : 'stopped',
+        isPlaying: false,
+        track: song ? {
+          id: song.id,
+          title: song.title,
+          artist: song.artist,
+          album: song.album || 'Aquality Music',
+          thumbnail: song.thumbnail,
+          duration: state.duration,
+          durationFormatted: formatTime(state.duration),
+          currentTime: state.currentTime,
+          currentTimeFormatted: formatTime(state.currentTime),
+          progress: state.duration > 0 ? state.currentTime / state.duration : 0,
+          url: song.id ? `https://music.youtube.com/watch?v=${song.id}` : undefined
+        } : null,
+        recommendations: []
+      }).catch(() => {});
+      return;
+    }
+
+    const recs: Array<{ id?: string; title: string; artist: string; thumbnail?: string; url?: string }> = [];
+    if (state.queue && state.queue.length > 0 && state.queueIndex >= 0) {
+      for (let i = state.queueIndex + 1; i < state.queue.length && recs.length < 3; i++) {
+        const item = state.queue[i];
+        if (item) {
+          recs.push({
+            id: item.id,
+            title: item.title,
+            artist: item.artist,
+            thumbnail: item.thumbnail,
+            url: item.id ? `https://music.youtube.com/watch?v=${item.id}` : undefined
+          });
+        }
+      }
+    }
+
+    api.botServer.updateState({
+      status: state.playing ? 'playing' : 'paused',
+      isPlaying: state.playing,
+      track: {
+        id: song.id,
+        title: song.title,
+        artist: song.artist,
+        album: song.album || 'Aquality Music',
+        thumbnail: song.thumbnail,
+        duration: state.duration,
+        durationFormatted: formatTime(state.duration),
+        currentTime: state.currentTime,
+        currentTimeFormatted: formatTime(state.currentTime),
+        progress: state.duration > 0 ? state.currentTime / state.duration : 0,
+        url: song.id ? `https://music.youtube.com/watch?v=${song.id}` : undefined
+      },
+      recommendations: recs
+    }).catch(() => {});
   }
 
   function clearDiscordTrack() {
     lastDiscordKey = '';
     lastDiscordSentAt = 0;
     api.discord.clearActivity().catch(() => {});
+    syncBotServer();
   }
 
   function maybeRefreshDiscord(key: string, title: string, artist: string, coverUrl?: string, album?: string, isVideo = false) {

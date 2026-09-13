@@ -1,0 +1,14 @@
+{
+  "name": "aquality-discord-bot",
+  "version": "1.0.1",
+  "description": "Discord.js Rich Presence & Canvas Player Bot for Aquality Music",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.66",
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.4.7"
+  }
+}

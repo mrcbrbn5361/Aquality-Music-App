@@ -12,6 +12,7 @@ import { authProvider } from './providers/auth-provider';
 import { volumeRatioProvider } from './providers/volume-ratio';
 import { lyricsProvider } from './providers/lyrics-provider';
 import { autoUpdater } from 'electron-updater';
+import { BotServer } from './api/bot-server';
 
 // Gizli çözücü penceresinde otomatik oynatmaya izin ver (kullanıcı hareketi gerekmesin)
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
@@ -47,6 +48,7 @@ let discordOAuth: DiscordOAuth;
 let googleAuth: GoogleOAuth;
 let musicAuth: MusicAuth;
 let streamResolver: StreamResolver;
+let botServer: BotServer;
 
 const isDev = !app.isPackaged;
 
@@ -244,6 +246,14 @@ function setupIPC(): void {
       mainWindow.webContents.send('player:update', u);
     }
   });
+
+  // Bot REST API (Port 9863) IPC
+  ipcMain.handle('bot-server:get-state', () => botServer?.getState());
+  ipcMain.handle('bot-server:update-state', (_, partial) => {
+    botServer?.updateState(partial);
+    return botServer?.getState();
+  });
+  ipcMain.handle('bot-server:is-running', () => botServer?.isRunning());
 
   // YouTube API
   ipcMain.handle('yt:search', async (_, query: string, filter?: string) => {
@@ -518,6 +528,8 @@ app.whenReady().then(async () => {
   youtubeAPI = new YouTubeAPI();
   discordRPC = new DiscordRPC();
   discordOAuth = new DiscordOAuth();
+  botServer = new BotServer(9863);
+  botServer.start();
 
   // Load Google auth token if available
   if (googleAuth.isGoogleAuthenticated()) {
@@ -548,12 +560,14 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   try { streamResolver?.destroy(); } catch {}
   try { discordRPC?.disconnect(); } catch {}
+  try { botServer?.stop(); } catch {}
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', () => {
   try { streamResolver?.destroy(); } catch {}
   try { discordRPC?.disconnect(); } catch {}
+  try { botServer?.stop(); } catch {}
   for (const win of BrowserWindow.getAllWindows()) {
     try { win.destroy(); } catch {}
   }

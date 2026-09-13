@@ -8,12 +8,12 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-12 00:12` |
-| **Proje Sürümü** | `v1.0.0` (Masaüstü: `v1.0.0`, Web: `v1.0.0`) |
+| **Son Güncelleme** | `2026-09-13 17:50` |
+| **Proje Sürümü** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `05f8ef9 - fix(mobile): update expo start guide and kill stale dev server processes (8 minutes ago)` |
+| **Son Commit** | `c1ef2e5 - chore: ignore local private documentation files (28 minutes ago)` |
 | **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
-| **Takip Edilen Sorunlar** | 21 / 21 Çözüldü (%100 Başarı) |
+| **Takip Edilen Sorunlar** | 24 / 24 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->
 
 ---
@@ -34,6 +34,7 @@ Aşağıdaki bağlantılar projenin tüm katmanlarını derinlemesine inceleyen 
 | 08 | [08. Sorunlar ve Çözümler Matrisi](08-SORUNLAR-VE-COZUMLER.md) | `SEC-01` ile `PKG-02` arasındaki 21 sorunun kök neden analizi (RCA), uygulanan çözümler ve durum matrisi. |
 | 09 | [09. Geliştirici Kılavuzu](09-GELISTIRICI-KILAVUZU.md) | Kurulum adımları, geliştirme ortamı, derleme komutları, hata ayıklama ipuçları ve terminal kılavuzu. |
 | 10 | [10. Mobil (Expo - Android & iOS) Rehberi](10-MOBIL-EXPO-REHBERI.md) | React Native (Expo) ile Android APK ve iOS derleme, kilit ekranı ses servisi, navigasyon ve EAS Build. |
+| 11 | [11. Discord Bot ve RPC Entegrasyonu](11-DISCORD-BOT-VE-RPC-ENTEGRASYONU.md) | Aquality & Harmonic Discord Botu, Canvas oynatıcı kartı motoru, Port 9863 REST API ve dinamik öneriler. |
 | 🔬 | [**Kapsamlı Proje Denetim ve Sorun Suiti (Audit)**](audit/00-OZET-VE-GELISMIS-SORUN-INDEKSI.md) | **38 Yeni Sorun, Tüm Klasör ve Dosyaların Ayrı Ayrı Teknik Dokümantasyonu (39 Bağımsız Rapor).** |
 
 ---

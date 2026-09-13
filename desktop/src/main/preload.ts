@@ -113,6 +113,13 @@ const api = {
     getUpdateStatus: () => ipcRenderer.invoke('auto:getUpdateStatus')
   },
 
+  // Bot REST API (Port 9863)
+  botServer: {
+    getState: () => ipcRenderer.invoke('bot-server:get-state'),
+    updateState: (partial: unknown) => ipcRenderer.invoke('bot-server:update-state', partial),
+    isRunning: () => ipcRenderer.invoke('bot-server:is-running')
+  },
+
   // Playback IPC'leri (gizli pencere üzerinden)
   player: {
     pause: () => ipcRenderer.invoke('player:pause'),
