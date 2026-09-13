@@ -15,10 +15,10 @@
     "build": "npm run build:main && npm run build:renderer",
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build",
-    "build:installer": "npm run build && electron-builder --win nsis -c.publish=never",
-    "build:win": "npm run build && electron-builder --win -c.publish=never",
-    "build:portable": "npm run build && electron-builder --win portable -c.publish=never",
-    "build:mac": "npm run build && electron-builder --mac -c.publish=never",
+    "build:installer": "npm run build && electron-builder --win nsis --publish never",
+    "build:win": "npm run build && electron-builder --win --publish never",
+    "build:portable": "npm run build && electron-builder --win portable --publish never",
+    "build:mac": "npm run build && electron-builder --mac --publish never",
     "typecheck": "tsc --noEmit -p tsconfig.main.json"
   },
   "dependencies": {
