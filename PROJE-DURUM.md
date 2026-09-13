@@ -4,10 +4,10 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-13 17:50` |
+| **Son Güncelleme** | `2026-09-13 17:51` |
 | **Proje Versiyonu** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`, Mobil: `v1.0.1`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `c1ef2e5 - chore: ignore local private documentation files (28 minutes ago)` |
+| **Son Git Commit** | `4a7235f - chore(release): bump version to v1.0.1 and sync documentation with 24/24 resolved issues (0 seconds ago)` |
 | **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Kod Hacmi (LOC)** | Ana Süreç: ~4626 satır, Arayüz: ~4792 satır, Mobil (Expo): ~5210 satır, Web: ~1069 satır |
 
@@ -55,35 +55,7 @@
 
 ## 📁 3. Son Değiştirilen / İzlenen Dosyalar (Git Status)
 
-| Dosya Yolu | Durum |
-|---|---|
-| `PROJE-DURUM.md` | Düzenlendi |
-| `app.json` | Düzenlendi |
-| `desktop/package.json` | Düzenlendi |
-| `desktop/src/main/main.ts` | Düzenlendi |
-| `desktop/src/main/preload.ts` | Düzenlendi |
-| `desktop/src/renderer/components/app.ts` | Düzenlendi |
-| `docs/01-MIMARI-VE-SISTEM-TASARIMI.md` | Düzenlendi |
-| `docs/02-API-VE-STREAM-MOTORU.md` | Düzenlendi |
-| `docs/03-AUTH-VE-GUVENLIK.md` | Düzenlendi |
-| `docs/04-RENDERER-VE-ARAYUZ.md` | Düzenlendi |
-| `docs/05-VERI-STORE-VE-DURUM.md` | Düzenlendi |
-| `docs/06-PAKETLEME-VE-DAGITIM.md` | Düzenlendi |
-| `docs/07-WEB-SITESI-VE-SEO.md` | Düzenlendi |
-| `docs/08-SORUNLAR-VE-COZUMLER.md` | Düzenlendi |
-| `docs/09-GELISTIRICI-KILAVUZU.md` | Düzenlendi |
-| `docs/10-MOBIL-EXPO-REHBERI.md` | Düzenlendi |
-| `docs/README.md` | Düzenlendi |
-| `mobile/app.json` | Düzenlendi |
-| `mobile/package.json` | Düzenlendi |
-| `package.json` | Düzenlendi |
-| `scripts/update-docs.cjs` | Düzenlendi |
-| `website/index.html` | Düzenlendi |
-| `website/indir.html` | Düzenlendi |
-| `website/package.json` | Düzenlendi |
-| `desktop/src/main/api/bot-server.ts` | Yeni Dosya |
-| `docs/11-DISCORD-BOT-VE-RPC-ENTEGRASYONU.md` | Yeni Dosya |
-| `scripts/discord-bot/` | Yeni Dosya |
+_Çalışma ağacı temiz. İzlenen herhangi bir kaydedilmemiş değişiklik bulunmuyor._
 
 ---
 
