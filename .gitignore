@@ -28,3 +28,7 @@ Thumbs.db
 .opencode/
 .expo/
 mobile/.expo/
+
+# Yerel Ozel Dokumantasyon (Sadece kullanicida kalacak)
+TUM-GUNCELLEMELER-VE-SURUM-NOTLARI.md
+docs/TUM-GUNCELLEMELER-VE-SURUM-NOTLARI.md
