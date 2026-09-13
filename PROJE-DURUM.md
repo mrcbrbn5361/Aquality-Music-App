@@ -4,12 +4,12 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-13 17:59` |
+| **Son Güncelleme** | `2026-09-13 18:16` |
 | **Proje Versiyonu** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`, Mobil: `v1.0.1`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `e045368 - feat(web): add Vercel deployment configuration, clean URLs, and custom 404 page (0 seconds ago)` |
+| **Son Git Commit** | `9525e24 - feat(web): add Discord bot documentation page, mobile Expo Go guide, and update all pages to v1.0.1 (3 minutes ago)` |
 | **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
-| **Kod Hacmi (LOC)** | Ana Süreç: ~4626 satır, Arayüz: ~4792 satır, Mobil (Expo): ~5210 satır, Web: ~1123 satır |
+| **Kod Hacmi (LOC)** | Ana Süreç: ~4626 satır, Arayüz: ~4792 satır, Mobil (Expo): ~5210 satır, Web: ~1585 satır |
 
 ---
 
@@ -55,7 +55,10 @@
 
 ## 📁 3. Son Değiştirilen / İzlenen Dosyalar (Git Status)
 
-_Çalışma ağacı temiz. İzlenen herhangi bir kaydedilmemiş değişiklik bulunmuyor._
+| Dosya Yolu | Durum |
+|---|---|
+| `.github/workflows/build-mac.yml` | Düzenlendi |
+| `.github/workflows/build-windows.yml` | Düzenlendi |
 
 ---
 
