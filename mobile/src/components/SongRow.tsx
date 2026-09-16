@@ -13,7 +13,7 @@ interface SongRowProps {
   showIndex?: boolean;
 }
 
-export const SongRow: React.FC<SongRowProps> = ({ song, onPress, index, showIndex = true }) => {
+export const SongRow: React.FC<SongRowProps> = React.memo(({ song, onPress, index, showIndex = true }) => {
   const { currentSong, playing, likedIds } = usePlayer();
   const isCurrent = currentSong?.id === song.id;
   const isLiked = likedIds.includes(song.id);
@@ -99,7 +99,7 @@ export const SongRow: React.FC<SongRowProps> = ({ song, onPress, index, showInde
       </View>
     </TouchableOpacity>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -189,6 +189,6 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums']
   },
   likeBtn: {
-    padding: 4
+    padding: 10
   }
 });

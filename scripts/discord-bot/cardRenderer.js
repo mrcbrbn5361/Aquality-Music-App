@@ -12,13 +12,14 @@ function roundRect(ctx, x, y, width, height, radius) {
   ctx.quadraticCurveTo(x + width, y + height, x + width - radius.br, y + height);
   ctx.lineTo(x + radius.bl, y + height);
   ctx.quadraticCurveTo(x, y + height, x, y + height - radius.bl);
-  ctx.lineTo(x + radius.tl);
+  ctx.lineTo(x + radius.tl, y);
   ctx.quadraticCurveTo(x, y, x + radius.tl, y);
   ctx.closePath();
 }
 
 function truncateText(ctx, text, maxWidth) {
   if (!text) return '';
+  if (maxWidth <= 0) return '...';
   if (ctx.measureText(text).width <= maxWidth) return text;
   let truncated = text;
   while (truncated.length > 0 && ctx.measureText(truncated + '...').width > maxWidth) {
@@ -96,7 +97,7 @@ async function renderPlayerCard({
   ctx.restore();
 
   // Platform Rozeti (Pill Badge)
-  const pillW = 104;
+  const pillW = 114;
   const pillH = 26;
   const pillX = coverX + (coverSize - pillW) / 2;
   const pillY = coverY + coverSize + 14;
@@ -113,7 +114,7 @@ async function renderPlayerCard({
   ctx.font = 'bold 11px Segoe UI, Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(`● ${platformName}`, pillX + pillW / 2, pillY + pillH / 2);
+  ctx.fillText('● Aquality Music', pillX + pillW / 2, pillY + pillH / 2);
 
   // Sağ Taraf İçeriği
   const rightX = 200;
@@ -124,12 +125,12 @@ async function renderPlayerCard({
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.font = 'bold 12px Segoe UI, Arial, sans-serif';
-  ctx.fillStyle = '#9b9da4';
-  ctx.fillText('Şu anda dinliyor', rightX, 26);
+  ctx.fillStyle = '#8c929a';
+  ctx.fillText('Su anda dinliyor', rightX, 26);
 
   ctx.textAlign = 'right';
   ctx.font = 'bold 12px Segoe UI, Arial, sans-serif';
-  ctx.fillStyle = '#9b9da4';
+  ctx.fillStyle = '#8c929a';
   ctx.fillText(truncateText(ctx, username, 180), rightEnd, 26);
 
   // Şarkı Başlığı
@@ -140,12 +141,12 @@ async function renderPlayerCard({
 
   // Sanatçı Adı
   ctx.font = 'bold 15px Segoe UI, Arial, sans-serif';
-  ctx.fillStyle = '#e2e3e8';
+  ctx.fillStyle = '#a7f3d0';
   ctx.fillText(truncateText(ctx, artist, rightWidth), rightX, 78);
 
   // Albüm Adı
   ctx.font = '13px Segoe UI, Arial, sans-serif';
-  ctx.fillStyle = '#7e818c';
+  ctx.fillStyle = '#8c929a';
   ctx.fillText(truncateText(ctx, album, rightWidth), rightX, 98);
 
   // Süre Zaman Etiketleri

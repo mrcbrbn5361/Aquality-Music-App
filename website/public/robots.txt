@@ -1,2 +1,3 @@
 User-agent: *
 Allow: /
+Sitemap: https://aqualitymusic.com/sitemap.xml

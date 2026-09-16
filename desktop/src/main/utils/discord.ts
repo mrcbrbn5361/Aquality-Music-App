@@ -66,7 +66,7 @@ export class DiscordRPC {
     } catch (err) {
       console.log('[Discord] Rich Presence bağlanamadı (Discord açık olmayabilir)');
       this.isConnected = false;
-      try { this.client?.destroy(); } catch {}
+      try { this.client?.destroy(); } catch (e) { /* client destroy failed */ }
       this.client = null;
     }
   }

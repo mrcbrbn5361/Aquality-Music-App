@@ -1,4 +1,5 @@
 import * as http from 'http';
+import * as crypto from 'crypto';
 
 export interface BotServerTrack {
   id?: string;
@@ -37,6 +38,7 @@ export class BotServer {
   private server: http.Server | null = null;
   private port: number = 9863;
   private active: boolean = false;
+  private apiToken: string = crypto.randomBytes(32).toString('hex');
   private state: BotServerState = {
     app: 'Aquality Music',
     version: '1.0.1',
@@ -53,6 +55,10 @@ export class BotServer {
 
   public getPort(): number {
     return this.port;
+  }
+
+  public getApiToken(): string {
+    return this.apiToken;
   }
 
   public isRunning(): boolean {
@@ -86,6 +92,13 @@ export class BotServer {
         if (req.method === 'OPTIONS') {
           res.writeHead(204);
           res.end();
+          return;
+        }
+
+        const authHeader = req.headers.authorization;
+        if (!authHeader || authHeader !== `Bearer ${this.apiToken}`) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Unauthorized' }));
           return;
         }
 

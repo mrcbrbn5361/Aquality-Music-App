@@ -21,8 +21,7 @@ const ACCENTS: { id: ThemeAccent; label: string; color: string }[] = [
 ];
 
 export default function SettingsScreen() {
-  const { adBlocker, audioQuality, themeAccent } = usePlayer();
-  const [autoPlay, setAutoPlay] = useState(true);
+  const { adBlocker, audioQuality, themeAccent, autoPlay } = usePlayer();
 
   const handleClearHistory = () => {
     Alert.alert(
@@ -93,7 +92,7 @@ export default function SettingsScreen() {
             </View>
             <Switch
               value={autoPlay}
-              onValueChange={setAutoPlay}
+              onValueChange={(val) => playerStore.setAutoPlay(val)}
               trackColor={{ false: '#162238', true: '#00f0ff' }}
               thumbColor="#f8fafc"
             />
@@ -157,9 +156,9 @@ export default function SettingsScreen() {
           <View style={styles.row}>
             <View style={styles.rowMeta}>
               <Text style={styles.rowTitle}>Tema Stili</Text>
-              <Text style={styles.rowDesc}>Obsidiyen & Siber Neon Camgöbeği</Text>
+              <Text style={styles.rowDesc}>Obsidiyen & Siber Neon</Text>
             </View>
-            <Text style={styles.dimText}>Koyu Metro</Text>
+            <Text style={styles.dimText}>{ACCENTS.find(a => a.id === themeAccent)?.label || 'Siber Mavi'}</Text>
           </View>
         </View>
 

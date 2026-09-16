@@ -72,7 +72,9 @@ function findBotDir(): string | null {
       if (fs.existsSync(dir) && fs.existsSync(path.join(dir, 'index.js'))) {
         return dir;
       }
-    } catch {}
+    } catch (e) {
+      // Directory check failed, continue
+    }
   }
   return null;
 }
@@ -152,9 +154,9 @@ function createWindow(): void {
   mainWindow.on('closed', () => {
     mainWindow = null;
     // Gizli oynatıcı penceresi window-all-closed'ı engeller — burada kapat
-    try { streamResolver?.destroy(); } catch {}
-    try { discordRPC?.disconnect(); } catch {}
-    try { discordBotProcess?.kill(); } catch {}
+    try { streamResolver?.destroy(); } catch (e) { /* cleanup best-effort */ }
+    try { discordRPC?.disconnect(); } catch (e) { /* cleanup best-effort */ }
+    try { discordBotProcess?.kill(); } catch (e) { /* cleanup best-effort */ }
     if (process.platform !== 'darwin') app.quit();
   });
 
@@ -165,7 +167,9 @@ function createWindow(): void {
         const b = mainWindow.getBounds();
         storeManager?.saveWindowBounds(b);
       }
-    } catch {}
+    } catch (e) {
+      // Window bounds save failed
+    }
   });
 
   mainWindow.on('maximize', () => {
@@ -341,7 +345,9 @@ function setupIPC(): void {
       try {
         const stored = await storeManager.get('discordBotToken');
         if (stored && typeof stored === 'string') token = stored.trim();
-      } catch {}
+      } catch (e) {
+        // Token read failed
+      }
     }
     if (!token && process.env.DISCORD_TOKEN) {
       token = process.env.DISCORD_TOKEN.trim();
@@ -535,7 +541,9 @@ function setupIPC(): void {
       if (isSafeExternalUrl(url)) {
         shell.openExternal(url);
       }
-    } catch {}
+    } catch (e) {
+      // External URL open failed
+    }
   });
 
   // ── Auth IPC ─────────────────────────────────
@@ -587,8 +595,9 @@ function setupIPC(): void {
             provider: 'youtube-music'
           });
         }
-      } catch {}
-      // En son kaydedilen kullanıcıyı dön (importFromChrome zaten kaydetti)
+      } catch (e) {
+        // Profile fetch failed during Chrome import
+      }
       return { success: true, cookies: result.cookies, user: musicAuth.getUser() };
     }
     return result;
@@ -612,14 +621,14 @@ function setupIPC(): void {
     const now = Date.now();
     if (now - lastDiscordReconnectAt < 45000) return false;
     lastDiscordReconnectAt = now;
-    try { await discordRPC.connect(); } catch {}
+    try { await discordRPC.connect(); } catch (e) { /* Discord reconnect failed */ }
     return discordRPC.isReady();
   }
   ipcMain.handle('discord:getAppId', () => discordRPC.getAppId());
   ipcMain.handle('discord:isReady', () => discordRPC.isReady());
   ipcMain.handle('discord:reconnect', async () => {
     lastDiscordReconnectAt = Date.now();
-    try { await discordRPC.connect(); } catch {}
+    try { await discordRPC.connect(); } catch (e) { /* Discord reconnect failed */ }
     return discordRPC.isReady();
   });
   ipcMain.handle('discord:setActivity', async (_, data) => {
@@ -690,7 +699,9 @@ app.whenReady().then(async () => {
   // Protokol kaydı ready içinde (Windows'ta ready öncesi kayıt tutarsız olur)
   try {
     if (!app.isDefaultProtocolClient('aquality-music')) app.setAsDefaultProtocolClient('aquality-music');
-  } catch {}
+  } catch (e) {
+    // Protocol registration failed
+  }
   storeManager = new StoreManager();
   googleAuth = new GoogleOAuth();
   musicAuth = new MusicAuth();
@@ -728,20 +739,20 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  try { streamResolver?.destroy(); } catch {}
-  try { discordRPC?.disconnect(); } catch {}
-  try { botServer?.stop(); } catch {}
-  try { discordBotProcess?.kill(); } catch {}
+  try { streamResolver?.destroy(); } catch (e) { /* cleanup best-effort */ }
+  try { discordRPC?.disconnect(); } catch (e) { /* cleanup best-effort */ }
+  try { botServer?.stop(); } catch (e) { /* cleanup best-effort */ }
+  try { discordBotProcess?.kill(); } catch (e) { /* cleanup best-effort */ }
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', () => {
-  try { streamResolver?.destroy(); } catch {}
-  try { discordRPC?.disconnect(); } catch {}
-  try { botServer?.stop(); } catch {}
-  try { discordBotProcess?.kill(); } catch {}
+  try { streamResolver?.destroy(); } catch (e) { /* cleanup best-effort */ }
+  try { discordRPC?.disconnect(); } catch (e) { /* cleanup best-effort */ }
+  try { botServer?.stop(); } catch (e) { /* cleanup best-effort */ }
+  try { discordBotProcess?.kill(); } catch (e) { /* cleanup best-effort */ }
   for (const win of BrowserWindow.getAllWindows()) {
-    try { win.destroy(); } catch {}
+    try { win.destroy(); } catch (e) { /* window already destroyed */ }
   }
 });
 

@@ -11,11 +11,7 @@ export interface MiniPlayerProps {
 }
 
 export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onOpenPlayer }) => {
-  let router: any = null;
-  try {
-    router = useRouter();
-  } catch (e) {}
-
+  const router = useRouter();
   const { currentSong, playing, likedIds } = usePlayer();
   const { currentTime, duration } = usePlayerProgress();
 
@@ -85,7 +81,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onOpenPlayer }) => {
               e.stopPropagation();
               playerStore.toggleLike(currentSong.id);
             }}
-            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons
               name={isLiked ? 'heart' : 'heart-outline'}
@@ -100,7 +96,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onOpenPlayer }) => {
               e.stopPropagation();
               mobilePlayer.togglePlay();
             }}
-            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons
               name={playing ? 'pause' : 'play'}
@@ -115,7 +111,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onOpenPlayer }) => {
               e.stopPropagation();
               mobilePlayer.playNext();
             }}
-            hitSlop={{ top: 6, bottom: 6, left: 4, right: 6 }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons name="play-skip-forward" size={18} color="#94a3b8" />
           </TouchableOpacity>

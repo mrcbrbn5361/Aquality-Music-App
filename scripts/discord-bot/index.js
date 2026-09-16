@@ -6,14 +6,19 @@ const {
   ButtonBuilder,
   ButtonStyle,
   Events,
-  AttachmentBuilder
+  AttachmentBuilder,
+  PermissionsBitField
 } = require('discord.js');
 require('dotenv').config();
 const { renderPlayerCard } = require('./cardRenderer');
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const AQUALITY_APP_ID = '1547602880427724841';
-const HARMONIC_APP_ID = '1545832861435830432';
+const AQUALITY_GUILD_ID = '1504574003594137680'; // Özel Aquality Sunucusu
+
+// Güvenlik: Kullanıcı başına cooldown (anti-spam)
+const cooldowns = new Map();
+const COOLDOWN_MS = 3500;
 
 const client = new Client({
   intents: [
@@ -35,16 +40,18 @@ async function fetchLocalBotState() {
       const data = await res.json();
       if (data && data.isPlaying && data.track) return data;
     }
-  } catch {}
+  } catch (e) {
+    // Local API not available, fallback to null
+  }
   return null;
 }
 
 // iTunes API üzerinden sanatçıya ait benzer şarkı önerilerini getirir
 async function fetchSuggestions(artist, currentTitle) {
   const fallback = [
-    { title: 'Benzer Şarkı 1', artist: artist || 'Aquality Music', url: 'https://github.com/mrcbrbn5361/Aquality-Music-App' },
-    { title: 'Benzer Şarkı 2', artist: artist || 'Aquality Music', url: 'https://github.com/mrcbrbn5361/Aquality-Music-App' },
-    { title: 'Benzer Şarkı 3', artist: artist || 'Aquality Music', url: 'https://github.com/mrcbrbn5361/Aquality-Music-App' }
+    { title: 'Benzer Şarkı 1', artist: artist || 'Aquality Music', url: 'https://aquality-music-app-desktop.vercel.app' },
+    { title: 'Benzer Şarkı 2', artist: artist || 'Aquality Music', url: 'https://aquality-music-app-desktop.vercel.app' },
+    { title: 'Benzer Şarkı 3', artist: artist || 'Aquality Music', url: 'https://aquality-music-app-desktop.vercel.app' }
   ];
 
   if (!artist || artist === 'Bilinmeyen Sanatçı') return fallback;
@@ -74,105 +81,161 @@ async function fetchSuggestions(artist, currentTitle) {
         return results;
       }
     }
-  } catch {}
+  } catch (e) {
+    // iTunes API error, use fallback
+  }
 
   return fallback;
 }
 
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`\n========================================`);
-  console.log(`✅ Aquality Discord Botu Hazır: ${readyClient.user.tag}`);
-  console.log(`🆔 Client ID: ${readyClient.user.id}`);
-  console.log(`🔗 Davet Linki: https://discord.com/oauth2/authorize?client_id=${readyClient.user.id}&permissions=274878024768&scope=bot%20applications.commands`);
+  console.log(`✅ Aquality Discord Botu Aktif: ${readyClient.user.tag}`);
+  console.log(`🔒 Hedef Sunucu: ${AQUALITY_GUILD_ID} (Yalnızca Aquality Sunucusuna Özel)`);
+  console.log(`🎵 Varsayılan Komut: .aquamusic`);
   console.log(`========================================\n`);
-  console.log(`Komutlar: .aqua, .aquality, .spo, .har`);
 });
 
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
 
-  const cmd = message.content.trim().toLowerCase();
-  const validCommands = ['.aqua', '.aquality', '.spo', '.har', '.harmonic'];
-  if (validCommands.includes(cmd)) {
-    if (!message.guild) return message.reply('❌ Bu komut sadece sunucularda kullanılabilir.');
+  const content = message.content.trim().toLowerCase();
+  const isAquaMusicCmd = content === '.aquamusic' || content.startsWith('.aquamusic ') || content === '.aqua';
 
-    let member = message.member;
-    if (!member || !member.presence) {
-      try {
-        member = await message.guild.members.fetch({ user: message.author.id, force: true });
-      } catch (err) {}
+  if (!isAquaMusicCmd) return;
+
+  // 🛡️ GÜVENLİK KONTROLÜ 1: Sunucu İzolasyonu (Sadece 1504574003594137680 sunucusunda çalışır)
+  if (!message.guild || message.guild.id !== AQUALITY_GUILD_ID) {
+    // Özel Aquality sunucusu dışındaki yerlerde komut sessizce yoksayılır
+    return;
+  }
+
+  // 🛡️ GÜVENLİK KONTROLÜ 2: Anti-Spam / Rate-Limiting (Kullanıcı başına bekleme süresi)
+  const now = Date.now();
+  const userCooldown = cooldowns.get(message.author.id);
+  if (userCooldown && now < userCooldown) {
+    const remaining = Math.ceil((userCooldown - now) / 1000);
+    try {
+      const warn = await message.reply(`⏳ Çok hızlısın! Lütfen **${remaining}** saniye sonra tekrar dene.`);
+      setTimeout(() => { try { warn.delete(); } catch (e) { /* message already deleted */ } }, 2500);
+    } catch (e) {
+      // Reply failed, ignore
     }
+    return;
+  }
+  cooldowns.set(message.author.id, now + COOLDOWN_MS);
 
-    // 1. Öncelik: Discord Gateway Presence
-    const activities = member?.presence?.activities || [];
-    const activity = activities.find(a => 
-      a.applicationId === AQUALITY_APP_ID || 
-      a.applicationId === HARMONIC_APP_ID ||
-      (a.name && (a.name.toLowerCase().includes('aquality') || a.name.toLowerCase().includes('harmonic')))
-    );
-
-    // 2. Yedek: Yerel REST API (Eğer aynı makineden tetikleniyorsa)
-    const localState = await fetchLocalBotState();
-
-    if (!activity && !localState) {
-      return message.reply('❌ Şu anda **Aquality Music** veya **Harmonic** uygulamasında şarkı dinlemiyorsun!');
+  // 🛡️ GÜVENLİK KONTROLÜ 3: Kanal Yetki Doğrulaması
+  if (message.channel && message.guild.members.me) {
+    const perms = message.channel.permissionsFor(message.guild.members.me);
+    if (perms && (!perms.has(PermissionsBitField.Flags.SendMessages) || !perms.has(PermissionsBitField.Flags.EmbedLinks) || !perms.has(PermissionsBitField.Flags.AttachFiles))) {
+      console.warn(`[Discord Bot] Kanalda mesaj gönderme veya dosya ekleme yetkisi yok: ${message.channel.id}`);
+      return;
     }
+  }
 
-    const isHarmonic = (activity?.name && activity.name.toLowerCase().includes('harmonic')) || (activity?.applicationId === HARMONIC_APP_ID);
-    const accentColor = isHarmonic ? '#E53935' : '#1ED760';
-    const platformName = isHarmonic ? 'Harmonic' : 'Aquality Music';
+  // Kullanıcı Presence (Durum) Bilgisini Çek
+  let member = message.member;
+  if (!member || !member.presence) {
+    try {
+      member = await message.guild.members.fetch({ user: message.author.id, force: true });
+    } catch (err) {}
+  }
 
-    let title = 'Bilinmeyen Şarkı';
-    let artist = 'Bilinmeyen Sanatçı';
-    let album = platformName;
-    let coverUrl = null;
-    let currentSec = 0;
-    let durationSec = 0;
+  // 1. Öncelik: Discord Gateway Presence (Aquality Music Desktop RPC)
+  const activities = member?.presence?.activities || [];
+  let activity = activities.find(a => 
+    a.applicationId === AQUALITY_APP_ID || 
+    (a.name && a.name.toLowerCase().includes('aquality'))
+  );
 
-    if (localState && localState.track) {
-      title = localState.track.title || title;
-      artist = localState.track.artist || artist;
-      album = localState.track.album || album;
-      coverUrl = localState.track.thumbnail || null;
-      currentSec = Math.round(localState.track.currentTime || 0);
-      durationSec = Math.round(localState.track.duration || 0);
-    } else if (activity) {
-      title = activity.details || title;
-      artist = activity.state || artist;
-      album = activity.assets?.largeText || album;
+  // Fallback: Kullanıcı Spotify dinliyorsa onu da destekle
+  const isSpotifyFallback = !activity && activities.some(a => a.name === 'Spotify');
+  if (isSpotifyFallback) {
+    activity = activities.find(a => a.name === 'Spotify');
+  }
 
-      if (activity.assets?.largeImageURL) {
-        coverUrl = activity.assets.largeImageURL({ size: 512 });
-      } else if (activity.assets?.largeImage) {
-        if (activity.assets.largeImage.startsWith('http')) {
-          coverUrl = activity.assets.largeImage;
-        } else if (activity.assets.largeImage.startsWith('mp:')) {
-          coverUrl = `https://media.discordapp.net/${activity.assets.largeImage.replace('mp:', '')}`;
-        }
+  // 2. Yedek: Yerel REST API (Port 9863)
+  const localState = await fetchLocalBotState();
+
+  if (!activity && !localState) {
+    const notPlayingEmbed = new EmbedBuilder()
+      .setColor('#1ED760')
+      .setTitle('🎵 Aktif Şarkı Bulunamadı')
+      .setDescription(
+        `Hey <@${message.author.id}>, şu anda **Aquality Music** üzerinde dinlediğin bir şarkı tespit edilemedi!\n\n` +
+        `**Nasıl Çalışır?**\n` +
+        `1. Bilgisayarında [Aquality Music](https://aquality-music-app-desktop.vercel.app/) uygulamasını aç.\n` +
+        `2. Ayarlar menüsünden **Discord'da Göster** seçeneğinin açık olduğundan emin ol.\n` +
+        `3. İstediğin bir şarkıyı çal ve bu kanala tekrar **\`.aquamusic\`** yaz!`
+      )
+      .setFooter({ text: 'Aquality Community • Sunucuya Özel Entegrasyon' });
+    return message.reply({ embeds: [notPlayingEmbed] });
+  }
+
+  const accentColor = '#1ED760'; // Canlı Spotify Yeşil Vurgu
+  const platformName = isSpotifyFallback ? 'Spotify' : 'Aquality Music';
+
+  let title = 'Bilinmeyen Şarkı';
+  let artist = 'Bilinmeyen Sanatçı';
+  let album = 'Aquality Music';
+  let coverUrl = null;
+  let currentSec = 0;
+  let durationSec = 0;
+  let trackUrl = 'https://aquality-music-app-desktop.vercel.app';
+
+  if (localState && localState.track) {
+    title = localState.track.title || title;
+    artist = localState.track.artist || artist;
+    album = localState.track.album || album;
+    coverUrl = localState.track.thumbnail || null;
+    currentSec = Math.round(localState.track.currentTime || 0);
+    durationSec = Math.round(localState.track.duration || 0);
+    if (localState.track.url) trackUrl = localState.track.url;
+  } else if (activity) {
+    title = activity.details || title;
+    artist = activity.state || artist;
+    album = activity.assets?.largeText || album;
+
+    if (activity.assets?.largeImageURL) {
+      coverUrl = activity.assets.largeImageURL({ size: 512 });
+    } else if (activity.assets?.largeImage) {
+      if (activity.assets.largeImage.startsWith('http')) {
+        coverUrl = activity.assets.largeImage;
+      } else if (activity.assets.largeImage.startsWith('mp:')) {
+        coverUrl = `https://media.discordapp.net/${activity.assets.largeImage.replace('mp:', '')}`;
+      } else if (activity.assets.largeImage.startsWith('spotify:')) {
+        coverUrl = `https://i.scdn.co/image/${activity.assets.largeImage.replace('spotify:', '')}`;
       }
-
-      const now = Date.now();
-      const start = activity.timestamps?.start ? new Date(activity.timestamps.start).getTime() : now;
-      const end = activity.timestamps?.end ? new Date(activity.timestamps.end).getTime() : 0;
-      durationSec = end > start ? Math.round((end - start) / 1000) : 0;
-      currentSec = Math.max(0, Math.round((now - start) / 1000));
     }
 
-    // Sıradaki önerileri al
-    let suggestions = [];
-    if (localState && localState.recommendations && localState.recommendations.length > 0) {
-      suggestions = localState.recommendations.map(r => ({
-        title: r.title,
-        artist: r.artist,
-        url: r.url || `https://www.youtube.com/results?search_query=${encodeURIComponent(r.title + ' ' + r.artist)}`
-      }));
-    }
-    if (suggestions.length < 3) {
-      const apiSuggestions = await fetchSuggestions(artist, title);
-      suggestions = suggestions.concat(apiSuggestions).slice(0, 3);
+    if (activity.syncId) {
+      trackUrl = `https://open.spotify.com/track/${activity.syncId}`;
     }
 
-    // Canvas Oynatıcı Kartı
+    const curNow = Date.now();
+    const start = activity.timestamps?.start ? new Date(activity.timestamps.start).getTime() : curNow;
+    const end = activity.timestamps?.end ? new Date(activity.timestamps.end).getTime() : 0;
+    durationSec = end > start ? Math.round((end - start) / 1000) : 0;
+    currentSec = Math.max(0, Math.round((curNow - start) / 1000));
+  }
+
+  // Benzer şarkı önerilerini getir
+  let suggestions = [];
+  if (localState && localState.recommendations && localState.recommendations.length > 0) {
+    suggestions = localState.recommendations.map(r => ({
+      title: r.title,
+      artist: r.artist,
+      url: r.url || `https://www.youtube.com/results?search_query=${encodeURIComponent(r.title + ' ' + r.artist)}`
+    }));
+  }
+  if (suggestions.length < 3) {
+    const apiSuggestions = await fetchSuggestions(artist, title);
+    suggestions = suggestions.concat(apiSuggestions).slice(0, 3);
+  }
+
+  try {
+    // Ekteki .spo tasarımının birebir dengi Canvas Oynatıcı Kartı
     const cardBuffer = await renderPlayerCard({
       title,
       artist,
@@ -182,43 +245,42 @@ client.on(Events.MessageCreate, async (message) => {
       durationSec,
       username: member.displayName || member.user.username,
       suggestions,
-      platformName,
+      platformName: 'Aquality Music',
       accentColor
     });
 
-    const attachment = new AttachmentBuilder(cardBuffer, { name: 'player-card.png' });
+    const attachment = new AttachmentBuilder(cardBuffer, { name: 'aquamusic-card.png' });
     const embed = new EmbedBuilder()
       .setColor(accentColor)
-      .setImage('attachment://player-card.png');
+      .setImage('attachment://aquamusic-card.png');
 
-    const appUrl = isHarmonic ? 'https://harmonic-music.org' : 'https://github.com/mrcbrbn5361/Aquality-Music-App';
+    // 1. Buton Satırı: [Aquality'de Aç ↗] [Şarkı Sözleri]
     const row1 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setLabel(`${platformName}'ta Aç`).setStyle(ButtonStyle.Link).setURL(appUrl),
+      new ButtonBuilder().setLabel("Aquality'de Aç").setStyle(ButtonStyle.Link).setURL(trackUrl),
       new ButtonBuilder().setCustomId('btn_lyrics').setLabel('Şarkı Sözleri').setStyle(ButtonStyle.Secondary)
     );
 
+    // 2. Buton Satırı: 1., 2., 3. Öneri Şarkı Butonları
     const row2 = new ActionRowBuilder();
     for (let i = 0; i < 3; i++) {
       const item = suggestions[i];
       let label = `${i + 1}. ${item.title}`;
       if (label.length > 25) label = label.slice(0, 22) + '...';
       row2.addComponents(
-        new ButtonBuilder().setLabel(label).setStyle(ButtonStyle.Link).setURL(item.url || appUrl)
+        new ButtonBuilder().setLabel(label).setStyle(ButtonStyle.Link).setURL(item.url || trackUrl)
       );
     }
 
-    try {
-      await message.reply({ embeds: [embed], files: [attachment], components: [row1, row2] });
-    } catch (err) {
-      console.error('[Discord Bot] Mesaj gönderilemedi:', err);
-    }
+    await message.reply({ embeds: [embed], files: [attachment], components: [row1, row2] });
+  } catch (err) {
+    console.error('[Discord Bot] Kart oluşturma veya gönderme hatası:', err);
   }
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return;
   if (interaction.customId === 'btn_lyrics') {
-    await interaction.reply({ content: '🎵 **Şarkı Sözleri** özelliği yakında kullanıma sunulacak!', ephemeral: true });
+    await interaction.reply({ content: '🎵 **Şarkı Sözleri:** Şarkı sözlerini Aquality Music masaüstü veya mobil uygulamasından anlık canlı senkronizasyonla takip edebilirsiniz!', ephemeral: true });
   }
 });
 
@@ -227,5 +289,9 @@ if (TOKEN) {
     console.error('[Discord Bot] Giriş hatası:', err.message);
   });
 } else {
-  console.log('[Discord Bot] DISCORD_TOKEN tanımlanmadı. Botu çalıştırmak için .env dosyasına token ekleyin.');
+  console.log('[Discord Bot] DISCORD_TOKEN tanımlanmadı (.env dosyasını kontrol edin).');
 }
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[Discord Bot] Yakalanmamış reddetme:', reason);
+});

@@ -26,11 +26,7 @@ export interface PlayerModalProps {
 }
 
 export default function PlayerModal({ onClose }: PlayerModalProps = {}) {
-  let router: any = null;
-  try {
-    router = useRouter();
-  } catch (e) {}
-
+  const router = useRouter();
   const handleClose = () => {
     playerStore.setPlayerModalOpen(false);
     if (onClose) {
@@ -440,7 +436,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10
   },
   closeBtn: {
-    padding: 6
+    padding: 10
   },
   segmentContainer: {
     flexDirection: 'row',
@@ -532,7 +528,7 @@ const styles = StyleSheet.create({
     fontWeight: '500'
   },
   heartBtn: {
-    padding: 6
+    padding: 10
   },
   progressSection: {
     marginVertical: 8

@@ -9,6 +9,12 @@ function base64url(buf: Buffer): string {
   return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+function escapeHtml(str: string): string {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
 interface OAuthTokens {
   access_token: string;
   refresh_token?: string;
@@ -215,7 +221,7 @@ export class GoogleOAuth {
             <html><body style="font-family:sans-serif;background:#121212;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
               <div style="text-align:center">
                 <h1 style="color:#2ecc71">Giriş başarılı!</h1>
-                <p>${user.name} olarak giriş yapıldı.</p>
+                <p>${escapeHtml(user.name)} olarak giriş yapıldı.</p>
                 <p style="color:#a0a0a0;font-size:14px;margin-top:16px">Bu sekmeyi kapatıp Aquality Music uygulamasına dönebilirsiniz.</p>
               </div>
             </body></html>
@@ -230,7 +236,7 @@ export class GoogleOAuth {
             <html><body style="font-family:sans-serif;background:#121212;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
               <div style="text-align:center">
                 <h1 style="color:#e8364e">Hata</h1>
-                <p>Giriş sırasında bir hata oluştu: ${err.message}</p>
+                <p>Giriş sırasında bir hata oluştu: ${escapeHtml(err.message)}</p>
                 <p style="color:#666;font-size:12px;margin-top:16px">Bu sekmeyi kapatabilirsiniz.</p>
               </div>
             </body></html>

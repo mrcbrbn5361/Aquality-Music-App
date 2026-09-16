@@ -273,7 +273,12 @@ export default function LibraryScreen() {
               <View>
                 <View style={styles.historyActionsRow}>
                   <Text style={styles.historyCountText}>{recentlyPlayed.length} Parça Kayıtlı</Text>
-                  <TouchableOpacity onPress={() => playerStore.clearRecentlyPlayed()}>
+                  <TouchableOpacity onPress={() => {
+                    Alert.alert('Geçmişi Temizle', 'Tüm dinleme geçmişi silinecek. Onaylıyor musunuz?', [
+                      { text: 'İptal', style: 'cancel' },
+                      { text: 'Temizle', style: 'destructive', onPress: () => playerStore.clearRecentlyPlayed() }
+                    ]);
+                  }}>
                     <Text style={styles.clearHistoryText}>Geçmişi Temizle</Text>
                   </TouchableOpacity>
                 </View>

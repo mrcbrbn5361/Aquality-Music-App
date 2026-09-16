@@ -10,7 +10,7 @@
     "jsx": "react-jsx",
     "noEmit": true,
     "isolatedModules": true,
-    "strict": false,
+    "strict": true,
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
