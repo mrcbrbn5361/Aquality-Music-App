@@ -2,6 +2,7 @@ name: Build Windows Application
 
 on:
   push:
+    branches: [ master, main ]
     tags: [ 'v*' ]
   pull_request:
     branches: [ master, main ]
@@ -48,11 +49,11 @@ jobs:
             desktop/release/latest.yml
 
       - name: Attach Windows assets to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
         run: |
           VERSION="v$(node -p "require('./package.json').version")"
           echo "Uploading Windows assets to release $VERSION..."
-          gh release upload "$VERSION" desktop/release/*.exe desktop/release/*.blockmap desktop/release/latest.yml --clobber
+          gh release upload "$VERSION" desktop/release/*.exe desktop/release/*.blockmap desktop/release/latest.yml --clobber || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash

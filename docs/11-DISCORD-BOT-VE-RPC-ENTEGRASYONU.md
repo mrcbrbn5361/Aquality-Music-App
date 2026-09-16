@@ -58,7 +58,7 @@ Aquality Music ve Harmonic, kullanıcıların dinleme durumunu iki bağımsız k
                                                     v
                                   +-----------------------------------+
                                   |       AQUALITY DISCORD BOTU       |
-                                  |    Komutlar: .aqua, .spo, .har    |
+                                  |   Komutlar: .aquamusic, .aqua   |
                                   +-----------------------------------+
                                                     |
                                                     v
@@ -138,7 +138,7 @@ Sıradan Discord metin embed'leri yerine `@napi-rs/canvas` ile ultra yüksek ç�
 ## 5. Discord.js (v14) Hazır Bot İstemcisi
 
 `scripts/discord-bot/index.js` dosyasında yer alan hazır bot kodu:
-- **Tetikleyiciler:** `.aqua`, `.aquality`, `.spo`, `.har`, `.harmonic`
+- **Tetikleyiciler:** `.aquamusic` (varsayılan), `.aqua` (kısayol) — *Yalnızca Aquality Sunucusunda (ID: 1504574003594137680) çalışır.*
 - **İki Sıralı İnteraktif Buton Düzeni (ActionRow):**
   - **1. Satır:** `[Aquality'de Aç ↗]` (veya Harmonic) ve `[Şarkı Sözleri]`
   - **2. Satır:** Önerilen parçaların doğrudan dinlenebilmesi için link butonları (`[1. Şarkı ↗]`, `[2. Şarkı ↗]`, `[3. Şarkı ↗]`).
