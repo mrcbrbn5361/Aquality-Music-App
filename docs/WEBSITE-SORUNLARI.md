@@ -94,7 +94,7 @@
 | **Önem** | 🔴 YÜKSEK |
 | **Durum** | Açık |
 
-**Açıklama:** Sitemap'ler göreli URL'ler (`./index.html`) kullanıyor. Sitemap protokolüne göre mutlak URL (`https://aqualitymusic.com/...`) kullanılmalı. Arama motorları bunu reddeder.
+**Açıklama:** Sitemap'ler göreli URL'ler (`./index.html`) kullanıyor. Sitemap protokolüne göre mutlak URL (`https://aqualitymusic.vercel.app/...`) kullanılmalı. Arama motorları bunu reddeder.
 
 ---
 

@@ -4,12 +4,12 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-13 18:33` |
+| **Son Güncelleme** | `2026-09-16 20:51` |
 | **Proje Versiyonu** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`, Mobil: `v1.0.1`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `27ff2ce - feat(desktop): add Discord bot management UI, in-app runner and REST API controls (1 second ago)` |
-| **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
-| **Kod Hacmi (LOC)** | Ana Süreç: ~4813 satır, Arayüz: ~4991 satır, Mobil (Expo): ~5210 satır, Web: ~1585 satır |
+| **Son Git Commit** | `605f390 - fix: security hardening, empty catch cleanup, CSS WCAG fixes, build verification (2 seconds ago)` |
+| **TypeScript Sağlık** | ⚠️ MOBIL TS HATASI: mobile/app/(tabs)/settings.tsx(24,49): error TS2339: Property 'autoPlay' does not exist on type 'Pla |
+| **Kod Hacmi (LOC)** | Ana Süreç: ~4843 satır, Arayüz: ~5004 satır, Mobil (Expo): ~5206 satır, Web: ~1586 satır |
 
 ---
 

@@ -102,7 +102,7 @@
 | **Platform** | Website |
 | **Etki** | Arama motorları sitemap'i reddeder |
 | **Dosya** | `sitemap.xml`, `public/sitemap.xml` |
-| **Çözüm** | Mutlak URL'ler (`https://aqualitymusic.com/...`) |
+| **Çözüm** | Mutlak URL'ler (`https://aqualitymusic.vercel.app/...`) |
 
 ### 9. 🔴 404 Rewrite Eksik
 | | |

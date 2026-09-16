@@ -17,7 +17,7 @@
 
 ### Sorun 1 (🟡 ORTA): `sitemap.xml` İçinde Gerçekleşmemiş Statik Alan Adı
 - **Konum**: `website/sitemap.xml:5-30`
-- **Açıklama**: Site haritasındaki tüm `<loc>` etiketleri `https://aqualitymusic.com/` alan adına bağlanmıştır. Gerçek dağıtım GitHub Pages (`https://aquality-music.github.io/...`) veya Vercel/Netlify üzerine yapıldığında alan adı eşleşmezse Google Search Console indekslemeyi reddeder.
+- **Açıklama**: Site haritasındaki tüm `<loc>` etiketleri `https://aqualitymusic.vercel.app/` alan adına bağlanmıştır. Gerçek dağıtım GitHub Pages (`https://aquality-music.github.io/...`) veya Vercel/Netlify üzerine yapıldığında alan adı eşleşmezse Google Search Console indekslemeyi reddeder.
 - **Düzeltme**: Alan adı bir çevre değişkeni (`SITE_URL`) ile derleme zamanında dinamik olarak enjekte edilmelidir.
 
 ---

@@ -8,11 +8,11 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-13 18:33` |
+| **Son Güncelleme** | `2026-09-16 20:51` |
 | **Proje Sürümü** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `27ff2ce - feat(desktop): add Discord bot management UI, in-app runner and REST API controls (1 second ago)` |
-| **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
+| **Son Commit** | `605f390 - fix: security hardening, empty catch cleanup, CSS WCAG fixes, build verification (2 seconds ago)` |
+| **TypeScript Derleme Sağlığı** | ⚠️ MOBIL TS HATASI: mobile/app/(tabs)/settings.tsx(24,49): error TS2339: Property 'autoPlay' does not exist on type 'Pla |
 | **Takip Edilen Sorunlar** | 24 / 24 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->
 
