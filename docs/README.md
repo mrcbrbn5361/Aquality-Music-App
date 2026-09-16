@@ -8,11 +8,11 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-16 20:51` |
+| **Son Güncelleme** | `2026-09-16 22:33` |
 | **Proje Sürümü** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `605f390 - fix: security hardening, empty catch cleanup, CSS WCAG fixes, build verification (2 seconds ago)` |
-| **TypeScript Derleme Sağlığı** | ⚠️ MOBIL TS HATASI: mobile/app/(tabs)/settings.tsx(24,49): error TS2339: Property 'autoPlay' does not exist on type 'Pla |
+| **Son Commit** | `e9612e8 - fix: update domain to aqualitymusic.vercel.app (73 minutes ago)` |
+| **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Takip Edilen Sorunlar** | 24 / 24 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->
 
@@ -36,6 +36,20 @@ Aşağıdaki bağlantılar projenin tüm katmanlarını derinlemesine inceleyen 
 | 10 | [10. Mobil (Expo - Android & iOS) Rehberi](10-MOBIL-EXPO-REHBERI.md) | React Native (Expo) ile Android APK ve iOS derleme, kilit ekranı ses servisi, navigasyon ve EAS Build. |
 | 11 | [11. Discord Bot ve RPC Entegrasyonu](11-DISCORD-BOT-VE-RPC-ENTEGRASYONU.md) | Aquality & Harmonic Discord Botu, Canvas oynatıcı kartı motoru, Port 9863 REST API ve dinamik öneriler. |
 | 🔬 | [**Kapsamlı Proje Denetim ve Sorun Suiti (Audit)**](audit/00-OZET-VE-GELISMIS-SORUN-INDEKSI.md) | **38 Yeni Sorun, Tüm Klasör ve Dosyaların Ayrı Ayrı Teknik Dokümantasyonu (39 Bağımsız Rapor).** |
+| 🔍 | [**KAPSAMLI PROJE ANALIZI (47 Sorun)**](00-PROJE-KAPSAMLI-ANALIZ.md) | **Tüm platformlarda 47 sorun tespit edildi. Detaylı analiz, kök neden ve çözüm önerileri.** |
+| 📊 | [**KAPSAMLI SORUN ANALIZI (202 Sorun)**](KAPSAMLI-SORUN-ANALIZI.md) | **Tüm modüllerde 202 sorun tespit edildi. KRİTİK: 14, YÜKSEK: 36, ORTA: 70, DÜŞÜK: 82.** |
+| 🖥️ | [Desktop Sorunları (50)](DESKTOP-SORUNLARI.md) | **Electron masaüstü uygulaması: 6 KRİTİK, 6 YÜKSEK, 19 ORTA, 19 DÜŞÜK.** |
+| 📱 | [Mobile Sorunları (34)](MOBILE-SORUNLARI.md) | **Expo/React Native mobil uygulama: 2 KRİTİK, 5 YÜKSEK, 14 ORTA, 13 DÜŞÜK.** |
+| 🌐 | [Website Sorunları (50)](WEBSITE-SORUNLARI.md) | **Vite web sitesi: 3 KRİTİK, 11 YÜKSEK, 15 ORTA, 21 DÜŞÜK.** |
+| ⚙️ | [CI/CD Sorunları (40)](CICD-SCRIPTS-SORUNLARI.md) | **CI/CD, scripts ve yapılandırma: 3 KRİTİK, 8 YÜKSEK, 13 ORTA, 16 DÜŞÜK.** |
+| 📝 | [Dokümantasyon Sorunları (28)](DOKUMANTASYON-SORUNLARI.md) | **Dokümantasyon tutarsızlıkları: 6 YÜKSEK, 9 ORTA, 13 DÜŞÜK.** |
+| 🔒 | [Güvenlik Sorunları (SEC)](SEC-GUVENLIK-SORUNLARI.md) | 9 güvenlik açığı: WebView, XSS, token sızıntısı, CSP bypass |
+| 🏗️ | [Mimari ve Kod Sorunları (ARC)](ARC-MIMARI-KOD-SORUNLARI.md) | 12 mimari/kod sorunu: TypeScript hataları, memory leak, type safety |
+| ⚡ | [Performans Sorunları (PERF)](PERF-PERFORMANS-SORUNLARI.md) | 7 performans sorunu: CPU kullanımı, polling, I/O |
+| 🛡️ | [Hata Yönetimi Sorunları (REL)](REL-HATA-YONETIMI-SORUNLARI.md) | 8 hata yönetimi sorunu: null safety, error handling |
+| 📱 | [Mobil Uygulama Sorunları (MOB)](MOBIL-SORUNLAR.md) | 6 mobil sorun: TypeScript, dependency, WebView |
+| 🔧 | [CI/CD Sorunları (OPS)](CI-CD-SORUNLARI.md) | 3 CI/CD sorunu: typecheck, version sync |
+| 🌐 | [Website Sorunları (WEB)](WEB-SORUNLARI.md) | 2 website sorunu: responsive, memory leak |
 
 ---
 

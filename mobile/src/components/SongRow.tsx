@@ -1,78 +1,93 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Song } from '../types';
-import { usePlayer, playerStore } from '../store/player-store';
+import { usePlayerSelector, playerStore } from '../store/player-store';
 import { mobilePlayer } from '../services/player';
 import { Equalizer } from './Equalizer';
 
 interface SongRowProps {
   song: Song;
   onPress?: () => void;
+  /** Verilirse dokununca bu liste kuyruk yapılır ve şarkı çalınır. */
+  contextList?: Song[];
   index?: number;
   showIndex?: boolean;
 }
 
-export const SongRow: React.FC<SongRowProps> = React.memo(({ song, onPress, index, showIndex = true }) => {
-  const { currentSong, playing, likedIds } = usePlayer();
-  const isCurrent = currentSong?.id === song.id;
+export const SongRow: React.FC<SongRowProps> = React.memo(({ song, onPress, contextList, index, showIndex = true }) => {
+  const currentSongId = usePlayerSelector((s) => s.currentSong?.id);
+  const playing = usePlayerSelector((s) => s.playing);
+  const likedIds = usePlayerSelector((s) => s.likedIds);
+  const isCurrent = currentSongId === song.id;
   const isLiked = likedIds.includes(song.id);
 
-  const handlePress = () => {
+  const handlePress = useCallback(() => {
     if (onPress) {
       onPress();
-    } else {
-      mobilePlayer.play(song);
+      return;
     }
-  };
+    if (contextList && contextList.length > 0) {
+      const idx = contextList.findIndex((s) => s.id === song.id);
+      playerStore.setQueue(contextList, idx >= 0 ? idx : 0);
+    }
+    mobilePlayer.play(song).catch((e) => {
+      console.warn('[SongRow] Oynatma hatası:', e);
+    });
+  }, [onPress, contextList, song]);
 
-  const handleLike = (e: any) => {
-    e.stopPropagation();
-    playerStore.toggleLike(song.id);
-  };
+  const handleLike = useCallback(() => {
+    playerStore.toggleLike(song);
+  }, [song]);
 
   return (
-    <TouchableOpacity
-      style={[styles.container, isCurrent && styles.activeContainer]}
-      onPress={handlePress}
-      activeOpacity={0.7}
-    >
+    // NOT: Beğeni butonu ana satırın dışında tutulur; iç içe Touchable
+    // kullanımı beğeniye dokununca şarkının da çalmasına yol açardı.
+    <View style={[styles.container, isCurrent && styles.activeContainer]}>
       {isCurrent && <View style={styles.activePillIndicator} />}
 
-      {showIndex && index !== undefined && (
-        <Text style={[styles.indexText, isCurrent && styles.activeCyanText]}>
-          {(index + 1).toString().padStart(2, '0')}
-        </Text>
-      )}
-
-      <View style={styles.thumbWrapper}>
-        <Image
-          source={{
-            uri:
-              song.thumbnail ||
-              'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=120'
-          }}
-          style={styles.thumbnail}
-        />
-        {song.isVideo && (
-          <View style={styles.videoBadge}>
-            <Ionicons name="videocam" size={8} color="#00f0ff" />
-          </View>
+      <TouchableOpacity
+        style={styles.pressArea}
+        onPress={handlePress}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={`${song.title} - ${song.artist} çal`}
+      >
+        {showIndex && index !== undefined && (
+          <Text style={[styles.indexText, isCurrent && styles.activeCyanText]}>
+            {(index + 1).toString().padStart(2, '0')}
+          </Text>
         )}
-      </View>
 
-      <View style={styles.metaContainer}>
-        <Text
-          style={[styles.title, isCurrent && styles.activeCyanText]}
-          numberOfLines={1}
-        >
-          {song.title}
-        </Text>
-        <Text style={styles.artist} numberOfLines={1}>
-          {song.artist}
-          {song.album ? ` • ${song.album}` : ''}
-        </Text>
-      </View>
+        <View style={styles.thumbWrapper}>
+          <Image
+            source={{
+              uri:
+                song.thumbnail ||
+                'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=120'
+            }}
+            style={styles.thumbnail}
+          />
+          {song.isVideo && (
+            <View style={styles.videoBadge}>
+              <Ionicons name="videocam" size={8} color="#00f0ff" />
+            </View>
+          )}
+        </View>
+
+        <View style={styles.metaContainer}>
+          <Text
+            style={[styles.title, isCurrent && styles.activeCyanText]}
+            numberOfLines={1}
+          >
+            {song.title}
+          </Text>
+          <Text style={styles.artist} numberOfLines={1}>
+            {song.artist}
+            {song.album ? ` • ${song.album}` : ''}
+          </Text>
+        </View>
+      </TouchableOpacity>
 
       <View style={styles.rightSection}>
         {isCurrent && (
@@ -89,6 +104,8 @@ export const SongRow: React.FC<SongRowProps> = React.memo(({ song, onPress, inde
           onPress={handleLike}
           style={styles.likeBtn}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel={isLiked ? 'Beğenmekten vazgeç' : 'Beğen'}
         >
           <Ionicons
             name={isLiked ? 'heart' : 'heart-outline'}
@@ -97,7 +114,7 @@ export const SongRow: React.FC<SongRowProps> = React.memo(({ song, onPress, inde
           />
         </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 });
 
@@ -110,6 +127,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginVertical: 2,
     backgroundColor: 'transparent'
+  },
+  pressArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center'
   },
   activeContainer: {
     backgroundColor: 'rgba(0, 240, 255, 0.07)',

@@ -4,8 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import Store from 'electron-store';
-// @ts-ignore — paketin tip tanımı yok
-import CDP from 'chrome-remote-interface';
+import CDP, { CDPClient } from 'chrome-remote-interface';
 
 // ── YouTube Music cookie tabanlı giriş ──────────
 // Kullanıcı music.youtube.com'a normal Google hesabıyla giriş yapar.
@@ -18,7 +17,14 @@ const CHROME_DEBUG_PORTS = [9222, 9333]; // Önce varsayılan 9222 (hedef: doğr
 
 // Google, UA'sında "Electron" geçen pencerelerden girişi reddediyor
 // ("Bir sorun oluştu" hatası). Gerçek Chrome kimliği kullanıyoruz.
-export const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+// Sürüm Electron'un dahili Chromium'undan alınır — Electron güncellenince
+// otomatik güncellenir, sabit sürüm eskimez.
+function buildChromeUA(): string {
+  const fullVer = process.versions?.chrome || '126.0.0.0';
+  return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullVer} Safari/537.36`;
+}
+export const CHROME_UA = buildChromeUA();
+export const CHROME_MAJOR = (process.versions?.chrome || '126.0.0.0').split('.')[0] || '126';
 
 // Geçersiz hesap isimlerini filtrele
 const INVALID_NAMES = /^(guide|hamburger|menu|account|hesap|profil|open guide|rehber|kläravuz|youtube music)$/i;
@@ -39,9 +45,17 @@ interface MusicUser {
 
 export type { MusicUser };
 
+interface GoogleUserRef {
+  id: string;
+  name: string;
+  email: string;
+  picture: string;
+  provider: string;
+}
+
 interface MusicStore {
   musicUser: MusicUser | null;
-  googleUser?: { id: string; name: string; email: string; picture: string; provider: string } | null;
+  googleUser?: GoogleUserRef | null;
 }
 
 export class MusicAuth {
@@ -64,13 +78,13 @@ export class MusicAuth {
     ses.webRequest.onBeforeSendHeaders(
       { urls: ['*://*.google.com/*', '*://*.youtube.com/*', '*://*.googleusercontent.com/*'] },
       (details, cb) => {
-        const h = details.requestHeaders;
-        h['Sec-CH-UA'] = '"Chromium";v="126", "Google Chrome";v="126", "Not.A/Brand";v="8"';
+        const h: Record<string, string> = { ...details.requestHeaders };
+        h['Sec-CH-UA'] = `"Chromium";v="${CHROME_MAJOR}", "Google Chrome";v="${CHROME_MAJOR}", "Not.A/Brand";v="8"`;
         h['Sec-CH-UA-Mobile'] = '?0';
         h['Sec-CH-UA-Platform'] = '"Windows"';
         h['Accept-Language'] = h['Accept-Language'] || 'tr-TR,tr;q=0.9,en;q=0.8';
         h['Accept'] = h['Accept'] || 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8';
-        (h as any)['X-Client-Data'] = (h as any)['X-Client-Data'] || 'CJW2yQEIpLbJAQimtskBCKmdygEIv6HKAQ==';
+        h['X-Client-Data'] = h['X-Client-Data'] || 'CJW2yQEIpLbJAQimtskBCKmdygEIv6HKAQ==';
         cb({ requestHeaders: h });
       }
     );
@@ -99,7 +113,7 @@ export class MusicAuth {
   getUser(): MusicUser | null {
     const user = this.store.get('musicUser');
     // googleUser'dan gerçek isim/alın
-    const googleUser = this.store.get('googleUser' as any) as any;
+    const googleUser = this.store.get('googleUser');
     
     // musicUser'da gerçek isim varsa direkt dön (sanitizeName "YouTube Music" filtreler)
     if (user && sanitizeName(user.name) && user.email) return user;
@@ -127,19 +141,21 @@ export class MusicAuth {
   // Kirli store migrasyonu: "Y", tek harf, "Guide" veya "YouTube Music" temizlenir — dosyadan zorla sil
   private migrateDirtyStore(): void {
     try {
-      const user = this.store.get('musicUser') as any;
+      const user = this.store.get('musicUser');
       if (user && (!user.name || user.name.trim().length <= 1 || user.name === 'Y' || user.name === 'YouTube Music' || !sanitizeName(user.name))) {
         console.log('[Auth] Kirli store düzeltildi:', JSON.stringify(user), '-> silindi');
-        this.store.set('musicUser', null as any);
+        this.store.set('musicUser', null);
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[Auth] Store migrasyon hatası:', e);
+    }
   }
 
   // Cookie'ler varsa profili yenile — pp eksikse veya "YouTube Music" fallback ise mutlaka çek
   private async refreshProfileIfNeeded(): Promise<void> {
     try {
       const user = this.store.get('musicUser');
-      const googleUser = this.store.get('googleUser' as any) as any;
+      const googleUser = this.store.get('googleUser');
       // pp boşsa veya "YouTube Music" fallback ise yenile
       const needRefresh = !user || !user.picture || !sanitizeName(user.name) || user.name === 'YouTube Music' || !user.email;
       if (!needRefresh) return;
@@ -296,7 +312,10 @@ export class MusicAuth {
       // 3. yol: CDP (hâlâ isim yoksa)
       if (!prof || !prof.name) {
         try {
-          const cdpProf = await this.fetchProfileViaCDP(null as any).catch(()=>null);
+          const cdpProf = await this.fetchProfileViaCDP(null).catch((e) => {
+            console.warn('[Auth] CDP profil çekilemedi:', e);
+            return null;
+          });
           if(cdpProf){
             if(!prof) prof = { name:'', email:'', picture:'' };
             if(cdpProf.name && cdpProf.name.length>1 && !prof.name) prof.name = cdpProf.name;
@@ -384,11 +403,13 @@ export class MusicAuth {
     return legacy;
   }
   async importFromTarget(targetId: string): Promise<{ success: boolean; cookies: number; error?: string }> {
-    let client: any;
+    let client: CDPClient | undefined;
     try {
       // Once targetId ile baglanmayı dene
       for (const port of CHROME_DEBUG_PORTS) {
-        try { client = await CDP({ host: '127.0.0.1', port, target: targetId }); if (client) break; } catch {}
+        try { client = await CDP({ host: '127.0.0.1', port, target: targetId }); if (client) break; } catch (e) {
+          console.warn(`[Auth] CDP bağlantısı başarısız (port ${port}):`, e);
+        }
       }
       if (!client) throw new Error('no target');
       const { Network } = client;
@@ -399,16 +420,19 @@ export class MusicAuth {
       let written=0;
       for (const c of all) {
         try {
-          const url = `http${c.secure ? 's' : ''}://${c.domain.startsWith('.') ? c.domain.slice(1) : c.domain}${c.path || '/'}`;
-          await ses.cookies.set({ url, name:c.name, value:c.value, domain:c.domain, path:c.path||'/', secure:!!c.secure, httpOnly:!!c.httpOnly, sameSite: c.sameSite==='None'?'no_restriction':(c.sameSite==='Strict'?'strict':'lax'), expirationDate: c.expires && c.expires>0 ? Math.floor(c.expires):undefined } as any);
+          const domain = c.domain.startsWith('.') ? c.domain.slice(1) : c.domain;
+          const url = `http${c.secure ? 's' : ''}://${domain}${c.path || '/'}`;
+          await ses.cookies.set({ url, name:c.name, value:c.value, domain:c.domain, path:c.path||'/', secure:!!c.secure, httpOnly:!!c.httpOnly, sameSite: c.sameSite==='None'?'no_restriction':(c.sameSite==='Strict'?'strict':'lax'), expirationDate: c.expires && c.expires>0 ? Math.floor(c.expires):undefined });
           written++;
-        } catch {}
+        } catch (e) {
+          console.warn('[Auth] Cookie yazılamadı:', c.name, e);
+        }
       }
       return written>0 ? { success:true, cookies:written } : { success:false, cookies:0, error:'Cookie yazılamadı.' };
-    } catch(e:any){ return { success:false, cookies:0, error:e?.message||String(e)} } finally { try{ await client?.close(); }catch{} }
+    } catch(e:any){ return { success:false, cookies:0, error:e?.message||String(e)} } finally { try{ await client?.close(); }catch(e){ console.warn('[Auth] CDP kapatma hatası:', e); } }
   }
   async importFromChromeLegacy(): Promise<{ success: boolean; cookies: number; error?: string }> {
-    let client: any;
+    let client: CDPClient | undefined;
     try {
       let lastErr:any=null;
       for (const port of CHROME_DEBUG_PORTS) {
@@ -442,7 +466,8 @@ export class MusicAuth {
       for (const c of all) {
         try {
           // CDP'den gelen cookie -> Electron formatı
-          const url = `http${c.secure ? 's' : ''}://${c.domain.startsWith('.') ? c.domain.slice(1) : c.domain}${c.path || '/'}`;
+          const domain = c.domain.startsWith('.') ? c.domain.slice(1) : c.domain;
+          const url = `http${c.secure ? 's' : ''}://${domain}${c.path || '/'}`;
           await ses.cookies.set({
             url,
             name: c.name,
@@ -453,9 +478,11 @@ export class MusicAuth {
             httpOnly: !!c.httpOnly,
             sameSite: c.sameSite === 'None' ? 'no_restriction' : (c.sameSite === 'Strict' ? 'strict' : 'lax'),
             expirationDate: c.expires && c.expires > 0 ? Math.floor(c.expires) : undefined
-          } as any);
+          });
           written++;
-        } catch {}
+        } catch (e) {
+          console.warn('[Auth] Cookie yazılamadı:', c.name, e);
+        }
       }
       if (written > 0) {
         // Cookie'ler tam yazıldıktan hemen sonra profil API'si hata verebilir
@@ -472,7 +499,7 @@ export class MusicAuth {
           prof = await this.fetchProfileViaAPI().catch(() => null);
         }
         // Google hesabından gerçek ismi al (YouTube Music API çoğu zaman isim dönmüyor)
-        const googleUser = this.store.get('googleUser' as any) as any;
+        const googleUser = this.store.get('googleUser');
         const realName = sanitizeName(prof?.name) || sanitizeName(googleUser?.name) || '';
         const realEmail = prof?.email || googleUser?.email || '';
         const realPicture = prof?.picture || googleUser?.picture || '';
@@ -498,11 +525,12 @@ export class MusicAuth {
   // Gerçek profil: ytd-active-account-header-renderer ham verisi (verdiğin dump) doğrudan
   async fetchProfileViaAPI(): Promise<{ name: string; email: string; picture: string } | null> {
     // 1. Hidden window ile music.youtube.com DOM'undan direkt çek — 10sn bekle, ytd render gelene kadar
+    let win: BrowserWindow | null = null;
     try {
       const cookies = await this.getSession().cookies.get({ url: 'https://music.youtube.com' });
       if (cookies.some(c=>c.name==='SAPISID' || c.name==='LOGIN_INFO')) {
-        const win = new BrowserWindow({ show:false, width:1024, height:700, webPreferences:{ partition: MUSIC_PARTITION } });
-        try { (win.webContents as any).setUserAgent(CHROME_UA); } catch {}
+        win = new BrowserWindow({ show:false, width:1024, height:700, webPreferences:{ partition: MUSIC_PARTITION } });
+        try { win.webContents.setUserAgent(CHROME_UA); } catch (e) { console.warn('[Auth] UA ayarlanamadı:', e); }
         await win.loadURL('https://music.youtube.com/');
         // sayfa + nav-bar avatar yüklenene kadar 15sn bekle
         for(let i=0;i<15;i++){ await new Promise(r=>setTimeout(r,1000)); try{ const has=await win.webContents.executeJavaScript(`!!(document.querySelector('ytmusic-nav-bar #avatar img')||document.querySelector('ytd-active-account-header-renderer #account-name')||document.querySelector('#account-name'))`,true); if(has) break; }catch{} }
@@ -547,17 +575,33 @@ export class MusicAuth {
             }
             return JSON.stringify({name: (name||'').trim(), email: (email||'').trim(), picture: (picture||'').trim(), handle: (handle||'').trim()});
           })()`, true);
-          const parsed = typeof data==='string' ? JSON.parse(data) : data;
-          win.destroy();
+          let parsed: { name?: string; email?: string; picture?: string } = {};
+          try {
+            parsed = typeof data==='string' ? JSON.parse(data) : (data as typeof parsed);
+          } catch (e) {
+            console.warn('[Auth] Profil JSON çözümlenemedi:', e);
+          }
           const validName = parsed && parsed.name && parsed.name.length>1 && parsed.name!=='Y' && parsed.name!=='YouTube Music' ? parsed.name : '';
           if (validName || (parsed && parsed.picture)) {
             console.log('[Auth] Hidden window profil OK:', validName || '(sadece pp)', parsed.picture ? 'pp var' : 'pp yok');
-            return { name: validName, email: (parsed.email||'').startsWith('@')?'':parsed.email, picture: parsed.picture||'' };
+            const rawEmail = parsed.email || '';
+            const email = rawEmail.startsWith('@') ? '' : rawEmail;
+            return { name: validName, email, picture: parsed.picture || '' };
           }
           console.error('[Auth] Hidden window profil bulunamadı');
-        } catch { try{ win.destroy(); } catch{} }
+        } catch (e) {
+          console.warn('[Auth] Hidden window profil okunamadı:', e);
+        } finally {
+          // Pencere her durumda yok edilir — sızıntı engellenir
+          if (win && !win.isDestroyed()) {
+            try { win.destroy(); } catch (e) { console.warn('[Auth] Gizli pencere yok edilemedi:', e); }
+            win = null;
+          }
+        }
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[Auth] fetchProfileViaAPI cookie aşaması hatası:', e);
+    }
     // 2. Direct fetch HTML fallback
     try {
       const cookies = await this.getSession().cookies.get({ url: 'https://music.youtube.com' });
@@ -596,7 +640,7 @@ export class MusicAuth {
           'Cookie': cookieHeader,
           'Origin': 'https://music.youtube.com',
           'Referer': 'https://music.youtube.com/',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36'
+          'User-Agent': CHROME_UA
         },
         body: JSON.stringify({
           context: { client: { hl: 'tr', gl: 'TR', clientName: 'WEB_REMIX', clientVersion: '1.20250801.00.00' } }
@@ -677,7 +721,8 @@ export class MusicAuth {
   }
 
   // CDP üzerinden mevcut sekmede hesap adını çek
-  private async fetchProfileViaCDP(client: any): Promise<{ name: string; email: string; picture: string } | null> {
+  private async fetchProfileViaCDP(client: CDPClient | null): Promise<{ name: string; email: string; picture: string } | null> {
+    if (!client) return null;
     try {
       const { Page, Runtime } = client;
       await Page.enable();
@@ -716,9 +761,18 @@ export class MusicAuth {
         })()`,
         returnByValue: true
       });
-      const data = JSON.parse(res.result?.value || '{}');
+      const rawValue = typeof res.result?.value === 'string' ? res.result.value : '{}';
+      let data: { name?: string; email?: string; picture?: string } = {};
+      try {
+        data = JSON.parse(rawValue);
+      } catch (e) {
+        console.warn('[Auth] CDP profil JSON çözümlenemedi:', e);
+        return null;
+      }
       console.log('[Auth] CDP profil:', data);
-      if (data.name || data.picture) return data;
+      if (data.name || data.picture) {
+        return { name: data.name || '', email: data.email || '', picture: data.picture || '' };
+      }
       return null;
     } catch (e: any) {
       console.error('[Auth] CDP profil hatası:', e?.message || e);
@@ -729,16 +783,16 @@ export class MusicAuth {
   // Normal cikis: sadece UI store'u temizle, tarayici cookie'si kalsin (mac id gibi kalici)
   async logout(): Promise<void> {
     this.store.set('musicUser', null);
-    try { this.loginWindow?.hide(); } catch {}
+    try { this.loginWindow?.hide(); } catch (e) { console.warn('[Auth] Pencere gizlenemedi:', e); }
   }
   async logoutCompletely(): Promise<void> {
     try {
       await this.getSession().clearStorageData({ storages: ['cookies', 'localstorage', 'cachestorage', 'indexdb', 'serviceworkers'] });
-    } catch {}
+    } catch (e) { console.warn('[Auth] Oturum verisi temizlenemedi:', e); }
     this.store.set('musicUser', null);
     try {
       const tmpProfile = (process.env.TEMP || 'C:\\Temp') + '\\aquality-music-chrome-profile';
       if (fs.existsSync(tmpProfile)) fs.rmSync(tmpProfile, { recursive: true, force: true });
-    } catch {}
+    } catch (e) { console.warn('[Auth] Geçici profil silinemedi:', e); }
   }
 }

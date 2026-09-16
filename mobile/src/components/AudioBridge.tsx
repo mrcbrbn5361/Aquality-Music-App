@@ -1,8 +1,27 @@
 import React, { useRef, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { WebView } from 'react-native-webview';
+import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { playerStore } from '../store/player-store';
 import { mobilePlayer } from '../services/player';
+
+/**
+ * YouTube video kimliklerini doğrular. Geçerli kimlikler 11 karakter
+ * uzunluğunda ve yalnızca URL-güvenli karakterler içerir.
+ * Enjeksiyon saldırılarına karşı ilk savunma hattıdır.
+ */
+function sanitizeVideoId(id: unknown): string | null {
+  if (typeof id !== 'string') return null;
+  const trimmed = id.trim();
+  if (/^[A-Za-z0-9_-]{11}$/.test(trimmed)) return trimmed;
+  return null;
+}
+
+/** Sayısal köprü argümanlarını güvenli aralığa kelepçeler. */
+function clampNumber(value: unknown, min: number, max: number, fallback = 0): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
 
 const PLAYER_HTML = `
 <!DOCTYPE html>
@@ -207,7 +226,16 @@ export const AudioBridge: React.FC = () => {
   useEffect(() => {
     mobilePlayer.registerBridge({
       play: (id: string) => {
-        webViewRef.current?.injectJavaScript(`window.playSong && window.playSong('${id}'); true;`);
+        const safeId = sanitizeVideoId(id);
+        if (!safeId) {
+          console.warn('[AudioBridge] Geçersiz video kimliği reddedildi');
+          return;
+        }
+        // JSON.stringify enjeksiyon koruması sağlar (tırnak/kaçış karakterleri
+        // güvenli şekilde kodlanır).
+        webViewRef.current?.injectJavaScript(
+          `window.playSong && window.playSong(${JSON.stringify(safeId)}); true;`
+        );
       },
       pause: () => {
         webViewRef.current?.injectJavaScript(`window.pauseSong && window.pauseSong(); true;`);
@@ -216,10 +244,16 @@ export const AudioBridge: React.FC = () => {
         webViewRef.current?.injectJavaScript(`window.resumeSong && window.resumeSong(); true;`);
       },
       seek: (seconds: number) => {
-        webViewRef.current?.injectJavaScript(`window.seekSong && window.seekSong(${seconds}); true;`);
+        const safeSeconds = clampNumber(seconds, 0, 86400);
+        webViewRef.current?.injectJavaScript(
+          `window.seekSong && window.seekSong(${safeSeconds}); true;`
+        );
       },
       setVolume: (vol: number) => {
-        webViewRef.current?.injectJavaScript(`window.setSongVolume && window.setSongVolume(${vol}); true;`);
+        const safeVol = clampNumber(vol, 0, 100);
+        webViewRef.current?.injectJavaScript(
+          `window.setSongVolume && window.setSongVolume(${safeVol}); true;`
+        );
       }
     });
 
@@ -228,10 +262,12 @@ export const AudioBridge: React.FC = () => {
     };
   }, []);
 
-  const handleMessage = (event: any) => {
+  const handleMessage = (event: WebViewMessageEvent) => {
     try {
-      const data = JSON.parse(event.nativeEvent.data);
-      if (!data || !data.type) return;
+      const raw = event.nativeEvent.data;
+      if (typeof raw !== 'string' || raw.length > 65536) return;
+      const data = JSON.parse(raw);
+      if (!data || typeof data !== 'object' || typeof data.type !== 'string') return;
 
       switch (data.type) {
         case 'state':
@@ -273,7 +309,7 @@ export const AudioBridge: React.FC = () => {
     <View style={styles.hiddenContainer} pointerEvents="none">
       <WebView
         ref={webViewRef}
-        originWhitelist={['*']}
+        originWhitelist={['https://www.youtube.com', 'https://*.youtube.com', 'https://*.googlevideo.com', 'https://*.gstatic.com', 'about:blank']}
         source={{
           html: PLAYER_HTML,
           baseUrl: 'https://www.youtube.com'
@@ -286,7 +322,11 @@ export const AudioBridge: React.FC = () => {
         scrollEnabled={false}
         javaScriptEnabled={true}
         domStorageEnabled={true}
-        mixedContentMode="always"
+        mixedContentMode="never"
+        allowFileAccess={false}
+        allowFileAccessFromFileURLs={false}
+        allowUniversalAccessFromFileURLs={false}
+        onShouldStartLoadWithRequest={() => false}
         userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
         style={styles.webView}
         onMessage={handleMessage}

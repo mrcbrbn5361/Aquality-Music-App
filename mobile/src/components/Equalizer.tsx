@@ -12,9 +12,16 @@ export const Equalizer: React.FC<EqualizerProps> = ({
   color = '#00e5ff',
   size = 14
 }) => {
-  const bar1 = useRef(new Animated.Value(0.3)).current;
-  const bar2 = useRef(new Animated.Value(0.8)).current;
-  const bar3 = useRef(new Animated.Value(0.5)).current;
+  // Tembel başlatma: her render'da yeni Animated.Value üretilmez.
+  const bar1Ref = useRef<Animated.Value | null>(null);
+  const bar2Ref = useRef<Animated.Value | null>(null);
+  const bar3Ref = useRef<Animated.Value | null>(null);
+  if (!bar1Ref.current) bar1Ref.current = new Animated.Value(0.3);
+  if (!bar2Ref.current) bar2Ref.current = new Animated.Value(0.8);
+  if (!bar3Ref.current) bar3Ref.current = new Animated.Value(0.5);
+  const bar1 = bar1Ref.current;
+  const bar2 = bar2Ref.current;
+  const bar3 = bar3Ref.current;
 
   useEffect(() => {
     let anim: Animated.CompositeAnimation | null = null;
@@ -44,7 +51,7 @@ export const Equalizer: React.FC<EqualizerProps> = ({
     return () => {
       if (anim) anim.stop();
     };
-  }, [playing]);
+  }, [playing, bar1, bar2, bar3]);
 
   return (
     <View style={[styles.container, { height: size, width: size * 1.1 }]}>

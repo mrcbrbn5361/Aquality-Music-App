@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Song, Playlist, ThemeAccent } from '../types';
 
 interface PlayerState {
@@ -10,11 +10,13 @@ interface PlayerState {
   queue: Song[];
   queueIndex: number;
   likedIds: string[];
+  likedSongs: Song[];
   recentlyPlayed: Song[];
   volume: number;
   shuffle: boolean;
   repeat: 'off' | 'all' | 'one';
   adBlocker: boolean;
+  autoPlay: boolean;
   playlists: Playlist[];
   themeAccent: ThemeAccent;
   audioQuality: 'high' | 'medium' | 'low';
@@ -23,15 +25,25 @@ interface PlayerState {
 
 const STORAGE_KEYS = {
   LIKED: '@aquality_liked',
+  LIKED_SONGS: '@aquality_liked_songs',
   RECENT: '@aquality_recent',
   VOLUME: '@aquality_volume',
   ADBLOCK: '@aquality_adblock',
+  AUTOPLAY: '@aquality_autoplay',
   QUEUE: '@aquality_queue',
   QUEUE_INDEX: '@aquality_queue_index',
   PLAYLISTS: '@aquality_playlists',
   ACCENT: '@aquality_accent',
   QUALITY: '@aquality_quality'
 };
+
+// AsyncStorage şişmesini önlemek için üst sınırlar (Android ~6MB limiti)
+const MAX_PERSISTED_QUEUE = 200;
+const MAX_RECENTLY_PLAYED = 100;
+const MAX_LIKED_SONGS = 500;
+// İlerleme bildirimleri için minimum delta (saniye) — 300ms'lik WebView
+// nabzını ~1 güncelleme/sn düzeyine indirir, yeniden çizim fırtınasını önler.
+const PROGRESS_NOTIFY_DELTA = 0.5;
 
 class PlayerStore {
   private state: PlayerState = {
@@ -42,11 +54,13 @@ class PlayerStore {
     queue: [],
     queueIndex: -1,
     likedIds: [],
+    likedSongs: [],
     recentlyPlayed: [],
     volume: 80,
     shuffle: false,
     repeat: 'off',
     adBlocker: true,
+    autoPlay: true,
     playlists: [],
     themeAccent: 'cyan',
     audioQuality: 'high',
@@ -55,18 +69,39 @@ class PlayerStore {
 
   private listeners = new Set<() => void>();
   private progressListeners = new Set<() => void>();
+  private lastNotifiedTime = -1;
+  private lastNotifiedDuration = -1;
 
   constructor() {
     this.loadPersistedData();
   }
 
+  private parseStoredArray(raw: string | null): Song[] {
+    if (!raw) return [];
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(
+        (item): item is Song =>
+          !!item && typeof item === 'object' &&
+          typeof (item as Song).id === 'string' &&
+          typeof (item as Song).title === 'string'
+      );
+    } catch (e) {
+      console.warn('[PlayerStore] Kayıtlı liste çözümlenemedi:', e);
+      return [];
+    }
+  }
+
   private async loadPersistedData() {
     try {
-      const [liked, recent, vol, adblock, queue, queueIndex, playlists, accent, quality] = await Promise.all([
+      const [liked, likedSongsRaw, recent, vol, adblock, autoplay, queue, queueIndex, playlists, accent, quality] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.LIKED),
+        AsyncStorage.getItem(STORAGE_KEYS.LIKED_SONGS),
         AsyncStorage.getItem(STORAGE_KEYS.RECENT),
         AsyncStorage.getItem(STORAGE_KEYS.VOLUME),
         AsyncStorage.getItem(STORAGE_KEYS.ADBLOCK),
+        AsyncStorage.getItem(STORAGE_KEYS.AUTOPLAY),
         AsyncStorage.getItem(STORAGE_KEYS.QUEUE),
         AsyncStorage.getItem(STORAGE_KEYS.QUEUE_INDEX),
         AsyncStorage.getItem(STORAGE_KEYS.PLAYLISTS),
@@ -74,28 +109,57 @@ class PlayerStore {
         AsyncStorage.getItem(STORAGE_KEYS.QUALITY)
       ]);
 
-      if (liked) this.state.likedIds = JSON.parse(liked);
-      if (recent) this.state.recentlyPlayed = JSON.parse(recent);
-      if (vol) this.state.volume = Number(vol);
+      if (liked) {
+        try {
+          const ids: unknown = JSON.parse(liked);
+          if (Array.isArray(ids)) {
+            this.state.likedIds = ids.filter((id): id is string => typeof id === 'string');
+          }
+        } catch (e) {
+          console.warn('[PlayerStore] Beğenilen kimlikleri çözümlenemedi:', e);
+        }
+      }
+      const storedLikedSongs = this.parseStoredArray(likedSongsRaw);
+      if (storedLikedSongs.length > 0) {
+        this.state.likedSongs = storedLikedSongs.slice(0, MAX_LIKED_SONGS);
+        // Metadata'sı olan şarkıların kimliklerini geri yükle
+        const restoredIds = new Set(this.state.likedSongs.map((s) => s.id));
+        for (const id of this.state.likedIds) restoredIds.add(id);
+        this.state.likedIds = Array.from(restoredIds);
+      }
+      const storedRecent = this.parseStoredArray(recent);
+      if (storedRecent.length > 0) {
+        this.state.recentlyPlayed = storedRecent.slice(0, MAX_RECENTLY_PLAYED);
+      }
+      if (vol !== null && vol !== '') {
+        const volNum = Number(vol);
+        if (Number.isFinite(volNum)) this.state.volume = Math.min(100, Math.max(0, volNum));
+      }
       if (adblock !== null) this.state.adBlocker = adblock === 'true';
+      if (autoplay !== null) this.state.autoPlay = autoplay === 'true';
       if (playlists) {
         try {
-          this.state.playlists = JSON.parse(playlists);
-        } catch {}
+          const parsed: unknown = JSON.parse(playlists);
+          if (Array.isArray(parsed)) this.state.playlists = parsed as Playlist[];
+        } catch (e) {
+          console.warn('[PlayerStore] Çalma listeleri çözümlenemedi:', e);
+        }
       }
-      if (accent) this.state.themeAccent = accent as ThemeAccent;
-      if (quality) this.state.audioQuality = quality as 'high' | 'medium' | 'low';
+      if (accent === 'cyan' || accent === 'indigo' || accent === 'amber' || accent === 'emerald') {
+        this.state.themeAccent = accent;
+      }
+      if (quality === 'high' || quality === 'medium' || quality === 'low') {
+        this.state.audioQuality = quality;
+      }
 
       if (queue) {
-        try {
-          const parsedQueue = JSON.parse(queue);
-          if (Array.isArray(parsedQueue) && parsedQueue.length > 0) {
-            this.state.queue = parsedQueue;
-            const idx = queueIndex ? Number(queueIndex) : 0;
-            this.state.queueIndex = (idx >= 0 && idx < parsedQueue.length) ? idx : 0;
-            this.state.currentSong = parsedQueue[this.state.queueIndex] || null;
-          }
-        } catch {}
+        const parsedQueue = this.parseStoredArray(queue);
+        if (parsedQueue.length > 0) {
+          this.state.queue = parsedQueue;
+          const idx = queueIndex ? Number(queueIndex) : 0;
+          this.state.queueIndex = (Number.isFinite(idx) && idx >= 0 && idx < parsedQueue.length) ? idx : 0;
+          this.state.currentSong = parsedQueue[this.state.queueIndex] || null;
+        }
       }
       this.notify();
     } catch (e) {
@@ -104,8 +168,15 @@ class PlayerStore {
   }
 
   private persistQueue() {
-    AsyncStorage.setItem(STORAGE_KEYS.QUEUE, JSON.stringify(this.state.queue)).catch(() => {});
-    AsyncStorage.setItem(STORAGE_KEYS.QUEUE_INDEX, String(this.state.queueIndex)).catch(() => {});
+    // Yalnızca kuyruğun son bölümünü sakla — AsyncStorage limitini korur.
+    const tail = this.state.queue.slice(-MAX_PERSISTED_QUEUE);
+    const indexInTail = Math.max(0, this.state.queueIndex - (this.state.queue.length - tail.length));
+    AsyncStorage.setItem(STORAGE_KEYS.QUEUE, JSON.stringify(tail)).catch((e) => {
+      console.warn('[PlayerStore] Kuyruk kaydedilemedi:', e);
+    });
+    AsyncStorage.setItem(STORAGE_KEYS.QUEUE_INDEX, String(indexInTail)).catch((e) => {
+      console.warn('[PlayerStore] Kuyruk konumu kaydedilemedi:', e);
+    });
   }
 
   getState(): PlayerState {
@@ -146,9 +217,18 @@ class PlayerStore {
   }
 
   setProgress(currentTime: number, duration: number) {
-    this.state.currentTime = currentTime;
-    if (duration > 0) this.state.duration = duration;
-    this.notifyProgress();
+    const safeTime = Number.isFinite(currentTime) && currentTime >= 0 ? currentTime : 0;
+    const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : this.state.duration;
+    const durationChanged = safeDuration !== this.state.duration;
+    this.state.currentTime = safeTime;
+    if (durationChanged) this.state.duration = safeDuration;
+    // 300ms'lik nabzı kıs: yalnızca anlamlı ilerleme varsa bildir.
+    // Bu, saniyede ~3 tam yeniden çizim yerine ~1-2 çizim demektir.
+    if (durationChanged || Math.abs(safeTime - this.lastNotifiedTime) >= PROGRESS_NOTIFY_DELTA) {
+      this.lastNotifiedTime = safeTime;
+      this.lastNotifiedDuration = safeDuration;
+      this.notifyProgress();
+    }
   }
 
   setQueue(queue: Song[], startIndex = 0) {
@@ -161,10 +241,14 @@ class PlayerStore {
     this.notify();
   }
 
-  addToQueue(song: Song) {
+  addToQueue(song: Song): boolean {
+    if (!song || typeof song.id !== 'string' || song.id.length === 0) return false;
+    // Yinelenenleri engelle: aynı parça kuyrukta iki kez çalmasın.
+    if (this.state.queue.some((s) => s.id === song.id)) return false;
     this.state.queue.push(song);
     this.persistQueue();
     this.notify();
+    return true;
   }
 
   getNextSong(): Song | null {
@@ -175,9 +259,12 @@ class PlayerStore {
       return this.state.currentSong;
     }
 
-    // Karışık çalma (shuffle)
+    // Karışık çalma (shuffle) — reddetme örneklemesi ile yansız seçim
     if (this.state.shuffle && this.state.queue.length > 1) {
-      let randIdx = Math.floor(Math.random() * this.state.queue.length);
+      let randIdx = this.state.queueIndex;
+      for (let attempt = 0; attempt < 10 && randIdx === this.state.queueIndex; attempt++) {
+        randIdx = Math.floor(Math.random() * this.state.queue.length);
+      }
       if (randIdx === this.state.queueIndex) {
         randIdx = (randIdx + 1) % this.state.queue.length;
       }
@@ -238,17 +325,40 @@ class PlayerStore {
     return this.state.repeat;
   }
 
-  toggleLike(songId: string): boolean {
+  /**
+   * Beğeni durumunu değiştirir. Şarkı nesnesi verildiğinde metadata da
+   * saklanır — böylece "Beğenilenler" listesi dinleme geçmişinden
+   * bağımsız olarak doğru çalışır.
+   */
+  toggleLike(song: Song | string): boolean {
+    const songId = typeof song === 'string' ? song : song.id;
+    const songObj: Song | null = typeof song === 'string' ? null : song;
+    if (!songId) return false;
     const idx = this.state.likedIds.indexOf(songId);
     let isLiked = false;
     if (idx > -1) {
       this.state.likedIds.splice(idx, 1);
+      this.state.likedSongs = this.state.likedSongs.filter((s) => s.id !== songId);
       isLiked = false;
     } else {
       this.state.likedIds.push(songId);
+      if (songObj) {
+        this.state.likedSongs = this.state.likedSongs.filter((s) => s.id !== songId);
+        this.state.likedSongs.unshift(songObj);
+        if (this.state.likedSongs.length > MAX_LIKED_SONGS) {
+          const removed = this.state.likedSongs.splice(MAX_LIKED_SONGS);
+          const removedIds = new Set(removed.map((s) => s.id));
+          this.state.likedIds = this.state.likedIds.filter((id) => !removedIds.has(id));
+        }
+      }
       isLiked = true;
     }
-    AsyncStorage.setItem(STORAGE_KEYS.LIKED, JSON.stringify(this.state.likedIds)).catch(() => {});
+    AsyncStorage.setItem(STORAGE_KEYS.LIKED, JSON.stringify(this.state.likedIds)).catch((e) => {
+      console.warn('[PlayerStore] Beğeniler kaydedilemedi:', e);
+    });
+    AsyncStorage.setItem(STORAGE_KEYS.LIKED_SONGS, JSON.stringify(this.state.likedSongs)).catch((e) => {
+      console.warn('[PlayerStore] Beğenilen şarkılar kaydedilemedi:', e);
+    });
     this.notify();
     return isLiked;
   }
@@ -260,13 +370,37 @@ class PlayerStore {
   addRecentlyPlayed(song: Song) {
     this.state.recentlyPlayed = this.state.recentlyPlayed.filter((s) => s.id !== song.id);
     this.state.recentlyPlayed.unshift(song);
-    AsyncStorage.setItem(STORAGE_KEYS.RECENT, JSON.stringify(this.state.recentlyPlayed)).catch(() => {});
+    if (this.state.recentlyPlayed.length > MAX_RECENTLY_PLAYED) {
+      this.state.recentlyPlayed.length = MAX_RECENTLY_PLAYED;
+    }
+    AsyncStorage.setItem(STORAGE_KEYS.RECENT, JSON.stringify(this.state.recentlyPlayed)).catch((e) => {
+      console.warn('[PlayerStore] Geçmiş kaydedilemedi:', e);
+    });
     this.notify();
   }
 
   setAdBlocker(enabled: boolean) {
     this.state.adBlocker = enabled;
-    AsyncStorage.setItem(STORAGE_KEYS.ADBLOCK, String(enabled)).catch(() => {});
+    AsyncStorage.setItem(STORAGE_KEYS.ADBLOCK, String(enabled)).catch((e) => {
+      console.warn('[PlayerStore] Reklam engelleyici ayarı kaydedilemedi:', e);
+    });
+    this.notify();
+  }
+
+  setAutoPlay(enabled: boolean) {
+    this.state.autoPlay = enabled;
+    AsyncStorage.setItem(STORAGE_KEYS.AUTOPLAY, String(enabled)).catch((e) => {
+      console.warn('[PlayerStore] Otomatik çalma ayarı kaydedilemedi:', e);
+    });
+    this.notify();
+  }
+
+  setVolume(vol: number) {
+    const safeVol = Number.isFinite(vol) ? Math.min(100, Math.max(0, vol)) : this.state.volume;
+    this.state.volume = safeVol;
+    AsyncStorage.setItem(STORAGE_KEYS.VOLUME, String(safeVol)).catch((e) => {
+      console.warn('[PlayerStore] Ses düzeyi kaydedilemedi:', e);
+    });
     this.notify();
   }
 
@@ -333,14 +467,28 @@ class PlayerStore {
 
   clearRecentlyPlayed() {
     this.state.recentlyPlayed = [];
-    AsyncStorage.removeItem(STORAGE_KEYS.RECENT).catch(() => {});
+    AsyncStorage.removeItem(STORAGE_KEYS.RECENT).catch((e) => {
+      console.warn('[PlayerStore] Geçmiş silinemedi:', e);
+    });
     this.notify();
   }
 
+  /**
+   * Tüm geçici önbellek verilerini temizler: dinleme geçmişi, ilerleme
+   * sayaçları. Kullanıcı verileri (beğeniler, çalma listeleri, kuyruk,
+   * ayarlar) korunur.
+   */
   async clearAllCache() {
     this.state.recentlyPlayed = [];
-    await AsyncStorage.removeItem(STORAGE_KEYS.RECENT).catch(() => {});
+    this.state.currentTime = 0;
+    this.lastNotifiedTime = -1;
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.RECENT);
+    } catch (e) {
+      console.warn('[PlayerStore] Önbellek temizlenemedi:', e);
+    }
     this.notify();
+    this.notifyProgress();
   }
 }
 
@@ -356,6 +504,19 @@ export function usePlayer() {
   }, []);
 
   return state;
+}
+
+/**
+ * Yalnızca ihtiyaç duyulan alanlara abone olur — tüm durum nesnesini
+ * kopyalamak yerine seçilen dilimi döndürür. Sık güncellenen alanlar
+ * (örn. kuyruk) değiştiğinde ilgisiz bileşenlerin yeniden çizilmesini önler.
+ */
+export function usePlayerSelector<T>(selector: (state: PlayerState) => T): T {
+  return useSyncExternalStore(
+    (onChange) => playerStore.subscribe(onChange),
+    () => selector(playerStore.getState()),
+    () => selector(playerStore.getState())
+  );
 }
 
 export function usePlayerProgress() {

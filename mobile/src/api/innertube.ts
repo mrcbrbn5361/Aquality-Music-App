@@ -28,26 +28,49 @@ const SEARCH_PARAMS: Record<string, string> = {
   artists: 'EgWKAQIgAWoQEAMQBBAJEAoQBRAREBAQFQ%3D%3D'
 };
 
+/** InnerTube JSON yanıtları için gevşek ama belgelenmiş köprü tipi. */
+type InnerTubeResponse = Record<string, any>;
+
 export class InnerTubeMobileApi {
-  private async request<T = any>(endpoint: string, body: Record<string, unknown>): Promise<T> {
+  private async request<T = InnerTubeResponse>(endpoint: string, body: Record<string, unknown>): Promise<T> {
     const payload = {
       context: INNERTUBE_CONTEXT,
       ...body
     };
 
-    const res = await fetch(`${BASE_URL}/${endpoint}`, {
-      method: 'POST',
-      headers: HEADERS,
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(12000)
-    });
+    // Geçici ağ hatalarında (zaman aşımı, bağlantı kopması, 5xx) bir kez
+    // yeniden dene. 4xx istemci hatalarında yeniden deneme yapma.
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, 800 * attempt));
+      }
+      try {
+        const res = await fetch(`${BASE_URL}/${endpoint}`, {
+          method: 'POST',
+          headers: HEADERS,
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(12000)
+        });
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      throw new Error(`InnerTube ${endpoint} error: ${res.status} - ${errText.substring(0, 200)}`);
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          const err = new Error(`InnerTube ${endpoint} error: ${res.status} - ${errText.substring(0, 200)}`);
+          // 4xx hataları kalıcıdır — yeniden deneme
+          if (res.status >= 400 && res.status < 500) throw err;
+          lastError = err;
+          continue;
+        }
+
+        return (await res.json()) as T;
+      } catch (e) {
+        lastError = e;
+        const msg = e instanceof Error ? e.message : String(e);
+        // 4xx hatasıysa yeniden deneme
+        if (/error: 4\d\d/.test(msg)) throw e;
+      }
     }
-
-    return res.json();
+    throw lastError instanceof Error ? lastError : new Error(`InnerTube ${endpoint} failed`);
   }
 
   private text(obj: any): string {
@@ -74,6 +97,7 @@ export class InnerTubeMobileApi {
   private duration(str: string): number {
     if (!str) return 0;
     const p = str.split(':').map(Number);
+    if (p.some((n) => !Number.isFinite(n) || n < 0)) return 0;
     if (p.length === 3) return p[0] * 3600 + p[1] * 60 + p[2];
     if (p.length === 2) return p[0] * 60 + p[1];
     return p[0] || 0;
@@ -152,7 +176,16 @@ export class InnerTubeMobileApi {
     };
   }
 
-  private parseTwoRow(item: any): Song | Album | null {
+  private isSongLike(value: unknown): value is Song {
+    return (
+      !!value &&
+      typeof value === 'object' &&
+      typeof (value as Song).id === 'string' &&
+      typeof (value as Song).duration === 'number'
+    );
+  }
+
+  private parseTwoRow(item: any): Song | Album | Artist | null {
     const r = item?.musicTwoRowItemRenderer;
     if (!r) return null;
 
@@ -177,23 +210,33 @@ export class InnerTubeMobileApi {
 
       return {
         id: nav.watchEndpoint.videoId,
-        title,
-        artist,
+        title: title || 'Bilinmeyen Parça',
+        artist: artist || 'Bilinmeyen Sanatçı',
         thumbnail: thumb || `https://i.ytimg.com/vi/${nav.watchEndpoint.videoId}/hqdefault.jpg`,
         duration,
-        album,
+        album: album || undefined,
         isVideo
-      } as Song;
+      };
     }
 
     const browseId: string = nav?.browseEndpoint?.browseId || '';
-    if (browseId && (browseId.startsWith('MPRE') || /albüm|album/i.test(subtitle))) {
+    if (!browseId) return null;
+    // Sanatçı kanalları UC ile başlar
+    if (browseId.startsWith('UC')) {
+      const sub = subtitle.split(/[•·]/)[0]?.trim() || '';
       return {
         id: browseId,
-        title,
+        name: title || sub || 'Bilinmeyen Sanatçı',
+        thumbnail: thumb
+      };
+    }
+    if (browseId.startsWith('MPRE') || browseId.startsWith('VL') || /albüm|album|single|ep\b/i.test(subtitle)) {
+      return {
+        id: browseId,
+        title: title || 'Bilinmeyen Albüm',
         artist: subtitle.split(/[•·]/)[0]?.trim() || '',
         thumbnail: thumb
-      } as Album;
+      };
     }
 
     return null;
@@ -270,10 +313,12 @@ export class InnerTubeMobileApi {
           for (const item of carousel.contents || []) {
             const parsed = this.parseTwoRow(item);
             if (parsed) {
-              if ('id' in parsed && (parsed as Song).duration !== undefined) {
-                songs.push(parsed as Song);
+              if (this.isSongLike(parsed)) {
+                songs.push(parsed);
+              } else if ('name' in parsed) {
+                artists.push(parsed);
               } else {
-                albums.push(parsed as Album);
+                albums.push(parsed);
               }
             } else {
               const song = this.parseSong(item);
@@ -315,10 +360,13 @@ export class InnerTubeMobileApi {
       for (const it of carousel.contents || []) {
         const parsed = this.parseTwoRow(it);
         if (parsed) {
-          if ('id' in parsed && (parsed as Song).duration !== undefined) {
-            sectionSongs.push(parsed as Song);
+          if (this.isSongLike(parsed)) {
+            sectionSongs.push(parsed);
+          } else if ('name' in parsed) {
+            // Sanatçı kartları ana sayfa raflarında atlanır
+            continue;
           } else {
-            albums.push(parsed as Album);
+            albums.push(parsed);
           }
           continue;
         }
@@ -345,40 +393,42 @@ export class InnerTubeMobileApi {
       }
     };
 
+    // Üç bağımsız besleme eş zamanlı çekilir — sıralı bekleme 3-4 sn sürerdi.
+    const [homeRes, exploreRes, chartsRes] = await Promise.allSettled([
+      this.request('browse', { browseId: 'FEmusic_home' }),
+      this.request('browse', { browseId: 'FEmusic_explore' }),
+      this.request('browse', { browseId: 'FEmusic_charts' })
+    ]);
+
+    const extractSections = (data: unknown): any[] =>
+      (data as any)?.contents?.singleColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+
     try {
       // 1. Ana Sayfa (FEmusic_home - Hızlı seçimler & topluluk listeleri)
-      const homeData = await this.request('browse', { browseId: 'FEmusic_home' });
-      const homeSections =
-        homeData?.contents?.singleColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
-
-      for (const section of homeSections) {
-        if (section?.musicCarouselShelfRenderer) {
-          parseCarouselSection(section.musicCarouselShelfRenderer);
-        }
-      }
-
-      // 2. Keşfet (FEmusic_explore - Yeni albümler, Trendler, Klipler, Türler)
-      try {
-        const exploreData = await this.request('browse', { browseId: 'FEmusic_explore' });
-        const exploreSections =
-          exploreData?.contents?.singleColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
-
-        for (const section of exploreSections) {
+      if (homeRes.status === 'fulfilled') {
+        for (const section of extractSections(homeRes.value)) {
           if (section?.musicCarouselShelfRenderer) {
             parseCarouselSection(section.musicCarouselShelfRenderer);
           }
         }
-      } catch (e) {
-        console.warn('[InnerTubeMobile] Explore non-fatal error:', e);
+      } else {
+        console.warn('[InnerTubeMobile] Home error:', homeRes.reason);
+      }
+
+      // 2. Keşfet (FEmusic_explore - Yeni albümler, Trendler, Klipler, Türler)
+      if (exploreRes.status === 'fulfilled') {
+        for (const section of extractSections(exploreRes.value)) {
+          if (section?.musicCarouselShelfRenderer) {
+            parseCarouselSection(section.musicCarouselShelfRenderer);
+          }
+        }
+      } else {
+        console.warn('[InnerTubeMobile] Explore non-fatal error:', exploreRes.reason);
       }
 
       // 3. Trendler & Popüler Parçalar (FEmusic_charts - Türkiye & Global Top Hits)
-      try {
-        const chartsData = await this.request('browse', { browseId: 'FEmusic_charts' });
-        const chartSections =
-          chartsData?.contents?.singleColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
-
-        for (const sec of chartSections) {
+      if (chartsRes.status === 'fulfilled') {
+        for (const sec of extractSections(chartsRes.value)) {
           const shelf = sec?.musicCarouselShelfRenderer || sec?.musicShelfRenderer;
           if (!shelf) continue;
           const shelfTitle = this.text(shelf.header?.musicCarouselShelfBasicHeaderRenderer?.title || shelf.title) || 'En Çok Dinlenenler';
@@ -386,8 +436,8 @@ export class InnerTubeMobileApi {
 
           const chartSongs: Song[] = [];
           for (const item of items) {
-            const song = this.parseSong(item) || (this.parseTwoRow(item) as Song);
-            if (song && song.id) {
+            const song = this.parseSong(item) || this.parseTwoRow(item);
+            if (song && this.isSongLike(song)) {
               chartSongs.push(song);
               charts.push(song);
             }
@@ -401,8 +451,8 @@ export class InnerTubeMobileApi {
             });
           }
         }
-      } catch (e) {
-        console.warn('[InnerTubeMobile] Charts non-fatal error:', e);
+      } else {
+        console.warn('[InnerTubeMobile] Charts non-fatal error:', chartsRes.reason);
       }
 
       // Fallback
@@ -446,7 +496,7 @@ export class InnerTubeMobileApi {
           if (carousel) {
             for (const item of carousel.contents || []) {
               const parsed = this.parseTwoRow(item);
-              if (parsed && 'id' in parsed) items.push(parsed as Song);
+              if (parsed && this.isSongLike(parsed)) items.push(parsed);
             }
           }
         }
@@ -506,7 +556,7 @@ export class InnerTubeMobileApi {
     if (!query.trim()) return [];
     try {
       const data = await this.request('music/get_search_suggestions', {
-        input: query
+        input: query.trim().slice(0, 100)
       });
       const contents = data?.contents?.[0]?.searchSuggestionsSectionRenderer?.contents || [];
       const suggestions: string[] = [];
@@ -515,7 +565,8 @@ export class InnerTubeMobileApi {
         if (text) suggestions.push(text);
       }
       return suggestions;
-    } catch {
+    } catch (e) {
+      console.warn('[InnerTubeMobile] Öneri hatası:', e);
       return [];
     }
   }

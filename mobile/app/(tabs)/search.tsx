@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Song, SearchFilter } from '../../src/types';
+import { Song, Album, Artist, SearchFilter } from '../../src/types';
 import { mobileApi } from '../../src/api/innertube';
 import { SongRow } from '../../src/components/SongRow';
 import { mobilePlayer } from '../../src/services/player';
 import { playerStore } from '../../src/store/player-store';
+import { Image } from 'react-native';
 
 const METRO_GENRES = [
   { name: 'Türkçe Rap & Trap', icon: 'mic', bg: '#4338ca' },
@@ -31,9 +32,21 @@ export default function SearchScreen() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<SearchFilter>('all');
   const [results, setResults] = useState<Song[]>([]);
+  const [albums, setAlbums] = useState<Album[]>([]);
+  const [artists, setArtists] = useState<Artist[]>([]);
+  const [collectionTitle, setCollectionTitle] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const debounceRef = useRef<any>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRequestRef = useRef(0);
+
+  // Kapanışta bekleyen debounce zamanlayıcısını temizle
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      searchRequestRef.current++;
+    };
+  }, []);
 
   // Anlık arama önerileri
   const handleQueryChange = (text: string) => {
@@ -41,37 +54,86 @@ export default function SearchScreen() {
     if (!text.trim()) {
       setSuggestions([]);
       setResults([]);
+      setAlbums([]);
+      setArtists([]);
+      setCollectionTitle(null);
       return;
     }
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    const snapshot = text;
     debounceRef.current = setTimeout(async () => {
       try {
-        const sugs = await mobileApi.getSuggestions(text);
+        const sugs = await mobileApi.getSuggestions(snapshot);
         setSuggestions(sugs.slice(0, 5));
-      } catch {}
+      } catch (e) {
+        console.warn('[Search] Öneri hatası:', e);
+      }
     }, 250);
   };
 
-  const executeSearch = async (text: string, currentFilter = filter) => {
-    if (!text.trim()) return;
+  const executeSearch = useCallback(async (text: string, currentFilter: SearchFilter = filter) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const requestId = ++searchRequestRef.current;
+    const isStale = () => requestId !== searchRequestRef.current;
     setSuggestions([]);
+    setCollectionTitle(null);
     setLoading(true);
     try {
-      const res = await mobileApi.search(text, currentFilter);
+      const res = await mobileApi.search(trimmed, currentFilter);
+      if (isStale()) return;
       if (currentFilter === 'videos') {
         setResults(res.videos);
+        setAlbums([]);
+        setArtists([]);
       } else if (currentFilter === 'songs') {
         setResults(res.songs);
+        setAlbums([]);
+        setArtists([]);
+      } else if (currentFilter === 'albums') {
+        setResults([]);
+        setAlbums(res.albums);
+        setArtists([]);
+      } else if (currentFilter === 'artists') {
+        setResults([]);
+        setAlbums([]);
+        setArtists(res.artists);
       } else {
         setResults([...res.songs, ...res.videos]);
+        setAlbums(res.albums);
+        setArtists(res.artists);
       }
     } catch (e) {
-      console.warn('[Search] error:', e);
+      if (!isStale()) console.warn('[Search] error:', e);
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
-  };
+  }, [filter]);
+
+  // Albüm/sanatçı koleksiyonunu aç: içeriği çek, kuyruk yap ve çal
+  const handleOpenCollection = useCallback(async (browseId: string, title: string) => {
+    if (!browseId) return;
+    const requestId = ++searchRequestRef.current;
+    const isStale = () => requestId !== searchRequestRef.current;
+    setLoading(true);
+    try {
+      const res = await mobileApi.browse(browseId);
+      if (isStale()) return;
+      if (res.items.length > 0) {
+        setCollectionTitle(res.title || title);
+        setResults(res.items);
+        setAlbums([]);
+        setArtists([]);
+        playerStore.setQueue(res.items, 0);
+        await mobilePlayer.play(res.items[0]);
+      }
+    } catch (e) {
+      if (!isStale()) console.warn('[Search] Koleksiyon açılamadı:', e);
+    } finally {
+      if (!isStale()) setLoading(false);
+    }
+  }, []);
 
   const handleFilterChange = (f: SearchFilter) => {
     setFilter(f);
@@ -83,11 +145,6 @@ export default function SearchScreen() {
   const handleSelectSuggestion = (sug: string) => {
     setQuery(sug);
     executeSearch(sug);
-  };
-
-  const handlePlayResult = (song: Song) => {
-    playerStore.setQueue(results, results.findIndex((s) => s.id === song.id));
-    mobilePlayer.play(song);
   };
 
   return (
@@ -114,12 +171,17 @@ export default function SearchScreen() {
             onSubmitEditing={() => executeSearch(query)}
             returnKeyType="search"
             autoCorrect={false}
+            accessibilityLabel="Müzik ara"
+            accessibilityHint="Şarkı, sanatçı veya tür yazın"
           />
           {query.length > 0 && (
             <TouchableOpacity
               onPress={() => {
                 setQuery('');
                 setResults([]);
+                setAlbums([]);
+                setArtists([]);
+                setCollectionTitle(null);
                 setSuggestions([]);
               }}
               style={styles.clearBtn}
@@ -189,19 +251,74 @@ export default function SearchScreen() {
           {loading ? (
             <View style={styles.loaderWrap}>
               <ActivityIndicator size="small" color="#00f0ff" />
-              <Text style={styles.loaderText}>Aquality arama motoru taranıyor...</Text>
+              <Text style={styles.loaderText}>Aranıyor...</Text>
             </View>
-          ) : results.length > 0 ? (
+          ) : results.length > 0 || albums.length > 0 || artists.length > 0 ? (
             <View style={styles.resultsWrap}>
-              <Text style={styles.resultsCountText}>{results.length} Parça Bulundu</Text>
+              {collectionTitle && (
+                <Text style={styles.collectionTitle}>{collectionTitle}</Text>
+              )}
+              {results.length > 0 && (
+                <Text style={styles.resultsCountText}>{results.length} Parça Bulundu</Text>
+              )}
               {results.map((song, idx) => (
                 <SongRow
                   key={song.id + '_' + idx}
                   song={song}
                   index={idx}
-                  onPress={() => handlePlayResult(song)}
+                  contextList={results}
                 />
               ))}
+              {albums.length > 0 && (
+                <View style={styles.collectionSection}>
+                  <Text style={styles.collectionHeader}>Albümler ({albums.length})</Text>
+                  <View style={styles.collectionGrid}>
+                    {albums.map((album) => (
+                      <TouchableOpacity
+                        key={'alb_' + album.id}
+                        style={styles.collectionCard}
+                        onPress={() => handleOpenCollection(album.id, album.title)}
+                        activeOpacity={0.8}
+                      >
+                        {album.thumbnail ? (
+                          <Image source={{ uri: album.thumbnail }} style={styles.collectionThumb} />
+                        ) : (
+                          <View style={styles.collectionThumbFallback}>
+                            <Ionicons name="disc" size={26} color="#00f0ff" />
+                          </View>
+                        )}
+                        <Text style={styles.collectionName} numberOfLines={1}>{album.title}</Text>
+                        <Text style={styles.collectionSub} numberOfLines={1}>{album.artist}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+              {artists.length > 0 && (
+                <View style={styles.collectionSection}>
+                  <Text style={styles.collectionHeader}>Sanatçılar ({artists.length})</Text>
+                  <View style={styles.collectionGrid}>
+                    {artists.map((artist) => (
+                      <TouchableOpacity
+                        key={'art_' + artist.id}
+                        style={styles.collectionCard}
+                        onPress={() => handleOpenCollection(artist.id, artist.name)}
+                        activeOpacity={0.8}
+                      >
+                        {artist.thumbnail ? (
+                          <Image source={{ uri: artist.thumbnail }} style={styles.collectionArtistThumb} />
+                        ) : (
+                          <View style={styles.collectionArtistThumbFallback}>
+                            <Ionicons name="person" size={26} color="#00f0ff" />
+                          </View>
+                        )}
+                        <Text style={styles.collectionName} numberOfLines={1}>{artist.name}</Text>
+                        <Text style={styles.collectionSub} numberOfLines={1}>Sanatçı</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
             </View>
           ) : query.trim().length > 0 ? (
             <View style={styles.noResultsBox}>
@@ -229,7 +346,7 @@ export default function SearchScreen() {
                     activeOpacity={0.8}
                   >
                     <View style={styles.genreIconWrap}>
-                      <Ionicons name={g.icon as any} size={20} color="#fff" />
+                      <Ionicons name={g.icon as keyof typeof Ionicons.glyphMap} size={20} color="#fff" />
                     </View>
                     <Text style={styles.genreTitle}>{g.name}</Text>
                   </TouchableOpacity>
@@ -238,7 +355,7 @@ export default function SearchScreen() {
             </View>
           )}
 
-          <View style={{ height: 110 }} />
+          <View style={styles.bottomSpacer} />
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -448,5 +565,73 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '700'
+  },
+  bottomSpacer: {
+    height: 110
+  },
+  collectionTitle: {
+    color: '#f8fafc',
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 4
+  },
+  collectionSection: {
+    marginTop: 16
+  },
+  collectionHeader: {
+    color: '#00f0ff',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: 10
+  },
+  collectionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12
+  },
+  collectionCard: {
+    width: '48%',
+    marginBottom: 4
+  },
+  collectionThumb: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 12,
+    backgroundColor: '#0e1628'
+  },
+  collectionThumbFallback: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 12,
+    backgroundColor: '#0e1628',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  collectionArtistThumb: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 999,
+    backgroundColor: '#0e1628'
+  },
+  collectionArtistThumbFallback: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 999,
+    backgroundColor: '#0e1628',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  collectionName: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 6
+  },
+  collectionSub: {
+    color: '#64748b',
+    fontSize: 11,
+    marginTop: 2
   }
 });

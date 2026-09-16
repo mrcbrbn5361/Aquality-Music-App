@@ -18,18 +18,19 @@ import { mobilePlayer } from '../../src/services/player';
 import { Playlist, Song } from '../../src/types';
 
 export default function LibraryScreen() {
-  const { likedIds, recentlyPlayed, playlists } = usePlayer();
+  const { likedSongs, recentlyPlayed, playlists } = usePlayer();
   const [activeTab, setActiveTab] = useState<'liked' | 'playlists' | 'recent'>('liked');
   const [newPlaylistModal, setNewPlaylistModal] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
 
-  // Beğenilen şarkıları bul
-  const likedSongs = recentlyPlayed.filter((s) => likedIds.includes(s.id));
+  // Beğenilen şarkılar store'da metadata ile saklanır — dinleme
+  // geçmişinden bağımsızdır, bu yüzden beğenilen parça kaybolmaz.
 
   const handleCreatePlaylist = () => {
-    if (!newPlaylistName.trim()) return;
-    playerStore.createPlaylist(newPlaylistName);
+    const name = newPlaylistName.trim().slice(0, 60);
+    if (!name) return;
+    playerStore.createPlaylist(name);
     setNewPlaylistName('');
     setNewPlaylistModal(false);
   };
@@ -51,7 +52,9 @@ export default function LibraryScreen() {
   const handlePlayAll = (songs: Song[]) => {
     if (songs.length === 0) return;
     playerStore.setQueue(songs, 0);
-    mobilePlayer.play(songs[0]);
+    mobilePlayer.play(songs[0]).catch((e) => {
+      console.warn('[Library] Oynatma hatası:', e);
+    });
   };
 
   return (
@@ -102,7 +105,7 @@ export default function LibraryScreen() {
               style={{ marginRight: 6 }}
             />
             <Text style={[styles.tabText, activeTab === 'liked' && styles.activeTabText]}>
-              Beğenilenler ({likedIds.length})
+              Beğenilenler ({likedSongs.length})
             </Text>
           </TouchableOpacity>
 
@@ -142,7 +145,10 @@ export default function LibraryScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
           {/* 1. BEĞENİLENLER */}
           {activeTab === 'liked' && (
             likedSongs.length > 0 ? (
@@ -151,10 +157,7 @@ export default function LibraryScreen() {
                   key={song.id + '_' + idx}
                   song={song}
                   index={idx}
-                  onPress={() => {
-                    playerStore.setQueue(likedSongs, idx);
-                    mobilePlayer.play(song);
-                  }}
+                  contextList={likedSongs}
                 />
               ))
             ) : (
@@ -204,10 +207,7 @@ export default function LibraryScreen() {
                       key={song.id + '_' + idx}
                       song={song}
                       index={idx}
-                      onPress={() => {
-                        playerStore.setQueue(selectedPlaylist.songs, idx);
-                        mobilePlayer.play(song);
-                      }}
+                      contextList={selectedPlaylist.songs}
                     />
                   ))
                 ) : (
@@ -287,10 +287,7 @@ export default function LibraryScreen() {
                     key={'rec_' + song.id + '_' + idx}
                     song={song}
                     index={idx}
-                    onPress={() => {
-                      playerStore.setQueue(recentlyPlayed, idx);
-                      mobilePlayer.play(song);
-                    }}
+                    contextList={recentlyPlayed}
                   />
                 ))}
               </View>

@@ -190,7 +190,7 @@ export default function SettingsScreen() {
           <View style={styles.row}>
             <View style={styles.rowMeta}>
               <Text style={styles.rowTitle}>Aquality Music Mobile</Text>
-              <Text style={styles.rowDesc}>v1.0.0 (MetroList Mimarisi / Expo Go)</Text>
+              <Text style={styles.rowDesc}>v1.0.1 (MetroList Mimarisi / Expo Go)</Text>
             </View>
             <Ionicons name="musical-notes" size={20} color="#00f0ff" />
           </View>

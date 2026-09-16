@@ -3,7 +3,45 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as child_process from 'child_process';
 import { YouTubeAPI } from './api/innertube';
-import { StoreManager } from './utils/store';
+import { StoreManager, StoreData } from './utils/store';
+
+/**
+ * Renderer'dan gelen store yazmalarını tip ve aralık doğrulamasından geçirir.
+ * Bozuk/şişirilmiş değerlerin kalıcı depolamayı bozması engellenir.
+ */
+function isValidStoreValue(key: string, value: unknown): boolean {
+  switch (key) {
+    case 'theme':
+      return value === 'dark' || value === 'light' || value === 'system';
+    case 'language':
+      return value === 'tr' || value === 'en' || value === undefined;
+    case 'quality':
+      return value === 'low' || value === 'medium' || value === 'high';
+    case 'repeat':
+      return value === 'off' || value === 'all' || value === 'one';
+    case 'volume':
+      return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100;
+    case 'queueIndex':
+      return typeof value === 'number' && Number.isInteger(value) && value >= -1 && value <= 10000;
+    case 'shuffle':
+    case 'autoPlay':
+    case 'discordEnabled':
+    case 'discordButtons':
+    case 'discordThumbnails':
+      return typeof value === 'boolean';
+    case 'queue':
+    case 'recentlyPlayed':
+      return Array.isArray(value) && value.length <= 1000;
+    case 'likedSongs':
+      return Array.isArray(value) && value.length <= 10000;
+    case 'playlists':
+      return Array.isArray(value) && value.length <= 500;
+    case 'discordBotToken':
+      return typeof value === 'string' && value.length <= 200;
+    default:
+      return false;
+  }
+}
 import { DiscordRPC } from './utils/discord';
 import { DiscordOAuth } from './auth/discord-oauth';
 import { GoogleOAuth } from './auth/google-oauth';
@@ -56,6 +94,14 @@ let discordBotProcess: child_process.ChildProcess | null = null;
 let discordBotLogs: string[] = [];
 let discordBotStatus: 'stopped' | 'running' | 'starting' | 'error' = 'stopped';
 let discordBotError: string | null = null;
+// Bot log tamponu üst sınırı — stdout fırtınalarında bellek şişmesini önler
+const MAX_BOT_LOGS = 60;
+
+function pushBotLog(line: string): void {
+  discordBotLogs.push(line);
+  while (discordBotLogs.length > MAX_BOT_LOGS) discordBotLogs.shift();
+  mainWindow?.webContents.send('bot-server:log', line);
+}
 
 function findBotDir(): string | null {
   const candidates = [
@@ -127,7 +173,7 @@ function createWindow(): void {
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#121212',
-    backgroundMaterial: 'mica' as any,
+    backgroundMaterial: 'mica',
     show: false,
     roundedCorners: true,
     thickFrame: true,
@@ -154,9 +200,7 @@ function createWindow(): void {
   mainWindow.on('closed', () => {
     mainWindow = null;
     // Gizli oynatıcı penceresi window-all-closed'ı engeller — burada kapat
-    try { streamResolver?.destroy(); } catch (e) { /* cleanup best-effort */ }
-    try { discordRPC?.disconnect(); } catch (e) { /* cleanup best-effort */ }
-    try { discordBotProcess?.kill(); } catch (e) { /* cleanup best-effort */ }
+    cleanupResources();
     if (process.platform !== 'darwin') app.quit();
   });
 
@@ -168,7 +212,7 @@ function createWindow(): void {
         storeManager?.saveWindowBounds(b);
       }
     } catch (e) {
-      // Window bounds save failed
+      console.warn('[Main] Pencere konumu kaydedilemedi:', e);
     }
   });
 
@@ -235,7 +279,7 @@ function buildMenu(): void {
             dialog.showMessageBox(mainWindow!, {
               type: 'info',
               title: 'Aquality Music',
-              message: 'Aquality Music v1.0.0',
+              message: `Aquality Music v${app.getVersion()}`,
               detail: 'Premium müzik deneyimi.\n\n© 2026 Aquality Music Team. Tüm hakları saklıdır.',
               buttons: ['Tamam']
             });
@@ -281,8 +325,10 @@ function setupIPC(): void {
   });
 
   // Bot REST API (Port 9863) & Discord Bot Runner IPC
+  // NOT: update-state BotServer.sanitizeStateUpdate ile şema doğrulamalıdır —
+  // renderer'dan gelen keyfi alanlar sessizce atılır.
   ipcMain.handle('bot-server:get-state', () => botServer?.getState());
-  ipcMain.handle('bot-server:update-state', (_, partial) => {
+  ipcMain.handle('bot-server:update-state', (_, partial: unknown) => {
     botServer?.updateState(partial);
     return botServer?.getState();
   });
@@ -343,19 +389,21 @@ function setupIPC(): void {
     let token = (customToken || '').trim();
     if (!token && storeManager) {
       try {
-        const stored = await storeManager.get('discordBotToken');
-        if (stored && typeof stored === 'string') token = stored.trim();
+        const stored = storeManager.getSecret('discordBotToken');
+        if (stored) token = stored.trim();
       } catch (e) {
-        // Token read failed
+        console.warn('[Main] Kayıtlı bot token okunamadı:', e);
       }
     }
     if (!token && process.env.DISCORD_TOKEN) {
       token = process.env.DISCORD_TOKEN.trim();
     }
 
-    if (!token) {
+    // Enjeksiyon koruması: gerçek token'lar en az 20 karakterdir ve
+    // boşluk/kontrol karakteri içermez.
+    if (!token || token.length < 20 || /[\s\x00-\x1f]/.test(token)) {
       discordBotStatus = 'error';
-      discordBotError = 'Discord Bot Token girilmedi. Lütfen Ayarlar > Discord Bot bölümünden token girin.';
+      discordBotError = 'Discord Bot Token girilmedi veya geçersiz. Lütfen Ayarlar > Discord Bot bölümünden token girin.';
       return { success: false, error: discordBotError };
     }
 
@@ -391,18 +439,14 @@ function setupIPC(): void {
       discordBotProcess.stdout?.on('data', (data) => {
         const lines = data.toString().split('\n').map((l: string) => l.trim()).filter(Boolean);
         for (const line of lines) {
-          discordBotLogs.push(line);
-          if (discordBotLogs.length > 60) discordBotLogs.shift();
-          mainWindow?.webContents.send('bot-server:log', line);
+          pushBotLog(line);
         }
       });
 
       discordBotProcess.stderr?.on('data', (data) => {
         const lines = data.toString().split('\n').map((l: string) => l.trim()).filter(Boolean);
         for (const line of lines) {
-          discordBotLogs.push(`[Hata] ${line}`);
-          if (discordBotLogs.length > 60) discordBotLogs.shift();
-          mainWindow?.webContents.send('bot-server:log', `[Hata] ${line}`);
+          pushBotLog(`[Hata] ${line}`);
         }
       });
 
@@ -432,10 +476,18 @@ function setupIPC(): void {
   });
 
   // YouTube API
+  const SEARCH_FILTERS = new Set(['all', 'songs', 'videos', 'albums', 'artists', 'playlists']);
   ipcMain.handle('yt:search', async (_, query: string, filter?: string) => {
     try {
-      const result = await youtubeAPI.search(query, filter || 'all');
-      console.log('[Main] Search:', query, 'songs:', result.songs?.length || 0, 'videos:', result.videos?.length || 0, 'albums:', result.albums?.length || 0, 'artists:', result.artists?.length || 0);
+      const safeQuery = typeof query === 'string' ? query.slice(0, 200) : '';
+      const safeFilter = typeof filter === 'string' && SEARCH_FILTERS.has(filter) ? filter : 'all';
+      if (!safeQuery.trim()) {
+        return { songs: [], videos: [], albums: [], artists: [], playlists: [] };
+      }
+      const result = await youtubeAPI.search(safeQuery, safeFilter);
+      if (isDev) {
+        console.log('[Main] Search:', safeQuery, 'songs:', result.songs?.length || 0, 'videos:', result.videos?.length || 0, 'albums:', result.albums?.length || 0, 'artists:', result.artists?.length || 0);
+      }
       return result;
     } catch (err) {
       console.error('[Main] Search error:', err);
@@ -444,12 +496,16 @@ function setupIPC(): void {
   });
   ipcMain.handle('yt:player', async (_, videoId: string) => {
     // Girişli session ile gizli pencerede şarkıyı oynat
+    const safeVideoId = typeof videoId === 'string' && /^[A-Za-z0-9_-]{11}$/.test(videoId) ? videoId : '';
+    if (!safeVideoId) {
+      return { error: 'invalid_id', id: '' };
+    }
     if (!(await musicAuth.isAuthenticated())) {
-      return { error: 'not_authenticated', id: videoId };
+      return { error: 'not_authenticated', id: safeVideoId };
     }
     // Oynatmayı başlat (fire & forget — ana pencere state'i update event'iyle alır)
-    streamResolver.play(videoId).catch((err) => console.error('[Player] play error:', err));
-    return { id: videoId, playing: true };
+    streamResolver.play(safeVideoId).catch((err) => console.error('[Player] play error:', err));
+    return { id: safeVideoId, playing: true };
   });
 
   ipcMain.handle('player:pause', async () => {
@@ -490,7 +546,9 @@ function setupIPC(): void {
   ipcMain.handle('yt:home', async () => {
     try {
       const result = await youtubeAPI.getHome();
-      console.log('[Main] Home items:', result.items?.length || 0);
+      if (isDev) {
+        console.log('[Main] Home items:', result.items?.length || 0);
+      }
       return result;
     } catch (err) {
       console.error('[Main] Home error:', err);
@@ -507,16 +565,32 @@ function setupIPC(): void {
     }
   });
   ipcMain.handle('yt:next', async (_, videoId: string, playlistId?: string) => {
-    try { return await youtubeAPI.getNext(videoId, playlistId); } catch { return { items: [], currentIndex: 0 }; }
+    try {
+      if (typeof videoId !== 'string' || !/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+        return { items: [], currentIndex: 0 };
+      }
+      return await youtubeAPI.getNext(videoId, playlistId);
+    } catch (e) {
+      console.warn('[Main] Next error:', e);
+      return { items: [], currentIndex: 0 };
+    }
   });
   ipcMain.handle('yt:suggestions', async (_, input: string) => {
-    try { return await youtubeAPI.getSearchSuggestions(input); } catch { return []; }
+    try {
+      const safeInput = typeof input === 'string' ? input.slice(0, 100) : '';
+      if (!safeInput.trim()) return [];
+      return await youtubeAPI.getSearchSuggestions(safeInput);
+    } catch (e) {
+      console.warn('[Main] Suggestions error:', e);
+      return [];
+    }
   });
   ipcMain.handle('yt:lyrics', async (_, videoId: string) => {
     try {
-      if (!lyricsProvider.isEnabled()) return null;
-      return await youtubeAPI.getLyrics(videoId);
-    } catch {
+      if (typeof videoId !== 'string' || !/^[A-Za-z0-9_-]{11}$/.test(videoId)) return null;
+      return await lyricsProvider.fetch(videoId, youtubeAPI);
+    } catch (e) {
+      console.warn('[Main] Lyrics error:', e);
       return null;
     }
   });
@@ -533,16 +607,50 @@ function setupIPC(): void {
     try { return await youtubeAPI.getLibraryAlbums(); } catch { return []; }
   });
 
-  // Store
-  ipcMain.handle('store:get', (_, key: string) => storeManager.get(key as any));
-  ipcMain.handle('store:set', (_, key: string, value: unknown) => { storeManager.set(key as any, value); });
+  // Store — renderer yalnızca kullanıcı ayarlarını okuyup yazabilir.
+  // Gizli anahtarlar (OAuth token'ları, client secret'lar) bu kanaldan
+  // ASLA geçmez; bot token'ı şifreli katman üzerinden taşınır.
+  const STORE_READ_KEYS = new Set([
+    'theme', 'language', 'volume', 'quality', 'autoPlay', 'recentlyPlayed',
+    'likedSongs', 'queue', 'queueIndex', 'playlists', 'shuffle', 'repeat',
+    'discordEnabled', 'discordButtons', 'discordThumbnails', 'discordBotToken'
+  ]);
+  const STORE_WRITE_KEYS = new Set([...STORE_READ_KEYS]);
+  ipcMain.handle('store:get', (_, key: string) => {
+    if (typeof key !== 'string' || !STORE_READ_KEYS.has(key)) return undefined;
+    try {
+      if (key === 'discordBotToken') return storeManager.getSecret('discordBotToken');
+      return storeManager.get(key as keyof StoreData);
+    } catch (e) {
+      console.warn('[Main] store:get hatası:', key, e);
+      return undefined;
+    }
+  });
+  ipcMain.handle('store:set', (_, key: string, value: unknown) => {
+    if (typeof key !== 'string' || !STORE_WRITE_KEYS.has(key)) return;
+    try {
+      if (!isValidStoreValue(key, value)) {
+        console.warn('[Main] store:set geçersiz değer reddedildi:', key);
+        return;
+      }
+      if (key === 'discordBotToken') {
+        storeManager.setSecret('discordBotToken', value as string);
+        return;
+      }
+      storeManager.set(key as keyof StoreData, value as never);
+    } catch (e) {
+      console.warn('[Main] store:set hatası:', key, e);
+    }
+  });
   ipcMain.handle('shell:openExternal', (_, url: string) => {
     try {
       if (isSafeExternalUrl(url)) {
         shell.openExternal(url);
+      } else {
+        console.warn('[Main] Güvensiz harici URL engellendi:', String(url).slice(0, 120));
       }
     } catch (e) {
-      // External URL open failed
+      console.warn('[Main] Harici URL açılamadı:', e);
     }
   });
 
@@ -576,9 +684,15 @@ function setupIPC(): void {
   ipcMain.handle('auth:importFromChrome', async () => {
     let result = await musicAuth.importFromChrome();
     if (!result.success) {
-      const target = await musicAuth.findYouTubeMusicTarget().catch(()=>null);
-      const ext = await musicAuth.importFromExternalChrome(target?.id).catch(()=>null);
-      if (ext && ext.success) result = ext as any;
+      const target = await musicAuth.findYouTubeMusicTarget().catch((e) => {
+        console.warn('[Main] YouTube Music hedefi bulunamadı:', e);
+        return null;
+      });
+      const ext = await musicAuth.importFromExternalChrome(target?.id).catch((e) => {
+        console.warn('[Main] Harici Chrome aktarımı başarısız:', e);
+        return null;
+      });
+      if (ext && ext.success) result = ext as typeof result;
     }
     if (result.success) {
       // importFromChrome zaten profili kaydetti. Ek olarak streamResolver'dan da dene
@@ -596,7 +710,7 @@ function setupIPC(): void {
           });
         }
       } catch (e) {
-        // Profile fetch failed during Chrome import
+        console.warn('[Main] Chrome aktarımı sonrası profil alınamadı:', e);
       }
       return { success: true, cookies: result.cookies, user: musicAuth.getUser() };
     }
@@ -621,25 +735,27 @@ function setupIPC(): void {
     const now = Date.now();
     if (now - lastDiscordReconnectAt < 45000) return false;
     lastDiscordReconnectAt = now;
-    try { await discordRPC.connect(); } catch (e) { /* Discord reconnect failed */ }
+    try { await discordRPC.connect(); } catch (e) { console.warn('[Main] Discord bağlanma hatası:', e); }
     return discordRPC.isReady();
   }
   ipcMain.handle('discord:getAppId', () => discordRPC.getAppId());
   ipcMain.handle('discord:isReady', () => discordRPC.isReady());
   ipcMain.handle('discord:reconnect', async () => {
     lastDiscordReconnectAt = Date.now();
-    try { await discordRPC.connect(); } catch (e) { /* Discord reconnect failed */ }
+    try { await discordRPC.connect(); } catch (e) { console.warn('[Main] Discord yeniden bağlanma hatası:', e); }
     return discordRPC.isReady();
   });
-  ipcMain.handle('discord:setActivity', async (_, data) => {
-    const enabled = storeManager.get('discordEnabled' as any);
+  ipcMain.handle('discord:setActivity', async (_, data: unknown) => {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return;
+    const activity = data as Record<string, unknown>;
+    const enabled = storeManager.get('discordEnabled');
     if (enabled === false) return;
-    const showButtons = storeManager.get('discordButtons' as any);
-    const showThumbs = storeManager.get('discordThumbnails' as any);
-    if (showButtons === false) delete (data as any).buttons;
-    if (showThumbs === false) { delete (data as any).coverUrl; delete (data as any).largeImageText; }
+    const showButtons = storeManager.get('discordButtons');
+    const showThumbs = storeManager.get('discordThumbnails');
+    if (showButtons === false) delete activity.buttons;
+    if (showThumbs === false) { delete activity.coverUrl; delete activity.largeImageText; }
     if (await ensureDiscordConnected()) {
-      await discordRPC.setActivity(data);
+      await discordRPC.setActivity(activity as Parameters<DiscordRPC['setActivity']>[0]);
     }
   });
   ipcMain.handle('discord:clearActivity', async () => {
@@ -724,9 +840,11 @@ app.whenReady().then(async () => {
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.on('error', (err: any) => { console.warn('[Auto] Update check skipped:', err?.message||err); });
   // GitHub'da release yokken hata popup'ı gösterme
-  if (process.env.GH_TOKEN || require('fs').existsSync(require('path').join(__dirname,'../release'))) {
-    autoUpdater.checkForUpdatesAndNotify().catch(()=>{});
-  } else {
+  if (process.env.GH_TOKEN || fs.existsSync(path.join(__dirname, '../release'))) {
+    autoUpdater.checkForUpdatesAndNotify().catch((e) => {
+      console.warn('[Auto] Update check failed:', e);
+    });
+  } else if (isDev) {
     console.log('[Auto] Update check disabled - no releases');
   }
 
@@ -738,21 +856,40 @@ app.whenReady().then(async () => {
   });
 });
 
+/**
+ * Tüm kaynakları tek noktadan ve tekrar-güvenli (idempotent) şekilde temizler.
+ * 'closed', 'window-all-closed' ve 'before-quit' olaylarının her biri farklı
+ * platform akışlarında tetiklenebilir — çift temizlik korumalıdır.
+ */
+let resourcesCleanedUp = false;
+function cleanupResources(): void {
+  if (resourcesCleanedUp) return;
+  resourcesCleanedUp = true;
+  // Bekleyen debounce yazmalarını diske yaz (kapanışta veri kaybı olmasın)
+  try { storeManager?.flush(); } catch (e) { console.warn('[Main] Store flush hatası:', e); }
+  try { streamResolver?.destroy(); } catch (e) { console.warn('[Main] StreamResolver destroy hatası:', e); }
+  try { discordRPC?.disconnect(); } catch (e) { console.warn('[Main] Discord disconnect hatası:', e); }
+  try {
+    const result = botServer?.stop();
+    if (result && typeof result.catch === 'function') {
+      result.catch((e: unknown) => console.warn('[Main] BotServer stop hatası:', e));
+    }
+  } catch (e) { console.warn('[Main] BotServer stop hatası:', e); }
+  if (discordBotProcess) {
+    try { discordBotProcess.kill(); } catch (e) { console.warn('[Main] Bot process kill hatası:', e); }
+    discordBotProcess = null;
+  }
+}
+
 app.on('window-all-closed', () => {
-  try { streamResolver?.destroy(); } catch (e) { /* cleanup best-effort */ }
-  try { discordRPC?.disconnect(); } catch (e) { /* cleanup best-effort */ }
-  try { botServer?.stop(); } catch (e) { /* cleanup best-effort */ }
-  try { discordBotProcess?.kill(); } catch (e) { /* cleanup best-effort */ }
+  cleanupResources();
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', () => {
-  try { streamResolver?.destroy(); } catch (e) { /* cleanup best-effort */ }
-  try { discordRPC?.disconnect(); } catch (e) { /* cleanup best-effort */ }
-  try { botServer?.stop(); } catch (e) { /* cleanup best-effort */ }
-  try { discordBotProcess?.kill(); } catch (e) { /* cleanup best-effort */ }
+  cleanupResources();
   for (const win of BrowserWindow.getAllWindows()) {
-    try { win.destroy(); } catch (e) { /* window already destroyed */ }
+    try { win.destroy(); } catch (e) { console.warn('[Main] Pencere destroy hatası:', e); }
   }
 });
 

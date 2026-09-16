@@ -20,7 +20,8 @@
   --c-text-1: #ffffff;
   --c-text-2: #b3b3b3;
   --c-text-3: #8a8a8a;
-  --c-text-4: #737373;
+  /* WCAG AA (4.5:1) eşiği için #181818 zeminde alt sınır */
+  --c-text-4: #858585;
 
   --c-accent: #1DB954;
   --c-accent-hover: #1ED760;
@@ -80,6 +81,19 @@ select:focus-visible {
 
 .user-select-none { user-select: none; }
 .user-select-text { user-select: text; }
+
+/* Ekran okuyucular için görsel olarak gizli ama erişilebilir etiketler */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
 
 html, body {
   height: 100%;
@@ -971,6 +985,13 @@ input, select { font: inherit; color: inherit; }
 }
 
 .scrubber:hover .scrubber-thumb { opacity: 1; }
+/* Dokunmatik ekran ve klavye kullanıcıları thumb'ı her zaman görür */
+.scrubber:active .scrubber-thumb,
+.scrubber:focus-visible .scrubber-thumb { opacity: 1; }
+@media (pointer: coarse) {
+  .scrubber-thumb { opacity: 1; }
+  .scrubber-track { height: 5px; }
+}
 
 .scrubber-tooltip {
   position: absolute;
@@ -1059,10 +1080,42 @@ input, select { font: inherit; color: inherit; }
 .volume-slider::-moz-range-track {
   height: 4px;
   border-radius: 999px;
-  background: transparent;
+  background: var(--c-bg-3);
+}
+/* Firefox dolgu (progress) çizgisi — gradyan yerine yerel parça */
+.volume-slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--c-text-0);
+}
+.volume-slider:hover::-moz-range-progress {
+  background: var(--c-accent);
 }
 
 
+
+/* Kuyruk sırası değiştirme butonları */
+.queue-move {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 6px;
+}
+.queue-move-btn {
+  font-size: 9px;
+  line-height: 1;
+  padding: 3px 6px;
+  color: var(--c-text-3);
+  border-radius: 4px;
+}
+.queue-move-btn:hover:not(:disabled) {
+  color: var(--c-text-0);
+  background: var(--c-bg-3);
+}
+.queue-move-btn:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
 
 /* ============================================
    Panels

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   RefreshControl,
   TouchableOpacity,
   Image,
-  Dimensions
+  useWindowDimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,8 +17,6 @@ import { mobileApi } from '../../src/api/innertube';
 import { mobilePlayer } from '../../src/services/player';
 import { playerStore } from '../../src/store/player-store';
 import { SongRow } from '../../src/components/SongRow';
-
-const { width } = Dimensions.get('window');
 
 const MOODS = [
   { id: 'all', label: 'Keşfet', icon: 'planet' },
@@ -38,6 +36,13 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const { width } = useWindowDimensions();
+  const requestIdRef = useRef(0);
+  // Küçük ekranlarda (örn. 320px) kartlar sığacak, büyük ekranlarda
+  // orantılı büyüyecek şekilde duyarlı kart genişlikleri.
+  const flowCardWidth = Math.max(140, Math.min(170, Math.floor(width * 0.44)));
+  const chartCardWidth = Math.max(112, Math.min(135, Math.floor(width * 0.35)));
+
   const getGreeting = () => {
     const hours = new Date().getHours();
     if (hours < 12) return 'Günaydın';
@@ -45,55 +50,67 @@ export default function HomeScreen() {
     return 'İyi Akşamlar';
   };
 
-  const loadData = async (mood = 'all') => {
+  const loadData = useCallback(async (mood = 'all') => {
+    const requestId = ++requestIdRef.current;
+    const isStale = () => requestId !== requestIdRef.current;
     try {
       if (mood === 'all' || mood === 'charts') {
         const res = await mobileApi.getHome();
+        if (isStale()) return;
         setQuickPicks(res.quickPicks.slice(0, 10));
         setTrending(res.trending);
         setCharts(res.charts);
         setSections(res.sections);
       } else {
         const res = await mobileApi.search(`${mood} müzik`, 'songs');
+        if (isStale()) return;
         setTrending(res.songs);
       }
     } catch (e) {
-      console.warn('Load home error:', e);
+      if (!isStale()) console.warn('Load home error:', e);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (!isStale()) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData(selectedMood);
-  }, [selectedMood]);
+  }, [selectedMood, loadData]);
 
-  const onRefresh = () => {
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadData(selectedMood);
-  };
+    loadData(selectedMood).catch((e) => {
+      console.warn('[Home] Yenileme hatası:', e);
+      setRefreshing(false);
+    });
+  }, [loadData, selectedMood]);
 
-  const handlePlaySong = async (song: Song, contextList: Song[] = []) => {
-    if (contextList.length > 0) {
-      const idx = contextList.findIndex((s) => s.id === song.id);
-      playerStore.setQueue(contextList, idx >= 0 ? idx : 0);
-    }
-    await mobilePlayer.play(song);
-
+  const handlePlaySong = useCallback(async (song: Song, contextList: Song[] = []) => {
     try {
+      if (contextList.length > 0) {
+        const idx = contextList.findIndex((s) => s.id === song.id);
+        playerStore.setQueue(contextList, idx >= 0 ? idx : 0);
+      }
+      await mobilePlayer.play(song);
+
       const similar = await mobileApi.getNext(song.id);
       if (similar.length > 0) {
         similar.forEach((s) => playerStore.addToQueue(s));
       }
-    } catch {}
-  };
+    } catch (e) {
+      console.warn('[Home] Oynatma hatası:', e);
+    }
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00f0ff" />
         }
@@ -137,7 +154,7 @@ export default function HomeScreen() {
                 activeOpacity={0.75}
               >
                 <Ionicons
-                  name={m.icon as any}
+                  name={m.icon as keyof typeof Ionicons.glyphMap}
                   size={14}
                   color={active ? '#06090e' : '#00f0ff'}
                   style={styles.moodIcon}
@@ -151,7 +168,7 @@ export default function HomeScreen() {
         {loading ? (
           <View style={styles.loaderBox}>
             <ActivityIndicator size="large" color="#00f0ff" />
-            <Text style={styles.loadingText}>Aquality Ses Motoru Başlatılıyor...</Text>
+            <Text style={styles.loadingText}>Müzikler yükleniyor...</Text>
           </View>
         ) : (
           <>
@@ -173,7 +190,7 @@ export default function HomeScreen() {
                   {quickPicks.map((song) => (
                     <TouchableOpacity
                       key={'flow_' + song.id}
-                      style={styles.flowCard}
+                      style={[styles.flowCard, { width: flowCardWidth, height: flowCardWidth }]}
                       onPress={() => handlePlaySong(song, quickPicks)}
                       activeOpacity={0.8}
                     >
@@ -217,7 +234,7 @@ export default function HomeScreen() {
                   {charts.slice(0, 20).map((song, idx) => (
                     <TouchableOpacity
                       key={'chart_' + song.id + idx}
-                      style={styles.chartCard}
+                      style={[styles.chartCard, { width: chartCardWidth }]}
                       onPress={() => handlePlaySong(song, charts)}
                       activeOpacity={0.8}
                     >
@@ -227,7 +244,7 @@ export default function HomeScreen() {
                             song.thumbnail ||
                             'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200'
                         }}
-                        style={styles.chartThumb}
+                        style={[styles.chartThumb, { width: chartCardWidth, height: chartCardWidth }]}
                       />
                       <View style={styles.rankBadge}>
                         <Text style={styles.rankText}>#{idx + 1}</Text>
@@ -262,7 +279,7 @@ export default function HomeScreen() {
                     {sec.items.slice(0, 15).map((song, idx) => (
                       <TouchableOpacity
                         key={sec.id + '_' + song.id + idx}
-                        style={styles.shelfCard}
+                        style={[styles.shelfCard, { width: chartCardWidth }]}
                         onPress={() => handlePlaySong(song, sec.items)}
                         activeOpacity={0.8}
                       >
@@ -272,7 +289,7 @@ export default function HomeScreen() {
                               song.thumbnail ||
                               'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200'
                           }}
-                          style={styles.shelfThumb}
+                          style={[styles.shelfThumb, { width: chartCardWidth, height: chartCardWidth }]}
                         />
                         {song.isVideo && (
                           <View style={styles.videoIndicator}>
@@ -303,7 +320,7 @@ export default function HomeScreen() {
                   <SongRow
                     key={'trend_' + song.id}
                     song={song}
-                    onPress={() => handlePlaySong(song, trending)}
+                    contextList={trending}
                   />
                 ))}
               </View>
@@ -311,7 +328,7 @@ export default function HomeScreen() {
           </>
         )}
 
-        <View style={{ height: 120 }} />
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -629,5 +646,8 @@ const styles = StyleSheet.create({
     color: '#6b7a99',
     fontSize: 12,
     fontWeight: '600'
+  },
+  bottomSpacer: {
+    height: 120
   }
 });

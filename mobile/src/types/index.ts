@@ -16,8 +16,6 @@ export interface HomeSection {
   items: Song[];
 }
 
-export interface QueueItem extends Song {}
-
 export interface Album {
   id: string;
   title: string;

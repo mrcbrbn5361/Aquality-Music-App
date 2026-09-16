@@ -1,432 +1,288 @@
-# Desktop Uygulaması - Kapsamlı Sorun Analizi
+# Desktop (Electron) Sorun Analizi
 
-> **Son Güncelleme:** 2026-09-16  
-> **Platform:** Electron (Vite + TypeScript)  
-> **Toplam Sorun:** 28  
-> **Önem Dereceleri:** Yüksek: 3 | Orta: 10 | Düşük: 15  
-> **Durum:** Çözülen: 12 | Açık: 16
+> **Toplam Sorun:** 50 | **KRITIK:** 6 | **YUKSEK:** 6 | **ORTA:** 19 | **DUSUK:** 19
 
 ---
 
-## 🔴 KRİTİK - ÇÖZÜLMÜŞ SORUNLAR
+## KRITIK Sorunlar
 
-### ~~D-001: Google OAuth HTML'de XSS Açığı~~ ✅ ÇÖZÜLDÜ
-| | |
-|---|---|
-| **Dosya** | `desktop/src/main/auth/google-oauth.ts` |
-| **Durum** | ✅ Çözüldü — `escapeHtml()` fonksiyonu eklendi (satır 12-16) |
+### DESK-01: Discord Bot Token Plaintext Saklaniyor
+- **Dosya:** `desktop/src/main/main.ts:343-354`
+- **Kategori:** GUVENLIK
+- **Aciklama:** Discord bot token'i `electron-store` uzerinde sifrelenmemis olarak saklaniyor. Dosya sistemi erisimi olan saldirganlar token'i calabilir.
+- **Cozum:** `electron.safeStorage` ile sifreleme uygulanmali. Token child process'e env olarak degil, IPC/pipe uzerinden gecirilmeli.
 
-### ~~D-002: Discord Bot Token Düz Metin Olarak Saklanıyor~~ ✅ ÇÖZÜLDÜ
-| | |
-|---|---|
-| **Dosya** | `desktop/src/main/utils/store.ts` |
-| **Durum** | ✅ Çözüldü — Token güvenli şekilde saklanıyor |
+### DESK-02: store:get IPC ile Herhangi Bir Sifreli Veri Okunabilir
+- **Dosya:** `desktop/src/main/main.ts:537`
+- **Kategori:** GUVENLIK
+- **Aciklama:** `ipcMain.handle('store:get')` herhangi bir key kabul ediyor. Kompromize edilmis renderer, `discordBotToken`, `oauthClientSecret`, `googleTokens` gibi hassas verileri okuyabilir. `as any` cast'i TypeScript guvenligini devre disi birakir.
+- **Cozum:** Store IPC handler'da whitelist uygulanmali. Hassas key'ler renderer'dan erisilemez olmali.
 
-### ~~D-003: Discord Bot Token Ortam Değişkeni Sızıntısı~~ ✅ ÇÖZÜLDÜ
-| | |
-|---|---|
-| **Dosya** | `desktop/src/main/main.ts` |
-| **Durum** | ✅ Çözüldü — Token güvenli aktarım sağlanıyor |
+### DESK-03: Bot REST API Wildcard CORS
+- **Dosya:** `desktop/src/main/api/bot-server.ts:88-89, 107-111`
+- **Kategori:** GUVENLIK
+- **Aciklama:** `Access-Control-Allow-Origin: *` ile herhangi bir web sitesi API'ye istek gonderebilir. Token rastgele uretiliyor ancak port sabit (9863).
+- **Cozum:** CORS `http://127.0.0.1:*` ile sinirlandirilmali veya tamamen kaldirilmali.
 
-### ~~D-005: Chrome Cookie Dosyası Kilitleme Olmadan Okunuyor~~ ✅ ÇÖZÜLDÜ
-| | |
-|---|---|
-| **Dosya** | `desktop/src/main/auth/music-auth.ts` |
-| **Durum** | ✅ Çözüldü — Geçici dosya ile güvenli okuma |
+### DESK-04: CSP unsafe-inline style-src
+- **Dosya:** `desktop/src/renderer/index.html:6`
+- **Kategori:** GUVENLIK
+- **Aciklama:** Content-Security-Policy `style-src 'self' 'unsafe-inline'` iceriyor. `innerHTML` ve inline style kullanimi XSS yuzeyini genisletiyor.
+- **Cozum:** `unsafe-inline` kaldirilmali, nonce-based veya class-based stillendirme kullanilmali.
 
-### ~~D-006: Chrome Client Hints Taklidi~~ ✅ ÇÖZÜLDÜ
-| | |
-|---|---|
-| **Dosya** | `desktop/src/main/auth/music-auth.ts` |
-| **Durum** | ✅ Çözüldü — Taklit riski kabul edildi, dokümante edildi |
+### DESK-05: shell:openExternal localhost Acilabiliyor
+- **Dosya:** `desktop/src/main/main.ts:539-547`
+- **Kategori:** GUVENLIK
+- **Aciklama:** `isSafeExternalUrl` `http://127.0.0.1` ve `http://localhost` izin veriyor. Bu, yerel HTTP endpoint'lerin rastgele acilmasina yol acabilir.
+- **Cozum:** Localhost URL'leri guvenli listesinden kaldirilmali.
 
----
-
-## 🔴 YÜKSEK - AÇIK SORUNLAR
-
-### D-004: Bot REST API'sinde Kimlik Doğrulama Yok
-| | |
-|---|---|
-| **Dosya** | `desktop/src/main/api/bot-server.ts` |
-| **Satır** | 88, 99 |
-| **Önem** | 🔴 YÜKSEK |
-| **Durum** | Açık |
-
-**Açıklama:** HTTP sunucusu `127.0.0.1:9863` adresine `Access-Control-Allow-Origin: *` ile bağlanıyor. Yerel process'ler veya tarayıcı sekmeleri (fetch ile) oturum açmadan tam uygulama durumunu okuyabilir veya eylem tetikleyebilir.
-
-**Ek Sorun:** Token karşılaştırması `!==` ile yapılıyor — timing attack'e karşı savunmasız. `crypto.timingSafeEqual` kullanılmalı.
-
-**Çözüm:** Rastgele bir API token oluşturulmalı ve her istekte doğrulanmalı:
-```typescript
-const apiToken = crypto.randomBytes(32).toString('hex');
-// Her istekte: if (req.headers.authorization !== `Bearer ${apiToken}`) return 401;
-```
+### DESK-06: Discord Token Child Process'e Env Olarak Geciriliyor
+- **Dosya:** `desktop/src/main/main.ts:377-381`
+- **Kategori:** GUVENLIK
+- **Aciklama:** `DISCORD_TOKEN` environment variable olarak geciriliyor. Process tree, crash dump'lari ve procfs uzerinden gorunur.
+- **Cozum:** Token pipe/stdin uzerinden gecirilmeli.
 
 ---
 
-### D-007: Auth Clients Bridge Uyumsuzluğu
-| | |
-|---|---|
-| **Dosya** | `desktop/src/renderer/components/app.ts` |
-| **Satır** | 2306-2307, 2344 |
-| **Önem** | 🔴 YÜKSEK |
-| **Durum** | Açık |
+## YUKSEK Sorunlar
 
-**Açıklama:** Renderer process `(api as any).authClients.list()` ve `(api as any).discordAuth.getUser()` çağrısı yapıyor ama preload bridge'de bu namespace'ler tanımlı olmayabilir. `main.ts:661-663`'te IPC handler'ları `auth:clients`, `auth:createClient`, `auth:revokeClient` olarak tanımlı — bridge uyumsuzluğu runtime crash'e neden olabilir.
+### DESK-07: sandbox: false
+- **Dosya:** `desktop/src/main/main.ts:135-141`
+- **Aciklama:** `sandbox: false` renderer'in Node.js erisimi olmasa bile bazi native API'lere erisebilmesine izin veriyor.
+- **Cozum:** `sandbox: true` yapilmali.
 
-**Çözüm:** Preload bridge'de `authClients` ve `discordAuth` namespace'leri doğru şekilde expose edilmeli.
+### DESK-08: Versiyon Uyumsuzlugu (1.0.0 vs 1.0.1)
+- **Dosya:** `main.ts:239`, `index.html:386`, `desktop/package.json:3`
+- **Aciklama:** package.json 1.0.1 gosterirken About dialog ve settings sayfasi 1.0.0 gosteriyor.
+- **Cozum:** `app.getVersion()` ile dinamik versiyon kullanilmali.
 
----
+### DESK-09: backgroundMaterial 'mica' as any
+- **Dosya:** `desktop/src/main/main.ti:130`
+- **Aciklama:** `as any` cast'i TypeScript'in bu ozelligin varligini kontrol etmesini engelliyor.
+- **Cozum:** Platform kontrolu ile kosullu kullanilmali.
 
-### D-008: Electron Sürümü Eski
-| | |
-|---|---|
-| **Dosya** | `desktop/package.json` |
-| **Satır** | 35 |
-| **Önem** | 🔴 YÜKSEK |
-| **Durum** | Açık |
+### DESK-10: isDev Guard Bypass Edilebilir
+- **Dosya:** `desktop/src/main/main.ts:192-198`
+- **Aciklama:** F12 ve Ctrl+Shift+I production'da bloklu ama menu'den hala erisilebilir.
+- **Cozum:** Reload menu item'i production'da gizlenmeli.
 
-**Açıklama:** Electron `28.3.3` kullanılıyor. Güncel sürüm 33+'dır. Eski sürümler bilinen güvenlik açıkları içerebilir.
+### DESK-11: Hardcoded Port 9863 Fallback Yok
+- **Dosya:** `desktop/src/main/api/bot-server.ts:39`, `main.ts:712`, `app.ts:2392`
+- **Aciklama:** Port 3 farkli yerde sabit kodlanmis. Baska uygulama bu portu kullaniyorsa sunucu sessizce basarisiz olur.
+- **Cozum:** Port store'dan okunmali ve otomatik fallback uygulanmali.
 
-**Çözüm:** Electron sürümü en son kararlı sürüme (33+) güncellenmeli.
-
----
-
-## 🟡 ORTA - AÇIK SORUNLAR
-
-### D-009: Sürüm Tutarsızlığı
-| | |
-|---|---|
-| **Dosya** | `desktop/src/main/main.ts:239`, `desktop/src/renderer/index.html:386` |
-| **Satır** | 239, 386 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
-
-**Açıklama:** `package.json: "version": "1.0.1"` ama `main.ts:239: 'Aquality Music v1.0.0'` ve `index.html:386: v1.0.0` yazıyor. 3 farklı sürüm numerasyonu var.
-
-**Çözüm:** Tüm dosyalarda `package.json`'dan okunan dinamik sürüm kullanılmalı.
+### DESK-12: discord-rpc Bakimsiz Paket
+- **Dosya:** `desktop/package.json:27`
+- **Aciklama:** `discord-rpc` v4.0.1 bakimsiz ve guvenlik uyarilari var.
+- **Cozum:** `@xhayper/discord-rpc` veya ozel Discord RPC istemcisine gecilmeli.
 
 ---
 
-### D-010: Chrome User-Agent Eski Sürüm
-| | |
-|---|---|
-| **Dosya** | `desktop/src/main/auth/music-auth.ts` |
-| **Satır** | 21 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
+## ORTA Sorunlar
 
-**Açıklama:** `Chrome/126.0.0.0` hardcoded. Chrome güncellendikçe Google'ın anti-bot tespitini tetikleyebilir.
+### DESK-13: StoreManager debounceTimers Temizlenmiyor
+- **Dosya:** `desktop/src/main/utils/store.ts:56, 101-109`
+- **Kategori:** BELLEK-SIZINTI
+- **Aciklama:** `debounceTimers` Map'i timeout handle'lari uretiyor ama `destroy()` metodu yok.
+- **Cozum:** `destroy()` metodu eklenmeli, tum timer'lar temizlenmeli.
 
-**Çözüm:** Dinamik UA veya periyodik güncelleme mekanizması.
+### DESK-14: StreamResolver.onUpdate Listener Temizlenmiyor
+- **Dosya:** `desktop/src/main/main.ts:277-281`
+- **Kategori:** BELLEK-SIZINTI
+- **Aciklama:** `streamResolver.onUpdate()` cagriliyor ama donus degeri (unsubscribe) kaydedilmiyor.
+- **Cozum:** Unsubscribe fonksiyonu kaydedilmeli ve cleanup handler'larda cagirilmali.
 
----
+### DESK-15: Tekrarlanan ipcMain.handle Kayitlari
+- **Dosya:** `desktop/src/main/main.ts:252-690`
+- **Aciklama:** `setupIPC()` birden fazla kez cagrilirsa ayni handler'lar tekrar kaydedilir.
+- **Cozum:** `ipcInitialized` guard'i eklenmeli.
 
-### D-011: Google OAuth Token Yenileme Eksik Kontrol
-| | |
-|---|---|
-| **Dosya** | `desktop/src/main/auth/google-oauth.ts` |
-| **Satır** | 306-310 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
+### DESK-16: discordRPC.connect() Hata Yutuluyor
+- **Dosya:** `desktop/src/main/main.ts:721`
+- **Kategori:** HATA-ISLEME
+- **Aciklama:** Discord calismiyorsa unhandled rejection olusabilir.
+- **Cozum:** try-catch veya `.catch(() => {})` eklenmeli.
 
-**Açıklama:** `refreshGoogleToken` fonksiyonunda `data.expires_in` kontrolü yok — Google refresh response'unda `expires_in` eksik gelirse `NaN` olarak ayarlanır.
+### DESK-17: _pauseEnforceInterval Pencere Yok Edildiginde Devam Ediyor
+- **Dosya:** `desktop/src/main/api/stream-resolver.ts:778-794`
+- **Aciklama:** Interval yok edilmis pencere uzerinde JavaScript calistirmaya calisir.
+- **Cozum:** `if (this._destroyed) return;` eklenmeli.
 
-**Çözüm:**
-```typescript
-if (data.expires_in) {
-  tokens.expires_at = Date.now() + (data.expires_in * 1000);
-}
-```
+### DESK-18: execCmd Guvensiz Kod Calistirma
+- **Dosya:** `desktop/src/main/api/stream-resolver.ts:809-900`
+- **Kategori:** GUVENLIK
+- **Aciklama:** `JSON.stringify` ile string interpolasyonu kirilgan bir kaliptir.
+- **Cozum:** Daha guvenli bir kod calistirma yontemi kullanilmali.
 
----
+### DESK-19: TVHTML5_SIMPLY_EMBEDDED_PLAYER Kullanimi
+- **Dosya:** `desktop/src/main/api/innertube.ts:464-496`
+- **Kategori:** GUVENLIK/HUKUKSAL
+- **Aciklama:** YouTube kosullarini ihlal edebilir, her an engellenebilir.
+- **Cozum:** Fallback mekanizmasi dusunulmeli.
 
-### D-012: Store Type Safety Kaybı
-| | |
-|---|---|
-| **Dosya** | `desktop/src/main/utils/store.ts` |
-| **Satır** | 19-37 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
+### DESK-20: YouTube API Rate Limiting Yok
+- **Dosya:** `desktop/src/main/api/innertube.ts`
+- **Kategori:** PERFORMANS
+- **Aciklama:** Hizli art arda istekler YouTube tarafindan gecici olarak engellenebilir.
+- **Cozum:** Istek kuyrugu veya 429 yanit exponentially backoff eklenmeli.
 
-**Açıklama:** `StoreData` arayüzü `discordButtons`, `discordThumbnails` alanlarını içermiyor ama `main.ts:637-638`'de bu anahtarlar `as any` ile okunuyor.
+### DESK-21: parseSong Debug Logging Production'da
+- **Dosya:** `desktop/src/main/api/innertube.ts:203, 248`
+- **Aciklama:** Her sarki icin console.log cagrisi loglari doldurur ve yavaslatir.
+- **Cozum:** Kaldirilmali veya `isDev` kontrolu altina alinmali.
 
-**Çözüm:** `StoreData` arayüzüne eksik alanlar eklenmeli.
+### DESK-22: Chrome Cookie Dosyasi Okuma
+- **Dosya:** `desktop/src/main/auth/music-auth.ts:186-196, 333-358`
+- **Aciklama:** Chrome SQLite dosyasini dogrudan okumak antivirus uyarilari tetikleyebilir.
+- **Cozum:** Dosya tabanli cookie algilama kaldirilmali, yalnizca CDP kullanilmali.
 
----
+### DESK-23: fetchProfileViaAPI Gizli Pencere Sizintisi
+- **Dosya:** `desktop/src/main/auth/music-auth.ts:500-558`
+- **Kategori:** BELLEK-SIZINTI
+- **Aciklama:** Her cagriya yeni gizli BrowserWindow olusturuluyor. Hata durumunda finally yok.
+- **Cozum:** `finally` blogu ile garanti temizlik veya tek pencere yeniden kullanma.
 
-### D-013: CSP WebSocket Eksik
-| | |
-|---|---|
-| **Dosya** | `desktop/src/renderer/index.html` |
-| **Satır** | 6 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
+### DESK-24: Google OAuth HTTP Sunucu Temizlik Eksikligi
+- **Dosya:** `desktop/src/main/auth/google-oauth.ts:93-286`
+- **Kategori:** BELLEK-SIZINTI
+- **Aciklama:** Rastgele port'ta HTTP sunucusu. `cleanup()` cagirilmazsa sunucu acik kalabilir.
+- **Cozum:** `finally` bloguna tasimali.
 
-**Açıklama:** Discord entegrasyonu `wss://gateway.discord.gg` kullanıyor olabilir ama CSP'de sadece `https://discord.com` var.
+### DESK-25: app.ts Monolitik Dosya (2636 Satir)
+- **Dosya:** `desktop/src/renderer/components/app.ts`
+- **Kategori:** BAKIM
+- **Aciklama:** Tum renderer mantigi tek dosyada. Test ve debug cok zor.
+- **Cozum:** Ayri modullere bolunmeli: player.ts, search.ts, library.ts, settings.ts, discord.ts, queue.ts, auth.ts, playlists.ts
 
-**Çözüm:** `connect-src`'e `wss://gateway.discord.gg` eklenmeli.
+### DESK-26: innerHTML ile Dinamik Veri
+- **Dosya:** `desktop/src/renderer/components/app.ts` (cok sayida satir)
+- **Kategori:** GUVENLIK/XSS
+- **Aciklama:** `innerHTML` kullanimi XSS acigi olusturabilir. Tum user verisi escape edilmeli.
+- **Cozum:** Template kutuphanesi veya guvenli DOM olusturma yontemi kullanilmali.
 
----
+### DESK-27: Event Listener Birikme
+- **Dosya:** `desktop/src/renderer/components/app.ts:727-767`
+- **Kategori:** BELLEK-SIZINTI
+- **Aciklama:** `attachSongEvents` her yuklemede cagriliyor. Ayni elementlere listener yiginiyor.
+- **Cozum:** Event delegation kullanilmali.
 
-### D-014: Boş catch Blokları
-| | |
-|---|---|
-| **Dosya** | `desktop/src/main/main.ts` ve diğerleri |
-| **Satır** | Birden fazla |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
+### DESK-28: Discord Status Interval Temizlenmiyor
+- **Dosya:** `desktop/src/renderer/components/app.ts:2335`
+- **Kategori:** BELLEK-SIZINTI
+- **Aciklama:** `setInterval` sonsuz calisiyor, temizlik yok.
+- **Cozum:** Interval ID kaydedilmeli, uygun zamanda temizlenmeli.
 
-**Açıklama:** Hatalar sessizce yutuluyor. En azından `console.error` çağrılmalı.
-
----
-
-### D-015: Gereksiz require() Kullanımı
-| | |
-|---|---|
-| **Dosya** | `desktop/src/main/main.ts` |
-| **Satır** | 727 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
-
-**Açıklama:** `require('fs').existsSync(...)` ve `require('path').join(...)` kullanılıyor, oysa `fs` ve `path` dosyanın başında zaten import edilmiş.
-
----
-
-### D-016: Sabit Partition Yerine Sabit String Kullanımı
-| | |
-|---|---|
-| **Dosya** | `desktop/src/main/api/stream-resolver.ts` |
-| **Satır** | 578 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
-
-**Açıklama:** `'persist:aquality-music'` sabit string'i kullanılıyor, export edilen `MUSIC_PARTITION` sabiti yerine.
-
----
-
-### D-017: Light Tema Kartlara Uygulanmıyor
-| | |
-|---|---|
-| **Dosya** | `desktop/src/renderer/styles/main.css` |
-| **Satır** | 669, 679 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
-
-**Açıklama:** `.card { background: #181818; }` ve `.card:hover { background: #282828; }` sabit hex değerleri CSS değişkenlerini göz ardı ediyor.
+### DESK-29: ADBLOCK_INJECTION_JS 250ms Polling
+- **Dosya:** `desktop/src/main/api/stream-resolver.ts:102-131`
+- **Kategori:** PERFORMANS
+- **Aciklama:** 250ms'de bir DOM taramasi CPU tuketiyor.
+- **Cozum:** MutationObserver veya buyuk aralik ile polling.
 
 ---
 
-## 🔵 DÜŞÜK - AÇIK SORUNLAR
+## DUSUK Sorunlar
 
-### D-018: Discord Durum setInterval'ı Temizlenmiyor
-| | |
-|---|---|
-| **Dosya** | `desktop/src/renderer/components/app.ts` |
-| **Satır** | 2335 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
+### DESK-30: store.get Defaults Donusu
+- **Dosya:** `desktop/src/main/utils/store.ts:62-68`
+- **Aciklama:** `defaults[key]` tanimsiz donebilir.
+- **Cozum:** Tum key'ler icin default deger tanimlanmali.
 
-**Açıklama:** `setInterval(() => {...}, 15000)` süresiz çalışıyor. Renderer yeniden yüklenirse eski interval GC'ye kadar kalıyor.
+### DESK-31: requestPlayer Timeout Yok
+- **Dosya:** `desktop/src/main/api/innertube.ts:484-488`
+- **Aciklama:** YouTube player API takilirsa istek sonsuz bekler.
+- **Cozum:** `AbortSignal.timeout()` eklenmeli.
 
----
+### DESK-32: mainWindow Null Assertion
+- **Dosya:** `desktop/src/main/main.ts:235`
+- **Aciklama:** `mainWindow!` null olabilir.
+- **Cozum:** Null kontrolu eklenmeli.
 
-### D-019: Debounce Timer'ları Quit Sırasında Temizlenmiyor
-| | |
-|---|---|
-| **Dosya** | `desktop/src/main/utils/store.ts` |
-| **Satır** | 56, 104 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
+### DESK-33: Volume Negatif/Ustu
+- **Dosya:** `desktop/src/renderer/components/app.ts:2109-2126`
+- **Aciklama:** Volume 0-100 disinda deger alabilir.
+- **Cozum:** `Math.max(0, Math.min(100, ...))` ile sinirlandirilmali.
 
-**Açıklama:** `debounceTimers` Map'i aktif `setTimeout` handle'larını saklıyor. Uygulama debounce sırasında kapanırsa timer callback'i temizlikten sonra çalışır.
+### DESK-34: Date.now() Geriye Gitme
+- **Dosya:** `desktop/src/renderer/components/app.ts:920`
+- **Aciklama:** NTP senkronizasyonu ile `Date.now()` geriye gidebilir.
+- **Cozum:** `performance.now()` kullanilmali.
 
----
+### DESK-35: Discord OAuth Sabit Port 65432
+- **Dosya:** `desktop/src/main/auth/discord-oauth.ts:38`
+- **Aciklama:** Port baska uygulama tarafindan isgal edilebilir.
+- **Cozum:** Port 0 ile rastgele atama yapilmali.
 
-### D-020: fetchProfileViaAPI'de Gizli BrowserWindow Sızıntısı
-| | |
-|---|---|
-| **Dosya** | `desktop/src/main/auth/music-auth.ts` |
-| **Satır** | 504-558 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
+### DESK-36: logout() hide() Calistiriyor
+- **Dosya:** `desktop/src/main/auth/music-auth.ts:732`
+- **Aciklama:** Pencere gizleniyor ama yok edilmiyor.
+- **Cozum:** `destroy()` kullanilmali.
 
-**Açıklama:** Profil çekme için bir BrowserWindow oluşturuluyor ama `win.destroy()` yalnızca bir kod yolunda çağrılıyor. `executeJavaScript` ulaşmadan önce hata verirse pencere sızıntısı oluşur.
+### DESK-37: Settings Versiyon Sabit
+- **Dosya:** `desktop/src/renderer/index.html:386`
+- **Aciklama:** `v1.0.0` sabit kodlanmis.
+- **Cozum:** Dinamik versiyon kullanilmali.
 
----
+### DESK-38: prefers-color-scheme Fallback Yok
+- **Dosya:** `desktop/src/renderer/styles/main.css`
+- **Aciklama:** CSS'te `@media (prefers-color-scheme)` fallback'i yok.
+- **Cozum:** Fallback media query eklenmeli.
 
-### D-021: Debug Log'lar
-| | |
-|---|---|
-| **Dosya** | `desktop/src/main/api/innertube.ts` |
-| **Satır** | 203, 248, 596, 665 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
+### DESK-39: Discord Bot UI Elementleri Eksik
+- **Dosya:** `desktop/src/renderer/components/app.ts:2381-2389`
+- **Aciklama:** DOM elementleri `index.html`'de yok, fonksiyon calismaz.
+- **Cozum:** Elementler eklmeli veya olum kod kaldirilmali.
 
-**Açıklama:** `[parseSong]` debug log'ları üretim kodunda bırakılmış, stdout'u kirletiyor.
+### DESK-40: showContextMenu innerHTML Kirilgan
+- **Dosya:** `desktop/src/renderer/components/app.ts:1683-1691`
+- **Aciklama:** Kullanici verisi eklenirse XSS acigi olusur.
+- **Cozum:** `textContent` kullanilmali.
 
----
+### DESK-41: discordBotProcess Listener Birikme
+- **Dosya:** `desktop/src/main/main.ts:391-407`
+- **Aciklama:** stdout/stderr listener'lari temizlenmiyor.
+- **Cozum:** Mevcut listener'lar kaldirilmali.
 
-### D-022: Renderer Debug Log'ları Ana Sürece Gönderiyor
-| | |
-|---|---|
-| **Dosya** | `desktop/src/renderer/components/app.ts` |
-| **Satır** | 69-75 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
+### DESK-42: visitorData Hiyerarsisi
+- **Dosya:** `desktop/src/main/api/innertube.ts:89, 118`
+- **Aciklama:** `visitorData` hic set edilmiyor, olu kod.
+- **Cozum:** Kaldirilmali veya uygulanmali.
 
-**Açıklama:** `dlog()` her debug mesajını IPC aracılığıyla ana süreç stdout'una gönderiyor. Üretimde performans ve bilgi sızıntısı.
+### DESK-43: UUID Token Gelistirme
+- **Dosya:** `desktop/src/main/providers/auth-provider.ts:9`
+- **Aciklama:** `randomUUID()` kriptografik olarak yeterli degil.
+- **Cozum:** `crypto.randomBytes(32).toString('hex')` kullanilmali.
 
----
+### DESK-44: tsconfig noUnusedLocals Yok
+- **Dosya:** `desktop/tsconfig.main.json`
+- **Aciklama:** Kullanilmayan degiskenler yakalanmaz.
+- **Cozum:** `"noUnusedLocals": true` eklenmeli.
 
-### D-023: Kullanılmayan 7zip-bin Bağımlılığı
-| | |
-|---|---|
-| **Dosya** | `desktop/package.json` |
-| **Satır** | 25 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
+### DESK-45: tsconfig Renderer noEmit Eksik
+- **Dosya:** `desktop/tsconfig.json`
+- **Aciklama:** Vite derleme yaparken tsconfig emission denemesi yaniltici.
+- **Cozum:** `"noEmit": true` eklenmeli.
 
-**Açıklama:** `"7zip-bin": "^5.2.0"` bağımlılığı kaynak kodunda hiçbir yerde import edilmiyor.
+### DESK-46: installer.nsh Cache Silme
+- **Dosya:** `desktop/installer.nsh:22-24`
+- **Aciklama:** Varsayilan path disindaki veriler de silinebilir.
+- **Cozum:** Path dogrulamasi yapilmali.
 
----
+### DESK-47: discord-bot Extra Resource Yolu
+- **Dosya:** `desktop/package.json:59-65`
+- **Aciklama:** `../scripts/discord-bot/` yoksa build basarisiz olabilir.
+- **Cozum:** Build dogrulamasi eklenmeli.
 
-### D-024: Kullanılmayan @types/ws Bağımlılığı
-| | |
-|---|---|
-| **Dosya** | `desktop/package.json` |
-| **Satır** | 36 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
+### DESK-48: @ts-ignore CDP Import
+- **Dosya:** `desktop/src/main/auth/music-auth.ts:8`
+- **Aciklama:** Tur tanimi olmayan paket icin `@ts-ignore`.
+- **Cozum:** `.d.ts` dosyasi olusturulmali.
 
-**Açıklama:** `@types/ws` devDependencies'de var ama `ws` hiçbir yerde kullanılmıyor.
+### DESK-49: LRCLIB Harici HTTP Istege Gece Veri
+- **Dosya:** `desktop/src/main/api/innertube.ts:832-866`
+- **Aciklama:** Sarki bilgisi ucuncu tarafa gonderiliyor, riza yok.
+- **Cozum:** Kullaniciya bilgilendirme veya opt-in ozelligi.
 
----
-
-### D-025: Tekrarlanan session Import'u
-| | |
-|---|---|
-| **Dosya** | `desktop/src/main/api/stream-resolver.ts` |
-| **Satır** | 2, 577 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
-
-**Açıklama:** `session` dosyanın başında import edilmiş ama `fetchAccountProfile` içinde dinamik `import('electron')` ile tekrar import ediliyor.
-
----
-
-### D-026: Beğeni Değişiminde Tüm DOM Taraması
-| | |
-|---|---|
-| **Dosya** | `desktop/src/renderer/components/app.ts` |
-| **Satır** | 1582-1588 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
-
-**Açıklama:** `$$('.like-btn').forEach(...)` her beğeni değişiminde tüm DOM'daki beğenme butonlarını tarıyor.
-
----
-
-### D-027: Büyük Liste Oluşturma için innerHTML
-| | |
-|---|---|
-| **Dosya** | `desktop/src/renderer/components/app.ts` |
-| **Satır** | 690, 1861, 1998 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
-
-**Açıklama:** Büyük HTML stringleri ile `innerHTML` kullanımı tam yeniden ayırmaya neden oluyor.
-
----
-
-### D-028: Yinelenen Ses Seviyesi IPC Çağrısı
-| | |
-|---|---|
-| **Dosya** | `desktop/src/renderer/components/app.ts` |
-| **Satır** | 1191, 1193 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
-
-**Açıklama:** `api.player.setVolume(...)` `playSong` içinde aynı değerle iki kez çağrılıyor.
-
----
-
-### D-029: login.css Kullanılmıyor
-| | |
-|---|---|
-| **Dosya** | `desktop/src/renderer/styles/login.css` |
-| **Satır** | - |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
-
-**Açıklama:** 293 satırlık CSS dosyası `index.html`'de import edilmiyor.
-
----
-
-### D-030: init() DOMContentLoaded'da Çağrılıyor ama Modül Ertelemeli
-| | |
-|---|---|
-| **Dosya** | `desktop/src/renderer/components/app.ts` |
-| **Satır** | 2635 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
-
-**Açıklama:** `document.addEventListener('DOMContentLoaded', init)` — `type="module"` ile ES modülleri ertelenir, DOMContentLoaded script çalıştırılana kadar ateşlenmiş olabilir.
-
----
-
-### D-031: Bot ile İlgili DOM Elementleri Mevcut Değil
-| | |
-|---|---|
-| **Dosya** | `desktop/src/renderer/components/app.ts` |
-| **Satır** | 2381-2390 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
-
-**Açıklama:** `#discordBotServerStatus`, `#discordBotProcessStatus`, `#btnStartDiscordBot` vb. referansları — bunların hiçbiri `index.html`'de mevcut değil.
-
----
-
-### D-032: btnStartWelcome Referansı Mevcut Değil
-| | |
-|---|---|
-| **Dosya** | `desktop/src/renderer/components/app.ts` |
-| **Satır** | 414 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
-
-**Açıklama:** `$('#btnStartWelcome')` sorgulanıyor ve olay dinleyicisi ekleniyor, ancak bu element `index.html`'de mevcut değil.
-
----
-
-## Özet Tablosu
-
-| # | Sorun | Önem | Durum | Dosya | Satır |
-|---|-------|------|-------|-------|-------|
-| D-004 | API kimlik doğrulama yok | 🔴 YÜKSEK | Açık | bot-server.ts | 88, 99 |
-| D-007 | Auth clients bridge uyumsuzluğu | 🔴 YÜKSEK | Açık | app.ts | 2306-2307, 2344 |
-| D-008 | Eski Electron sürümü | 🔴 YÜKSEK | Açık | package.json | 35 |
-| D-009 | Sürüm tutarsızlığı | 🟡 ORTA | Açık | main.ts, index.html | 239, 386 |
-| D-010 | Chrome UA eski sürüm | 🟡 ORTA | Açık | music-auth.ts | 21 |
-| D-011 | Token yenileme eksik kontrol | 🟡 ORTA | Açık | google-oauth.ts | 306-310 |
-| D-012 | Store type safety kaybı | 🟡 ORTA | Açık | store.ts | 19-37 |
-| D-013 | CSP WebSocket eksik | 🟡 ORTA | Açık | index.html | 6 |
-| D-014 | Boş catch blokları | 🟡 ORTA | Açık | main.ts | birden fazla |
-| D-015 | Gereksiz require() | 🟡 ORTA | Açık | main.ts | 727 |
-| D-016 | Sabit partition string | 🟡 ORTA | Açık | stream-resolver.ts | 578 |
-| D-017 | Light tema eksik | 🟡 ORTA | Açık | main.css | 669, 679 |
-| D-018 | Interval temizlenmiyor | 🔵 DÜŞÜK | Açık | app.ts | 2335 |
-| D-019 | Debounce timer sızıntısı | 🔵 DÜŞÜK | Açık | store.ts | 56, 104 |
-| D-020 | BrowserWindow sızıntısı | 🔵 DÜŞÜK | Açık | music-auth.ts | 504-558 |
-| D-021 | Debug log'lar | 🔵 DÜŞÜK | Açık | innertube.ts | 203,248,596,665 |
-| D-022 | Debug IPC | 🔵 DÜŞÜK | Açık | app.ts | 69-75 |
-| D-023 | Ölü 7zip-bin | 🔵 DÜŞÜK | Açık | package.json | 25 |
-| D-024 | Ölü @types/ws | 🔵 DÜŞÜK | Açık | package.json | 36 |
-| D-025 | Tekrarlanan session import | 🔵 DÜŞÜK | Açık | stream-resolver.ts | 2, 577 |
-| D-026 | DOM taraması | 🔵 DÜŞÜK | Açık | app.ts | 1582-1588 |
-| D-027 | innerHTML kullanımı | 🔵 DÜŞÜK | Açık | app.ts | 690,1861,1998 |
-| D-028 | Yinelenen IPC | 🔵 DÜŞÜK | Açık | app.ts | 1191, 1193 |
-| D-029 | Kullanılmayan login.css | 🔵 DÜŞÜK | Açık | login.css | - |
-| D-030 | DOMContentLoaded zamanlaması | 🔵 DÜŞÜK | Açık | app.ts | 2635 |
-| D-031 | Ölü DOM referansları | 🔵 DÜŞÜK | Açık | app.ts | 2381-2390 |
-| D-032 | Ölü btnStartWelcome | 🔵 DÜŞÜK | Açık | app.ts | 414 |
+### DESK-50: saveQueueTimer Temizlenmiyor
+- **Dosya:** `desktop/src/renderer/components/app.ts:250-262`
+- **Aciklama:** Kapanis sirasinda timer calisarak store'a yazabilir.
+- **Cozum:** `beforeunload` handler'inda temizlenmeli.

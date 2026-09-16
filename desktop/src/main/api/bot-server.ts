@@ -1,5 +1,6 @@
 import * as http from 'http';
 import * as crypto from 'crypto';
+import { app } from 'electron';
 
 export interface BotServerTrack {
   id?: string;
@@ -41,13 +42,21 @@ export class BotServer {
   private apiToken: string = crypto.randomBytes(32).toString('hex');
   private state: BotServerState = {
     app: 'Aquality Music',
-    version: '1.0.1',
+    version: this.appVersion(),
     status: 'stopped',
     isPlaying: false,
     track: null,
     recommendations: [],
     updatedAt: Date.now()
   };
+
+  private appVersion(): string {
+    try {
+      return app.getVersion();
+    } catch {
+      return '1.0.1';
+    }
+  }
 
   constructor(port: number = 9863) {
     this.port = port;
@@ -69,12 +78,82 @@ export class BotServer {
     return this.state;
   }
 
-  public updateState(partial: Partial<BotServerState>): void {
+  /**
+   * Renderer'dan gelen kısmi durumu şema doğrulamasından geçirerek uygular.
+   * Bilinmeyen alanlar ve yanlış tipler sessizce atılır — böylece ele
+   * geçirilmiş bir renderer bot API'sine keyfi veri enjekte edemez.
+   */
+  public updateState(partial: unknown): void {
+    const clean = BotServer.sanitizeStateUpdate(partial);
+    if (!clean) return;
     this.state = {
       ...this.state,
-      ...partial,
+      ...clean,
       updatedAt: Date.now()
     };
+  }
+
+  private static asString(value: unknown, maxLen: number): string | undefined {
+    if (typeof value !== 'string') return undefined;
+    return value.slice(0, maxLen);
+  }
+
+  private static asNumber(value: unknown): number | undefined {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+    return value;
+  }
+
+  private static sanitizeStateUpdate(partial: unknown): Partial<BotServerState> | null {
+    if (!partial || typeof partial !== 'object' || Array.isArray(partial)) return null;
+    const input = partial as Record<string, unknown>;
+    const out: Partial<BotServerState> = {};
+
+    if (input.status === 'playing' || input.status === 'paused' || input.status === 'stopped') {
+      out.status = input.status;
+    }
+    if (typeof input.isPlaying === 'boolean') {
+      out.isPlaying = input.isPlaying;
+    }
+    if (input.track === null) {
+      out.track = null;
+    } else if (input.track && typeof input.track === 'object' && !Array.isArray(input.track)) {
+      const t = input.track as Record<string, unknown>;
+      const track: BotServerTrack = {
+        title: BotServer.asString(t.title, 200) ?? '',
+        artist: BotServer.asString(t.artist, 200) ?? ''
+      };
+      const optional: Array<keyof BotServerTrack> = ['id', 'album', 'thumbnail', 'durationFormatted', 'currentTimeFormatted', 'url'];
+      for (const key of optional) {
+        const v = BotServer.asString(t[key], 500);
+        if (v !== undefined) (track as unknown as Record<string, unknown>)[key] = v;
+      }
+      const numeric: Array<'duration' | 'currentTime' | 'progress'> = ['duration', 'currentTime', 'progress'];
+      for (const key of numeric) {
+        const v = BotServer.asNumber(t[key]);
+        if (v !== undefined) track[key] = v;
+      }
+      out.track = track;
+    }
+    if (Array.isArray(input.recommendations)) {
+      out.recommendations = input.recommendations.slice(0, 20).flatMap((r): BotServerRecommendation[] => {
+        if (!r || typeof r !== 'object') return [];
+        const rec = r as Record<string, unknown>;
+        const title = BotServer.asString(rec.title, 200);
+        const artist = BotServer.asString(rec.artist, 200);
+        if (!title || !artist) return [];
+        return [{
+          id: BotServer.asString(rec.id, 100),
+          title,
+          artist,
+          thumbnail: BotServer.asString(rec.thumbnail, 500),
+          url: BotServer.asString(rec.url, 500)
+        }];
+      });
+    }
+    const lyrics = BotServer.asString(input.lyrics, 20000);
+    if (lyrics !== undefined) out.lyrics = lyrics;
+
+    return out;
   }
 
   public start(): Promise<boolean> {
@@ -112,7 +191,7 @@ export class BotServer {
 
         if (url === '/api/v1/health' || url === '/health') {
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(JSON.stringify({ status: 'ok', app: 'Aquality Music', version: '1.0.1', port: this.port }));
+          res.end(JSON.stringify({ status: 'ok', app: 'Aquality Music', version: this.state.version, port: this.port }));
           return;
         }
 

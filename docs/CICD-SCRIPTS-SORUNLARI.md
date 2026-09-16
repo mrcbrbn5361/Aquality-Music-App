@@ -1,464 +1,246 @@
-# CI/CD ve Scripts - Kapsamlı Sorun Analizi
+# CI/CD, Scripts ve Yapilandirma Sorun Analizi
 
-> **Son Güncelleme:** 2026-09-16  
-> **Platform:** GitHub Actions, Node.js Scripts, PowerShell, Discord Bot  
-> **Toplam Sorun:** 33  
-> **Önem Dereceleri:** Kritik: 5 | Yüksek: 8 | Orta: 14 | Düşük: 6
+> **Toplam Sorun:** 40 | **KRITIK:** 3 | **YUKSEK:** 8 | **ORTA:** 13 | **DUSUK:** 16
 
 ---
 
-## 🔴 KRİTİK - Güvenlik
+## KRITIK Sorunlar
 
-### S-001: Release Asset'leri Her Push'ta Yükleniyor
-| | |
-|---|---|
-| **Dosya** | `.github/workflows/build-windows.yml` |
-| **Satır** | 54 |
-| **Önem** | 🔴 KRİTİK |
-| **Durum** | Açık |
+### CICD-01: Discord Bot node_modules Git'te
+- **Dosya:** `scripts/discord-bot/node_modules/`
+- **Kategori:** GITIGNORE / REPO BLOAT
+- **Aciklama:** Discord bot'un `node_modules/` dizini git'e commit edilmis. Bu depo boyutunu buyutur, merge conflict olusturur ve guvensiz/guncel olmayan bagimliliklari icerir.
+- **Cozum:**
+  ```bash
+  echo "scripts/discord-bot/node_modules/" >> .gitignore
+  git rm -r --cached scripts/discord-bot/node_modules/
+  ```
 
-**Açıklama:** Koşul `github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'` — main/master'e yapılan her push'ta release asset'leri yükleniyor. Tag olmayan commit'lerde release oluşturulup değiştirilebilir.
+### CICD-02: Build Artifact'lari Git'te
+- **Dosya:** `desktop/dist/`, `desktop/release/`
+- **Kategori:** GITIGNORE
+- **Aciklama:** `.gitignore` bunlari listeliyor ama `mobile/node_modules/` hic listelenmemis. `desktop/release/` iceriginde buyuk binary dosyalari var.
+- **Cozum:** `**/node_modules/` wildcard pattern eklenmeli.
 
-**Çözüm:** Tag tabanlı tetikleme:
-```yaml
-if: startsWith(github.ref, 'refs/tags/v')
-```
-
----
-
-### S-002: macOS Workflow'da Güvenlik Header'ları Eksik + Kirli Symlink
-| | |
-|---|---|
-| **Dosya** | `.github/workflows/build-mac.yml` |
-| **Satır** | 31-40 |
-| **Önem** | 🔴 KRİTİK |
-| **Durum** | Açık |
-
-**Açıklama:** `brew install p7zip` + manuel symlink + mkdir + cp bloğu kırılgan. `which 7za` ve `which 7z` ikisi de başarısız olursa `$P7ZA` boş olur ve `ln -sf "" ./7za` kırık bir symlink oluşturur. Hata yönetimi yok.
-
-**Ek Sorun:** Workspace kökünde proje dışı dosya oluşturuyor.
+### CICD-03: sandbox: false - Electron Guvenlik Riski
+- **Dosya:** `desktop/src/main/main.ts:140`
+- **Kategori:** GUVENLIK / CONFIG
+- **Aciklama:** `sandbox: false` renderer'in V8 acigi exploited edilirse tam Node.js erisimi saglar. `contextIsolation: true` ve `nodeIntegration: false` dogru ama sandbox zayiflatiyor.
+- **Cozum:** `sandbox: true` yapilmali. Preload script sadece `contextBridge` API'leri kullanmali.
 
 ---
 
-### S-003: discord-bot Token Çevre Değişkeninde
-| | |
-|---|---|
-| **Dosya** | `scripts/discord-bot/index.js` |
-| **Satır** | 15 |
-| **Önem** | 🔴 KRİTİK |
-| **Durum** | Açık |
+## YUKSEK Sorunlar
 
-**Açıklama:** `process.env.DISCORD_TOKEN` ile token yükleniyor. `.env` dosyası repo'ya commit edilirse (yaygın hata) token açığa çıkar. `.env.example` ve `.gitignore` kontrolü yok.
+### CICD-04: Hardcoded Versiyon About Dialog'da
+- **Dosya:** `desktop/src/main/main.ts:238`
+- **Kategori:** BUILD / CONFIG
+- **Aciklama:** `message: 'Aquality Music v1.0.0'` sabit kodlanmis. Versiyon artirildiginda guncellenmez.
+- **Cozum:** `` message: `Aquality Music v${app.getVersion()}` ``
 
----
+### CICD-05: Iki Vercel.json Cakismasi
+- **Dosya:** `vercel.json` vs `website/vercel.json`
+- **Kategori:** DEPLOY
+- **Aciklama:** Root'da build command `npm run build:website`, website'de `npm run build`. Root'da guvenlik header'lari eksik. Hangisinin kullanilacagi belirsiz.
+- **Cozum:** Root vercel.json kaldirilmali veya birlestirilmeli.
 
-### S-004: Bot API'sinde Kimlik Doğrulama Yok
-| | |
-|---|---|
-| **Dosya** | `scripts/discord-bot/index.js` |
-| **Satır** | 37 |
-| **Önem** | 🔴 KRİTİK |
-| **Durum** | Açık |
+### CICD-06: PR'lar Icin Cross-Platform Test Yok
+- **Dosya:** `.github/workflows/build-windows.yml`, `.github/workflows/build-mac.yml`
+- **Kategori:** CI/CD
+- **Aciklama:** Her workflow kendi platformu icin build yapiyor. Ortak bir typecheck/lint/test pipeline'i yok. Windows workflow'u yalnizca desktop typecheck yapiyor, mobile ve website'i atliyor.
+- **Cozum:** Ortak CI workflow olusturulmali: `npm ci`, tum workspace'ler icin typecheck, temel build dogrulamasi.
 
-**Açıklama:** `http://127.0.0.1:9863/api/v1/state` adresine hardkodlanmış localhost URL'si ile bağlanıyor. Bu API noktasında kimlik doğrulama yok — localhost'taki herhangi biri durumu sahteleyebilir.
+### CICD-07: postinstall Her npm ci'da Agir Script
+- **Dosya:** `package.json:26`
+- **Kategori:** CI/CD
+- **Aciklama:** `postinstall` her `npm ci`'da `update-docs.cjs` calistiriyor. Bu script git komutlari, tsc kontrolu ve dosya yazma islemleri yapiyor. CI'da 30+ saniye kayip ve potansiyel hata.
+- **Cozum:** CI'da devre disi: `process.env.CI !== 'true'` kontrolu.
 
----
+### CICD-08: npm ci Lockfile Sorunlari
+- **Dosya:** CI workflow'lari
+- **Kategori:** CI/CD
+- **Aciklama:** `postinstall` sirasinda tsc kontrolu ve dosya yazma, read-only CI ortaminda basarisiz olabilir.
+- **Cozum:** Tsc ve doc-generation postinstall'dan kaldirilmali.
 
-### S-005: Git Hook'u Zorla Yazma
-| | |
-|---|---|
-| **Dosya** | `scripts/update-docs.cjs` |
-| **Satır** | 446-457 |
-| **Önem** | 🔴 KRİTİK |
-| **Durum** | Açık |
+### CICD-09: Google OAuth Secret Bos Varsayilan
+- **Dosya:** `desktop/src/main/auth/google-credentials.ts:4-5`
+- **Kategori:** CONFIG / GUVENLIK
+- **Aciklama:** `GOOGLE_CLIENT_SECRET` bos string olarak basliyor. Google OAuth sessizce basarisiz olur.
+- **Cozum:** Build-time injection veya acik hata mesaji.
 
-**Açıklama:** `ensureGitHook` her script çalıştırıldığında `.git/hooks/post-commit` dosyasını sessizce overwritten ediyor. Bu müdahalesiz davranış — script kullanıcı onayı olmadan git hook'larını değiştirmemeli.
-
-**Ek Sorun:** Hook göreceli yol kullanıyor (`node scripts/update-docs.cjs`) — alt dizinlerden çalıştırılursa başarısız olur.
-
----
-
-## 🟠 YÜKSEK - CI/CD Hataları
-
-### S-006: gh release upload ile Sessiz Başarısızlık
-| | |
-|---|---|
-| **Dosya** | `.github/workflows/build-windows.yml:58`, `build-mac.yml:62` |
-| **Satır** | 58, 62 |
-| **Önem** | 🟠 YÜKSEK |
-| **Durum** | Açık |
-
-**Açıklama:** `gh release upload ... || true` başarısızlıkları sessizce bastırıyor. Yükleme başarısız olursa workflow yine de başarılı olur.
+### CICD-10: Bot REST API Auth Uyumsuz
+- **Dosya:** `desktop/src/main/api/bot-server.ts:88`, `scripts/discord-bot/index.js:37`
+- **Kategori:** GUVENLIK / BUG
+- **Aciklama:** BotServer Bearer token gerektiriyor ama bot token gondermiyor. /api/v1/state her zaman 401 donebilir.
+- **Cozum:** Ya token bot'a gecirilmeli ya da localhost icin auth kaldirilmali.
 
 ---
 
-### S-007: Auto-Update Dosyaları Release'de Eksik
-| | |
-|---|---|
-| **Dosya** | `.github/workflows/build-windows.yml:58`, `build-mac.yml:62` |
-| **Satır** | 58, 62 |
-| **Önem** | 🟠 YÜKSEK |
-| **Durum** | Açık |
+## ORTA Sorunlar
 
-**Açıklama:** Yükleme yalnızca `.exe` ve `.dmg` dosyalarını ekliyor — `.blockmap`, `latest.yml`, `latest-mac.yml` dosyaları eksik. Bu auto-update'i kırar.
+### CICD-11: Mobile metro.config.js blockList Eksik
+- **Dosya:** `mobile/metro.config.js`
+- **Kategori:** CONFIG
+- **Aciklama:** Root metro.config.js'de `blockList` var ama mobile'da yok. Monorepo'da diger workspace dosyalari resolve edilebilir.
+- **Cozum:** Ayni blockList konfigurasyonu eklenmeli.
 
----
+### CICD-12: CI macOS workflow'da shell: bash Yok
+- **Dosya:** `.github/workflows/build-mac.yml`
+- **Kategori:** CI/CD
+- **Aciklama:** gh release upload adimi icin explicit shell tanimi yok.
+- **Cozum:** `shell: bash` eklenmeli.
 
-### S-008: npm install Yerine npm ci Kullanılmaması
-| | |
-|---|---|
-| **Dosya** | `.github/workflows/build-windows.yml`, `build-mac.yml` |
-| **Satır** | - |
-| **Önem** | 🟠 YÜKSEK |
-| **Durum** | Açık |
+### CICD-13: Eski Versiyon Artifact'lari
+- **Dosya:** `desktop/release/`
+- **Kategori:** BUILD
+- **Aciklama:** 1.0.0 ve 1.0.1 artifact'lari bir arada. latest.yml sadece 1.0.1'i referans gosteriyor.
+- **Cozum:** Eski artifact'lar temizlenmeli.
 
-**Açıklama:** CI'da `npm install` kullanılıyor — tekrarlanabilir değil. `npm ci` kullanılmalı.
+### CICD-14: Git Hook Overwrite
+- **Dosya:** `scripts/update-docs.cjs:446-457`
+- **Kategori:** SCRIPTS
+- **Aciklama:** `ensureGitHook()` mevcut post-commit hook'unu sessizce eziyor (husky, lint-staged vb.).
+- **Cozum:** Husky veya simple-git-hooks kullanilmali.
 
----
+### CICD-15: electron-builder publish never
+- **Dosya:** `desktop/package.json:18-21`
+- **Kategori:** BUILD
+- **Aciklama:** Tum build scriptleri `--publish never` kullaniyor. CI'da bile otomatik publish yok.
+- **Cozum:** Bilincli karar, dokumante edilmeli.
 
-### S-009: macOS Workflow'da PR Tetikleyicisi Eksik
-| | |
-|---|---|
-| **Dosya** | `.github/workflows/build-mac.yml` |
-| **Satır** | - |
-| **Önem** | 🟠 YÜKSEK |
-| **Durum** | Açık |
+### CICD-16: react-native-worklets Gereksiz
+- **Dosya:** `mobile/package.json:28`
+- **Kategori:** DEPENDENCY
+- **Aciklama:** react-native-reanimated v4.5.1 muhtemelen worklets'i iceriyor.
+- **Cozum:** Gereklilik dogrulanmali, gereksizse kaldirilmali.
 
-**Açıklama:** Windows workflow'unda `pull_request` tetikleyicisi var ama macOS'de yok — PR'lar macOS'ta doğrulanmıyor.
+### CICD-17: discord-rpc Bakimsiz ve Tekrarli
+- **Dosya:** `desktop/package.json:28`, root `package.json:40`
+- **Kategori:** DEPENDENCY
+- **Aciklama:** Hem root hem desktop'da var. Bakimsiz.
+- **Cozum:** Root'dan kaldirilmali, `@xhayper/discord-rpc`'ye gecilmeli.
 
----
+### CICD-18: electron-store Isim Cakismasi
+- **Dosya:** `store.ts:59`, `google-oauth.ts:53`, `discord-oauth.ts:73`, `music-auth.ts:52`
+- **Kategori:** CONFIG
+- **Aciklama:** `aquality-music-auth` adi 3 modul tarafindan paylasiliyor. Key cakismasi riski.
+- **Cozum:** Ayrilmis store adlari: `aquality-music-google-auth`, `aquality-music-discord-auth`, `aquality-music-music-auth`.
 
-### S-010: cardRenderer.js'de Kırık Rounded Rect
-| | |
-|---|---|
-| **Dosya** | `scripts/discord-bot/cardRenderer.js` |
-| **Satır** | 15 |
-| **Önem** | 🟠 YÜKSEK |
-| **Durum** | Açık |
+### CICD-19: Root package.json engines Yok
+- **Dosya:** `package.json`
+- **Kategori:** CONFIG
+- **Aciklama:** Node.js surum kisitlami yok.
+- **Cozum:** `"engines": { "node": ">=18" }` eklenmeli.
 
-**Açıklama:** `ctx.lineTo(x + radius.tl)` `y` parametresi eksik — `(x + radius.tl, undefined)` noktasına çizgi çiziyor. Yuvarlak dikdörtgen yolu hatalı olacak.
+### CICD-20: mobile/.npmrc legacy-peer-deps
+- **Dosya:** `mobile/.npmrc:1`
+- **Kategori:** DEPENDENCY
+- **Aciklama:** Peer dependency cakismalarini bastiriyor.
+- **Cozum:** Gercek cakismalar cozulmeli.
 
-**Çözüm:**
-```javascript
-ctx.lineTo(x + radius.tl, y);  // y eklendi
-```
+### CICD-21: mobile/tsconfig.json lib DOM Iceriyor
+- **Dosya:** `mobile/tsconfig.json`
+- **Kategori:** CONFIG
+- **Aciklama:** React Native'de DOM yok ama `"lib": ["DOM", "ESNext"]` tanimli.
+- **Cozum:** `"lib": ["ESNext"]` olarak degistirilmeli.
 
----
+### CICD-22: make-installer-bmps.ps1 Windows-Only
+- **Dosya:** `scripts/make-installer-bmps.ps1`
+- **Kategori:** CROSS-PLATFORM
+- **Aciklama:** PowerShell ve .NET System.Drawing kullaniyor.
+- **Cozum:** Cross-platform alternatif veya dokumantasyon.
 
-### S-011: Sürüm Tutarsızlığı - README.md
-| | |
-|---|---|
-| **Dosya** | `README.md` |
-| **Satır** | 1, 10 |
-| **Önem** | 🟠 YÜKSEK |
-| **Durum** | Açık |
-
-**Açıklama:** Başlık `v1.0.0` diyor, badge `Version-1.0.0` gösteriyor, ama gerçek sürüm `v1.0.1`.
-
----
-
-### S-012: Sürüm Tutarsızlığı - TUM-GUNCELLEMELER
-| | |
-|---|---|
-| **Dosya** | `TUM-GUNCELLEMELER-VE-SURUM-NOTLARI.md` |
-| **Satır** | 3, 232 |
-| **Önem** | 🟠 YÜKSEK |
-| **Durum** | Açık |
-
-**Açıklama:** Başlık `v1.0.0-stable` diyor ama bölüm 9 başlığı `v1.0.1` yazıyor.
-
----
-
-### S-013: PROJE-DURUM.md ile Script Tutarsızlığı
-| | |
-|---|---|
-| **Dosya** | `PROJE-DURUM.md` |
-| **Satır** | 18 |
-| **Önem** | 🟠 YÜKSEK |
-| **Durum** | Açık |
-
-**Açıklama:** `Toplam Takip Edilen Sorun: 24` diyor ama `update-docs.cjs` 22 sorun tanımlıyor.
+### CICD-23: run_check.bat Hardcoded Path
+- **Dosya:** `desktop/run_check.bat:1`
+- **Kategori:** SCRIPTS
+- **Aciklama:** `cd D:\Aquality-Music-App\desktop` sadece bir gelistiricide calisir.
+- **Cozum:** `cd /d "%~dp0"` kullanilmali.
 
 ---
 
-## 🟡 ORTA - Script Hataları
+## DUSUK Sorunlar
 
-### S-014: update-docs.cjs Hata İletişimi Kırpılmış
-| | |
-|---|---|
-| **Dosya** | `scripts/update-docs.cjs` |
-| **Satır** | 71-93 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
+### CICD-24: Root tsconfig Bos
+- **Dosya:** `tsconfig.json`
+- **Aciklama:** `"compilerOptions": {}` hicbir ise yaramiyor.
+- **Cozum:** Kaldirilmali veya anlamlı icerik eklenmeli.
 
-**Açıklama:** TypeScript kontrol hata mesajları 100 karaktere kırpılmış — faydalı tanı bilgileri kaybediliyor.
+### CICD-25: Website vercel.json Catch-All
+- **Dosya:** `website/vercel.json:9`
+- **Aciklama:** Tum route'lari 404'e yonlendiriyor.
+- **Cozum:** Kaldirilmali (WEB-01 ile ayni).
 
----
+### CICD-26: gl.bat Gereksiz
+- **Dosya:** `desktop/gl.bat`
+- **Aciklama:** Sadece `git log --oneline` komutu.
+- **Cozum:** Kaldirilmali veya .gitignore'a eklenmeli.
 
-### S-015: update-docs.cjs LOC Sayımında Yanlış Diziler
-| | |
-|---|---|
-| **Dosya** | `scripts/update-docs.cjs` |
-| **Satır** | 100-116 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
+### CICD-27: Root vercel.json Guvenlik Header Eksik
+- **Dosya:** `vercel.json`
+- **Aciklama:** Sadece Cache-Control header'i var.
+- **Cozum:** Website/vercel.json'daki header'lar eklenmeli.
 
-**Açıklama:** `countLinesInDir` yalnızca `dist` ve `release`'ı atlıyor — `.git`, `build`, `.expo`, `.cache` dizinlerini atlamıyor. LOC metrikleri şişirilebilir.
+### CICD-28: Root app.json Mobil Ile Ayni
+- **Dosya:** `app.json` vs `mobile/app.json`
+- **Aciklama:** Expo config tekrari.
+- **Cozum:** Root app.json kaldirilmali.
 
----
+### CICD-29: Discord Bot .env Ornegi Yok
+- **Dosya:** `scripts/discord-bot/index.js:12`
+- **Aciklama:** DISCORD_TOKEN gerekli ama .env.example yok.
+- **Cozum:** `.env.example` olusturulmali.
 
-### S-016: JSON Dosyaları Kod Olarak Sayılıyor
-| | |
-|---|---|
-| **Dosya** | `scripts/update-docs.cjs` |
-| **Satır** | 121 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
+### CICD-30: discord-bot package-lock.json CI'da Install Edilmiyor
+- **Dosya:** `scripts/discord-bot/package-lock.json`
+- **Aciklama:** extraResources olarak paketleniyor ama CI'da install edilmiyor.
+- **Cozum:** CI adimi eklenmeli.
 
-**Açıklama:** `mobileLoc` `.json` dosyalarını (`package.json`, `app.json`) kod olarak sayıyor — kaynak kodu değil.
+### CICD-31: assets-source AciKLAMASI YOK
+- **Dosya:** `desktop/assets-source/`, `assets-source/`
+- **Aciklama:** Amaclarina dair dokumantasyon yok.
+- **Cozum:** README eklenmeli.
 
----
+### CICD-32: bot-server.ts Hardcoded Versiyon
+- **Dosya:** `desktop/src/main/api/bot-server.ts:44, 115`
+- **Aciklama:** `version: '1.0.1'` sabit kodlanmis.
+- **Cozum:** `app.getVersion()` kullanilmali.
 
-### S-017: Atomik Olmayan Dosya Yazma
-| | |
-|---|---|
-| **Dosya** | `scripts/update-docs.cjs` |
-| **Satır** | 408 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
+### CICD-33: InnerTube hl/gl Hardcoded Turkce
+- **Dosya:** `desktop/src/main/api/innertube.ts:15-16`, `mobile/src/main/api/innertube.ts:19-20`
+- **Aciklama:** API her zaman Turkce sonuc dondurur.
+- **Cozum:** Kullanici tercihinden dinamik alinmali.
 
-**Açıklama:** `fs.writeFileSync(statusFilePath, md, 'utf8')` dosyayı tamamen overwrite ediyor. Script kesilirse dosya bozulabilir. Atomik yazma (temp dosyası, sonra rename) kullanılmalı.
+### CICD-34: 100+ Bos catch {} Blogu
+- **Dosya:** Cok sayida dosya
+- **Aciklama:** Hatalari sessizce yutuyor.
+- **Cozum:** Kritik yollarda en azindan console.warn.
 
----
+### CICD-35: duplicate mobile Script
+- **Dosya:** `package.json:12-16`
+- **Aciklama:** `mobile` ve `dev:mobile` ayni.
+- **Cozum:** Biri kaldirilmali.
 
-### S-018: Git Status Parsing Kırılgan
-| | |
-|---|---|
-| **Dosya** | `scripts/update-docs.cjs` |
-| **Satır** | 31-33 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
+### CICD-36: electron-builder mac.identity null
+- **Dosya:** `desktop/package.json:110`
+- **Aciklama:** Gatekeeper uyarisi verir.
+- **Cozum:** Dokumante edilmeli.
 
-**Açıklama:** `git status --porcelain` çıktısının ayrıştırılması tam olarak 2+ boşlukla ayrılmış parça bekliyor. Yeniden adlandırılmış dosyalar (ör. `R  old -> new`) `parts.slice(1).join(' ')` mantığını bozar.
+### CICD-37: 7zip-bin Tekrarli
+- **Dosya:** root `package.json:35`, `desktop/package.json:25`
+- **Aciklama:** Hem root devDependencies hem desktop dependencies'de.
+- **Cozum:** Root'dan kaldirilmali.
 
----
+### CICD-38: chrome-remote-interface Tur Tanimsiz
+- **Dosya:** `desktop/src/main/auth/music-auth.ts:8`
+- **Aciklama:** `@ts-ignore` ile import.
+- **Cozum:** `.d.ts` dosyasi olusturulmali.
 
-### S-019: Boş catch Blokları - Scripts
-| | |
-|---|---|
-| **Dosya** | `scripts/update-docs.cjs:112,455` |
-| **Satır** | 112, 455 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
+### CICD-39: discord-bot CI'da Test Edilmiyor
+- **Dosya:** CI workflow'lari
+- **Aciklama:** Bot kodu hic test edilmiyor.
+- **Cozum:** Test adimi eklenmeli.
 
-**Açıklama:** Dosya okuma ve hook yazma hataları sessizce yutuluyor.
-
----
-
-### S-020: PowerShell Scriptinde GDI Handle Sızıntısı
-| | |
-|---|---|
-| **Dosya** | `scripts/make-installer-bmps.ps1` |
-| **Satır** | 22-36, 43-92 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
-
-**Açıklama:** Bitmap nesneleri hata yoluyla temizlenmeden sızıyor. Adımlar arasında hata olursa GDI handle'ları serbest kalmaz. `try/catch/finally` ile `Dispose()` çağrılmalı.
-
----
-
-### S-021: PowerShell Scriptinde Hata Yönetimi Yok
-| | |
-|---|---|
-| **Dosya** | `scripts/make-installer-bmps.ps1` |
-| **Satır** | - |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
-
-**Açıklama:** Script boyunca `-ErrorAction Stop` veya `try/catch` yok. Tek bir başarısızlık diskte kısmi bitmap dosyaları bırakır.
-
----
-
-### S-022: Discord Bot - Boş catch Blokları
-| | |
-|---|---|
-| **Dosya** | `scripts/discord-bot/index.js` |
-| **Satır** | 43, 82 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
-
-**Açıklama:** Ağ hataları ve fetch hataları sessizce yutuluyor.
-
----
-
-### S-023: Discord Bot - rate Limit Riski
-| | |
-|---|---|
-| **Dosya** | `scripts/discord-bot/index.js` |
-| **Satır** | 135 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
-
-**Açıklama:** `message.guild.members.fetch({ force: true })` önbelleği atlıyor ve API çağrısı yapıyor. Çok sayıda kullanıcı tetiklerse Discord rate limit'ine çarpılabilir.
-
----
-
-### S-024: Discord Bot - platformName Hardcode
-| | |
-|---|---|
-| **Dosya** | `scripts/discord-bot/index.js` |
-| **Satır** | 242 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
-
-**Açıklama:** `platformName: 'Aquality Music'` hardcode edilmiş ama satır 171'de hesaplanan `platformName` değişkeni `'Spotify'` olabilir — tutarsız.
-
----
-
-### S-025: Discord Bot - Lyrics Butonu Yanıltıcı
-| | |
-|---|---|
-| **Dosya** | `scripts/discord-bot/index.js` |
-| **Satır** | 274-279 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
-
-**Açıklama:** `btn_lyrics` etkileşimi statik mesaj döndürüyor, gerçek sözler yok — yanıltıcı UX.
-
----
-
-### S-026: TUM-GUNCELLEMELER - Gerçekleştirlmemiş Komutlar
-| | |
-|---|---|
-| **Dosya** | `TUM-GUNCELLEMELER-VE-SURUM-NOTLARI.md` |
-| **Satır** | 172 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
-
-**Açıklama:** `.spo`, `.har`, `.harmonic` komutları listeleniyor ama bot kodunda (index.js:99) yalnızca `.aquamusic` ve `.a` ele alınıyor — bu komutlar gerçekleştirilmedi.
-
----
-
-### S-027: TUM-GUNCELLEMELER - Yerel Olarak Tutulur İddiası
-| | |
-|---|---|
-| **Dosya** | `TUM-GUNCELLEMELER-VE-SURUM-NOTLARI.md` |
-| **Satır** | 6 |
-| **Önem** | 🟡 ORTA |
-| **Durum** | Açık |
-
-**Açıklama:** "GitHub üzerinde yayınlanmaz, yerel olarak tutulur" deniyor ama dosya repo'ya commit edilmiş — çelişki.
-
----
-
-## 🔵 DÜŞÜK
-
-### S-028: Windows Workflow'da Gereksiz 7zip-bin Kurulumu
-| | |
-|---|---|
-| **Dosya** | `.github/workflows/build-windows.yml` |
-| **Satır** | 31 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
-
-**Açıklama:** `npm install 7zip-bin --no-save` — package.json'a kaydedilmeyen bağımlılık kuruluyor. Windows'ta electron-builder 7zip'i zaten paketliyor, gereksiz adım.
-
----
-
-### S-029: double-build Riski
-| | |
-|---|---|
-| **Dosya** | `.github/workflows/build-windows.yml` |
-| **Satır** | 37, 40 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
-
-**Açıklama:** `npm --workspace=desktop run build` ardından `npm run build:win` çalışıyor — electron-builder muhtemelen Vite build'ini de içeriyor, çift build olabilir.
-
----
-
-### S-030: Discord Bot - unhandledRejection Yok
-| | |
-|---|---|
-| **Dosya** | `scripts/discord-bot/index.js` |
-| **Satır** | - |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
-
-**Açıklama:** `process.on('unhandledRejection')` handler'ı yok — yakalanmamış promise reddetmeleri botu sessizce çökertebilir.
-
----
-
-### S-031: Discord Bot - coverUrl Yükleme Zaman Aşımı Yok
-| | |
-|---|---|
-| **Dosya** | `scripts/discord-bot/cardRenderer.js` |
-| **Satır** | 79 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
-
-**Açıklama:** `loadImage(coverUrl)` harici URL'den görsel yüklüyor — zaman aşımı yok. URL yavaşsa veya takılırsa kart render'ı süresiz askıda kalır.
-
----
-
-### S-032: Discord Bot - Font Platform Bağımlılığı
-| | |
-|---|---|
-| **Dosya** | `scripts/discord-bot/cardRenderer.js` |
-| **Satır** | 91 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
-
-**Açıklama:** `'bold 40px Segoe UI, Arial, sans-serif'` — `@napi-rs/canvas` Linux'ta `Segoe UI`'ya sahip olmayabilir. Font fallback çalışıyor ama görsel çıktı platforma bağlı.
-
----
-
-### S-033: README - Eksik Proje Yapısı
-| | |
-|---|---|
-| **Dosya** | `README.md` |
-| **Satır** | 56-74 |
-| **Önem** | 🔵 DÜŞÜK |
-| **Durum** | Açık |
-
-**Açıklama:** Proje yapısı listesi `website/gizlilik.html`, `website/kosullar.html`, `website/bot.html`, `website/404.html` dosyalarını içermiyor — güncel değil.
-
----
-
-## Özet Tablosu
-
-| # | Sorun | Önem | Dosya |
-|---|-------|------|-------|
-| S-001 | Release her push'ta | 🔴 KRİTİK | build-windows.yml:54 |
-| S-002 | macOS symlink hack | 🔴 KRİTİK | build-mac.yml:31-40 |
-| S-003 | Token çevre değişkeni | 🔴 KRİTİK | discord-bot/index.js:15 |
-| S-004 | Bot API auth yok | 🔴 KRİTİK | discord-bot/index.js:37 |
-| S-005 | Git hook zorla yazma | 🔴 KRİTİK | update-docs.cjs:446-457 |
-| S-006 | Sessiz başarısızlık | 🟠 YÜKSEK | her iki workflow |
-| S-007 | Auto-update dosya eksik | 🟠 YÜKSEK | her iki workflow |
-| S-008 | npm ci yok | 🟠 YÜKSEK | her iki workflow |
-| S-009 | macOS PR tetikleme eksik | 🟠 YÜKSEK | build-mac.yml |
-| S-010 | Kırık rounded rect | 🟠 YÜKSEK | cardRenderer.js:15 |
-| S-011 | README sürüm eski | 🟠 YÜKSEK | README.md:1 |
-| S-012 | TUM-GUNCELEMELER tutarsız | 🟠 YÜKSEK | TUM-GUNCELLEMELER:3 |
-| S-013 | PROJE-DURUM tutarsız | 🟠 YÜKSEK | PROJE-DURUM.md:18 |
-| S-014 | Hata mesajları kırpılmış | 🟡 ORTA | update-docs.cjs:71-93 |
-| S-015 | LOC sayımında yanlış diziler | 🟡 ORTA | update-docs.cjs:100-116 |
-| S-016 | JSON kod sayılıyor | 🟡 ORTA | update-docs.cjs:121 |
-| S-017 | Atomik yazma yok | 🟡 ORTA | update-docs.cjs:408 |
-| S-018 | Git status parsing | 🟡 ORTA | update-docs.cjs:31-33 |
-| S-019 | Boş catch blokları | 🟡 ORTA | update-docs.cjs:112,455 |
-| S-020 | GDI handle sızıntısı | 🟡 ORTA | make-installer-bmps.ps1 |
-| S-021 | PowerShell hata yönetimi | 🟡 ORTA | make-installer-bmps.ps1 |
-| S-022 | Bot boş catch | 🟡 ORTA | discord-bot/index.js:43 |
-| S-023 | Bot rate limit riski | 🟡 ORTA | discord-bot/index.js:135 |
-| S-024 | Bot platformName hardcode | 🟡 ORTA | discord-bot/index.js:242 |
-| S-025 | Bot lyrics yanıltıcı | 🟡 ORTA | discord-bot/index.js:274 |
-| S-026 | Gerçekleştirilmemiş komutlar | 🟡 ORTA | TUM-GUNCELLEMELER:172 |
-| S-027 | Yerel tutma çelişkisi | 🟡 ORTA | TUM-GUNCELLEMELER:6 |
-| S-028 | Gereksiz 7zip-bin | 🔵 DÜŞÜK | build-windows.yml:31 |
-| S-029 | Çift build riski | 🔵 DÜŞÜK | build-windows.yml:37 |
-| S-030 | unhandledRejection yok | 🔵 DÜŞÜK | discord-bot/index.js |
-| S-031 | coverUrl zaman aşımı yok | 🔵 DÜŞÜK | cardRenderer.js:79 |
-| S-032 | Font platform bağımlılığı | 🔵 DÜŞÜK | cardRenderer.js:91 |
-| S-033 | Eksik proje yapısı | 🔵 DÜŞÜK | README.md:56-74 |
+### CICD-40: desktop/gl.bat Gereksiz
+- **Dosya:** `desktop/gl.bat`
+- **Aciklama:** Tek satirlik git alias.
+- **Cozum:** Kaldirilmali.

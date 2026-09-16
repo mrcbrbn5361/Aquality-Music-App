@@ -4,6 +4,8 @@ import * as http from 'http';
 import { URL } from 'url';
 import Store from 'electron-store';
 import { DISCORD_APP_ID } from '../utils/discord';
+import { base64url } from '../utils/crypto-util';
+import { decryptJSON, encryptJSON } from '../utils/secure-store';
 
 export interface DiscordUser {
   id: string;
@@ -22,7 +24,8 @@ interface DiscordTokens {
 }
 
 interface DiscordStore {
-  discordTokens: DiscordTokens | null;
+  // Şifreli (string) veya eski düz metin (DiscordTokens) formatında olabilir
+  discordTokens: DiscordTokens | string | null;
   discordUser: DiscordUser | null;
 }
 
@@ -37,10 +40,6 @@ const DISCORD_USER_URL = 'https://discord.com/api/users/@me';
 const DISCORD_SCOPES = ['identify', 'email'];
 const OAUTH_PORT = 65432;
 const REDIRECT_URI = `http://127.0.0.1:${OAUTH_PORT}/callback`;
-
-function base64url(buf: Buffer): string {
-  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
 
 function avatarUrl(id: string, avatar: string | null): string {
   if (!avatar) return '';
@@ -77,6 +76,19 @@ export class DiscordOAuth {
 
   getDiscordUser(): DiscordUser | null {
     return this.store.get('discordUser');
+  }
+
+  /** Şifreli saklanan token'ları okur (eski düz metin kayıtlarla uyumlu). */
+  getDiscordTokens(): DiscordTokens | null {
+    try {
+      const raw = this.store.get('discordTokens');
+      if (!raw) return null;
+      if (typeof raw !== 'string') return raw;
+      return decryptJSON<DiscordTokens>(raw);
+    } catch (e) {
+      console.warn('[Discord OAuth] Token okunamadı:', e);
+      return null;
+    }
   }
 
   isDiscordAuthenticated(): boolean {
@@ -151,7 +163,8 @@ export class DiscordOAuth {
             expires_at: Date.now() + ((tokenData.expires_in || 3600) * 1000),
             token_type: tokenData.token_type || 'Bearer'
           };
-          this.store.set('discordTokens', tokens);
+          // Token'lar OS anahtarlığı ile şifreli saklanır
+          this.store.set('discordTokens', encryptJSON(tokens));
 
           const userRes = await fetch(DISCORD_USER_URL, {
             headers: { Authorization: `Bearer ${tokens.access_token}` }

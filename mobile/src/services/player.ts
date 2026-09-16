@@ -1,4 +1,4 @@
-import { createAudioPlayer, setAudioModeAsync, AudioPlayer, AudioStatus } from 'expo-audio';
+import { setAudioModeAsync } from 'expo-audio';
 import { Song } from '../types';
 import { mobileApi } from '../api/innertube';
 import { playerStore } from '../store/player-store';
@@ -12,7 +12,6 @@ export interface BridgeInterface {
 }
 
 class MobilePlayerService {
-  private player: AudioPlayer | null = null;
   private bridge: BridgeInterface | null = null;
   private pendingSongId: string | null = null;
   private isConfigured = false;
@@ -71,8 +70,6 @@ class MobilePlayerService {
   async pause(): Promise<void> {
     if (this.bridge) {
       this.bridge.pause();
-    } else if (this.player) {
-      this.player.pause();
     }
     playerStore.setPlaying(false);
   }
@@ -80,8 +77,6 @@ class MobilePlayerService {
   async resume(): Promise<void> {
     if (this.bridge) {
       this.bridge.resume();
-    } else if (this.player) {
-      this.player.play();
     }
     playerStore.setPlaying(true);
   }
@@ -95,51 +90,60 @@ class MobilePlayerService {
   }
 
   async seek(seconds: number): Promise<void> {
+    const safeSeconds = Number.isFinite(seconds) && seconds >= 0 ? seconds : 0;
     if (this.bridge) {
-      this.bridge.seek(seconds);
-    } else if (this.player) {
-      await this.player.seekTo(seconds);
+      this.bridge.seek(safeSeconds);
     }
-    playerStore.setProgress(seconds, playerStore.getState().duration);
+    playerStore.setProgress(safeSeconds, playerStore.getState().duration);
   }
 
   async setVolume(vol: number): Promise<void> {
+    const safeVol = Number.isFinite(vol) ? Math.min(100, Math.max(0, vol)) : 80;
     if (this.bridge) {
-      this.bridge.setVolume(vol);
-    } else if (this.player) {
-      this.player.volume = Math.max(0, Math.min(1, vol / 100));
+      this.bridge.setVolume(safeVol);
     }
+    playerStore.setVolume(safeVol);
   }
 
-  private onPlaybackStatusUpdate = (status: AudioStatus) => {
-    if (!status.isLoaded) return;
-
-    playerStore.setProgress(status.currentTime || 0, status.duration || 0);
-    playerStore.setPlaying(status.playing);
-
-    // Parça bittiğinde otomatik sonraki parçaya geç
-    if (status.didJustFinish) {
-      this.playNext();
-    }
-  };
-
   playNext(): void {
-    const nextSong = playerStore.getNextSong();
-    if (nextSong && nextSong.id !== playerStore.getState().currentSong?.id) {
-      this.play(nextSong);
-    } else {
-      // Kuyruk bittiğinde veya tek şarkı çalıyorsa benzer parçaları çek ve devam et
-      const current = playerStore.getState().currentSong;
-      if (current) {
-        mobileApi.getNext(current.id).then((similar) => {
-          if (similar && similar.length > 0) {
-            similar.forEach((s) => playerStore.addToQueue(s));
-            const next = playerStore.getNextSong();
-            if (next) this.play(next);
-          }
-        }).catch(() => {});
-      }
+    const state = playerStore.getState();
+    // Tekrar (bir): aynı parçayı baştan çal
+    if (state.repeat === 'one' && state.currentSong) {
+      this.play(state.currentSong);
+      return;
     }
+    const currentId = state.currentSong?.id;
+    const nextSong = playerStore.getNextSong();
+    if (nextSong && nextSong.id !== currentId) {
+      this.play(nextSong);
+      return;
+    }
+    // Kuyruk bitti: otomatik çalma açıksa benzer parçalarla devam et
+    const current = playerStore.getState().currentSong;
+    if (!current) {
+      playerStore.setPlaying(false);
+      return;
+    }
+    if (!playerStore.getState().autoPlay) {
+      playerStore.setPlaying(false);
+      return;
+    }
+    mobileApi.getNext(current.id).then((similar) => {
+      if (similar && similar.length > 0) {
+        similar.forEach((s) => playerStore.addToQueue(s));
+        const next = playerStore.getNextSong();
+        if (next) {
+          this.play(next);
+        } else {
+          playerStore.setPlaying(false);
+        }
+      } else {
+        playerStore.setPlaying(false);
+      }
+    }).catch((e) => {
+      console.warn('[MobilePlayer] Benzer parça alınamadı:', e);
+      playerStore.setPlaying(false);
+    });
   }
 
   playPrevious(): void {

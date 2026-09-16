@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { usePlayer, usePlayerProgress, playerStore } from '../store/player-store';
+import { usePlayerSelector, usePlayerProgress, playerStore } from '../store/player-store';
 import { mobilePlayer } from '../services/player';
 import { Equalizer } from './Equalizer';
+import { Song } from '../types';
 
 export interface MiniPlayerProps {
   onOpenPlayer?: () => void;
@@ -12,63 +13,92 @@ export interface MiniPlayerProps {
 
 export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onOpenPlayer }) => {
   const router = useRouter();
-  const { currentSong, playing, likedIds } = usePlayer();
+  // Yalnızca gerekli dilimlere abone ol — kuyruk/zaman değişimleri
+  // bu bileşeni gereksiz yere yeniden çizmesin.
+  const currentSong = usePlayerSelector((s) => s.currentSong);
+  const playing = usePlayerSelector((s) => s.playing);
+  const likedIds = usePlayerSelector((s) => s.likedIds);
   const { currentTime, duration } = usePlayerProgress();
 
-  if (!currentSong) return null;
-
-  const isLiked = likedIds.includes(currentSong.id);
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
-
-  const openFullPlayer = () => {
+  const openFullPlayer = useCallback(() => {
     playerStore.setPlayerModalOpen(true);
     if (onOpenPlayer) {
       onOpenPlayer();
       return;
     }
-    if (router && typeof router.push === 'function') {
-      try {
-        router.push('/modal/player');
-      } catch (e) {}
+    try {
+      router.push('/modal/player');
+    } catch (e) {
+      console.warn('[MiniPlayer] Oyuncu ekranı açılamadı:', e);
     }
-  };
+  }, [onOpenPlayer, router]);
+
+  const handleToggleLike = useCallback(() => {
+    if (currentSong) playerStore.toggleLike(currentSong);
+  }, [currentSong]);
+
+  const handleTogglePlay = useCallback(() => {
+    mobilePlayer.togglePlay().catch((e) => {
+      console.warn('[MiniPlayer] Oynat/duraklat hatası:', e);
+    });
+  }, []);
+
+  const handleNext = useCallback(() => {
+    try {
+      mobilePlayer.playNext();
+    } catch (e) {
+      console.warn('[MiniPlayer] Sonraki parça hatası:', e);
+    }
+  }, []);
+
+  if (!currentSong) return null;
+
+  const song: Song = currentSong;
+  const isLiked = likedIds.includes(song.id);
+  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <TouchableOpacity
-      style={styles.container}
-      activeOpacity={0.92}
-      onPress={openFullPlayer}
-    >
+    // NOT: İç içe Touchable kullanılmıyor — aksi halde iç butona
+    // dokunmak dış kapsayıcıyı da tetikler (olay kabarcıklanması).
+    <View style={styles.container}>
       {/* Üst Kısım: Neon İlerleme Çizgisi */}
       <View style={styles.progressBackground}>
         <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
       </View>
 
       <View style={styles.mainRow}>
-        <Image
-          source={{
-            uri:
-              currentSong.thumbnail ||
-              'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=120'
-          }}
-          style={styles.thumbnail}
-        />
+        <TouchableOpacity
+          style={styles.openArea}
+          activeOpacity={0.92}
+          onPress={openFullPlayer}
+          accessibilityRole="button"
+          accessibilityLabel="Tam ekran oynatıcıyı aç"
+        >
+          <Image
+            source={{
+              uri:
+                song.thumbnail ||
+                'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=120'
+            }}
+            style={styles.thumbnail}
+          />
 
-        <View style={styles.textWrap}>
-          <Text style={styles.title} numberOfLines={1}>
-            {currentSong.title}
-          </Text>
-          <View style={styles.artistRow}>
-            <Text style={styles.artist} numberOfLines={1}>
-              {currentSong.artist}
+          <View style={styles.textWrap}>
+            <Text style={styles.title} numberOfLines={1}>
+              {song.title}
             </Text>
-            {currentSong.isVideo && (
-              <View style={styles.clipBadge}>
-                <Text style={styles.clipText}>KLİP</Text>
-              </View>
-            )}
+            <View style={styles.artistRow}>
+              <Text style={styles.artist} numberOfLines={1}>
+                {song.artist}
+              </Text>
+              {song.isVideo && (
+                <View style={styles.clipBadge}>
+                  <Text style={styles.clipText}>KLİP</Text>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.controls}>
           <View style={styles.eqBox}>
@@ -77,11 +107,10 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onOpenPlayer }) => {
 
           <TouchableOpacity
             style={styles.iconBtn}
-            onPress={(e) => {
-              e.stopPropagation();
-              playerStore.toggleLike(currentSong.id);
-            }}
+            onPress={handleToggleLike}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel={isLiked ? 'Beğenmekten vazgeç' : 'Beğen'}
           >
             <Ionicons
               name={isLiked ? 'heart' : 'heart-outline'}
@@ -92,11 +121,10 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onOpenPlayer }) => {
 
           <TouchableOpacity
             style={[styles.iconBtn, styles.playBtn]}
-            onPress={(e) => {
-              e.stopPropagation();
-              mobilePlayer.togglePlay();
-            }}
+            onPress={handleTogglePlay}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel={playing ? 'Duraklat' : 'Oynat'}
           >
             <Ionicons
               name={playing ? 'pause' : 'play'}
@@ -107,17 +135,16 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onOpenPlayer }) => {
 
           <TouchableOpacity
             style={styles.iconBtn}
-            onPress={(e) => {
-              e.stopPropagation();
-              mobilePlayer.playNext();
-            }}
+            onPress={handleNext}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel="Sonraki parça"
           >
             <Ionicons name="play-skip-forward" size={18} color="#94a3b8" />
           </TouchableOpacity>
         </View>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 };
 
@@ -150,6 +177,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 7
+  },
+  openArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center'
   },
   thumbnail: {
     width: 42,

@@ -6,28 +6,45 @@
   <meta name="description" content="Aquality Music özellikleri - Reklamsız müzik, arka plan oynatma, şarkı sözleri ve daha fazlası.">
   <title>Özellikler - Aquality Music</title>
   <link rel="icon" type="image/png" href="./assets/favicon.png">
+  <link rel="icon" type="image/x-icon" href="./assets/favicon.ico">
+  <link rel="canonical" href="https://aqualitymusic.vercel.app/ozellikler">
+  <meta name="theme-color" content="#121212">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Aquality Music">
+  <meta property="og:title" content="Özellikler - Aquality Music">
+  <meta property="og:description" content="Aquality Music özellikleri - Reklamsız müzik, arka plan oynatma, şarkı sözleri ve daha fazlası.">
+  <meta property="og:url" content="https://aqualitymusic.vercel.app/ozellikler">
+  <meta property="og:image" content="https://aqualitymusic.vercel.app/assets/og-image.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Özellikler - Aquality Music">
+  <meta name="twitter:description" content="Aquality Music özellikleri - Reklamsız müzik, arka plan oynatma, şarkı sözleri ve daha fazlası.">
+  <meta name="twitter:image" content="https://aqualitymusic.vercel.app/assets/og-image.png">
   <link rel="stylesheet" href="./css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-  <nav class="navbar">
+  <a href="#main-content" class="skip-link">İçeriğe atla</a>
+  <nav class="navbar" aria-label="Ana menü">
     <div class="container">
-      <a href="index.html" class="logo"><div class="logo-icon">A</div><span>Aquality Music</span></a>
-      <div class="nav-links">
+      <a href="index.html" class="logo"><div class="logo-icon" aria-hidden="true">A</div><span>Aquality Music</span></a>
+      <div class="nav-links" id="siteNavLinks">
         <a href="ozellikler.html" class="active">Özellikler</a>
         <a href="bot.html">Discord Bot</a>
         <a href="indir.html">İndir</a>
         <a href="sss.html">SSS</a>
       </div>
       <div class="nav-actions"><a href="indir.html" class="btn btn-primary">İndir</a></div>
-      <button class="mobile-menu-btn" id="mobileMenuBtn">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Menüyü aç" aria-expanded="false" aria-controls="siteNavLinks">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
     </div>
   </nav>
 
+  <main id="main-content">
   <section class="page-hero">
     <div class="container">
       <div class="hero-badge" style="margin-bottom: 14px;">v1.0.1 - Masaüstü, Mobil & Discord</div>
@@ -131,11 +148,12 @@
     </div>
   </section>
 
+  </main>
   <footer class="footer">
     <div class="container">
       <div class="footer-content">
         <div class="footer-brand">
-          <div class="logo"><div class="logo-icon">A</div><span>Aquality Music</span></div>
+          <div class="logo"><div class="logo-icon" aria-hidden="true">A</div><span>Aquality Music</span></div>
           <p>Windows, macOS ve Mobil için premium müzik deneyimi.</p>
         </div>
         <div class="footer-links">
@@ -148,13 +166,12 @@
           <div class="footer-column">
             <h4>Kaynaklar</h4>
             <a href="bot.html#api-endpoints">REST API</a>
-            <a href="sss.html">SSS</a>
-            <a href="sss.html">Destek</a>
+            <a href="sss.html">SSS ve Destek</a>
           </div>
           <div class="footer-column">
             <h4>Topluluk</h4>
-            <a href="https://github.com/mrcbrbn5361/Aquality-Music-App" target="_blank" rel="noopener">GitHub</a>
-            <a href="https://discord.gg/aquality" target="_blank" rel="noopener">Discord</a>
+            <a href="https://github.com/mrcbrbn5361/Aquality-Music-App" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <a href="https://discord.gg/aquality" target="_blank" rel="noopener noreferrer">Discord</a>
           </div>
         </div>
       </div>

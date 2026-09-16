@@ -1,5 +1,6 @@
 import { session } from 'electron';
 import { MUSIC_PARTITION } from '../auth/music-auth';
+import { logDebug } from '../utils/log';
 
 const BASE_URL = 'https://music.youtube.com/youtubei/v1';
 
@@ -200,7 +201,7 @@ export class YouTubeAPI {
     // DEBUG: parseSong alanlarını logla
     const fixedLen = r.fixedColumns?.length || 0;
     const flexLen = r.flexColumns?.length || 0;
-    console.log(`[parseSong] "${title}" | artist="${artist}" | album="${album}" | fixedCols=${fixedLen} | flexCols=${flexLen} | dur=${duration}`);
+    logDebug(`[parseSong] "${title}" | artist="${artist}" | album="${album}" | fixedCols=${fixedLen} | flexCols=${flexLen} | dur=${duration}`);
 
     // fixedColumns veya flexColumns'dan süre oku
     if (r.fixedColumns?.length) {
@@ -245,7 +246,7 @@ export class YouTubeAPI {
       }
     }
 
-    console.log(`[parseSong] FINAL: "${title}" dur=${duration}`);
+    logDebug(`[parseSong] FINAL: "${title}" dur=${duration}`);
     return {
       id: videoId,
       title,
@@ -505,13 +506,13 @@ export class YouTubeAPI {
         contentCheckOk: true, 
         racyCheckOk: true 
       }, 'https://www.youtube.com/youtubei/v1');
-      console.log('[YT Player] Using www.youtube.com, status:', d?.playabilityStatus?.status);
+      logDebug('[YT Player] Using www.youtube.com, status:', d?.playabilityStatus?.status);
     } catch (err) {
       console.error('[YT Player] www.youtube.com failed, trying music.youtube.com:', err);
       try {
         // Fallback: music.youtube.com player API
         d = await this.request('player', { videoId, contentCheckOk: true, racyCheckOk: true });
-        console.log('[YT Player] Using music.youtube.com, status:', d?.playabilityStatus?.status);
+        logDebug('[YT Player] Using music.youtube.com, status:', d?.playabilityStatus?.status);
       } catch (err2) {
         console.error('[YT Player] All player attempts failed:', err2);
         return null;
@@ -593,7 +594,7 @@ export class YouTubeAPI {
       }
     }
 
-    console.log('[YT Home] items:', items.length);
+    logDebug('[YT Home] items:', items.length);
     return { items };
   }
 
@@ -662,7 +663,7 @@ export class YouTubeAPI {
       if (typeof mf === 'string' && mf) title = mf;
     }
 
-    console.log('[YT Browse]', browseId, 'items:', items.length, 'title:', title);
+    logDebug('[YT Browse]', browseId, 'items:', items.length, 'title:', title);
     return { title, items };
   }
 

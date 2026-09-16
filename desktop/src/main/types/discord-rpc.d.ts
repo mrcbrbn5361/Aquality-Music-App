@@ -1,4 +1,5 @@
 declare module 'discord-rpc' {
+  import { EventEmitter } from 'events';
   export class Client extends EventEmitter {
     constructor(options: { transport: string });
     login(options: { clientId: string }): Promise<void>;

@@ -63,15 +63,34 @@
   const songCache = new Map<string, Song>();
 
   // ── API Bridge ─────────────────────────────
-  const api = (window as any).api;
+  interface ElectronAPIBridge {
+    debugLog: (msg: string) => void;
+    [namespace: string]: any;
+  }
+  const api = (window as unknown as { api?: ElectronAPIBridge }).api as ElectronAPIBridge;
 
-  // Logları ana sürece gönder (stdout'tan izlenebilir)
+  // Üretimde IPC log trafiği olmasın diye hata ayıklama bayrağı
+  // (?debug=1 ile veya AQUALITY_DEBUG=1 localStorage anahtarıyla açılır)
+  const DEBUG: boolean = (() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('debug')) return true;
+      return window.localStorage.getItem('AQUALITY_DEBUG') === '1';
+    } catch {
+      return false;
+    }
+  })();
+
+  // Logları ana sürece gönder (yalnızca hata ayıklama modunda — stdout'tan izlenebilir)
   function dlog(...args: any[]) {
+    if (!DEBUG) return;
     const line = args.map((a) => {
       try { return typeof a === 'string' ? a : JSON.stringify(a); } catch { return String(a); }
     }).join(' ');
     console.log('[Aquality Music]', line);
-    try { api.debugLog(line); } catch {}
+    try { api.debugLog(line); } catch (e) {
+      console.warn('[Aquality Music] debugLog IPC hatası:', e);
+    }
   }
 
   async function ytSearch(query: string, filter?: string) {
@@ -118,9 +137,28 @@
   // ── Helpers ────────────────────────────────
   const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
   const $$ = (sel: string) => document.querySelectorAll(sel);
+  /** Null-dönüşlü sorgu — eksik elementte tüm init çökmesin diye. */
+  const $opt = (sel: string): HTMLElement | null => document.querySelector(sel) as HTMLElement | null;
+  /** Eksik elementi sessizce atlayan güvenli tıklama bağlayıcı. */
+  function onClick(sel: string, fn: (e: MouseEvent) => void): boolean {
+    const el = $opt(sel);
+    if (!el) {
+      dlog(`[init] Element bulunamadı, dinleyici atlandı: ${sel}`);
+      return false;
+    }
+    el.addEventListener('click', fn as EventListener);
+    return true;
+  }
 
   function escapeHtml(str: string): string {
+    if (typeof str !== 'string' || !str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  /** CSS url("...") bağlamı için kaçış — url() dışına çıkışı engeller. */
+  function escapeCssUrl(url: string): string {
+    if (typeof url !== 'string' || !url) return '';
+    return url.replace(/["'()\\\n\r\t\f\v]/g, (ch) => `\\${ch}`);
   }
 
   function formatTime(sec: number, placeholder = ''): string {
@@ -155,7 +193,7 @@
     const title = item.title || item.name || '';
     const sub = item.artist || item.subtitle || '';
     return `
-      <div class="card" data-browse="${escapeHtml(item.browseId)}">
+      <div class="card" data-browse="${escapeHtml(item.browseId)}" role="button" tabindex="0" aria-label="${escapeHtml(title)} aç">
         <div class="card-thumb-wrap">
           <img class="card-thumb" src="${escapeHtml(item.thumbnail)}" alt="" loading="lazy" onerror="this.style.background='var(--c-bg-3)'">
           <button class="card-play-btn" title="Oynat" data-browse="${escapeHtml(item.browseId)}">
@@ -170,10 +208,20 @@
   function attachCardEvents(container: HTMLElement, backTarget: 'home' | 'library'): void {
     // Kartın gövdesine tıklama -> listeyi aç
     container.querySelectorAll('.card[data-browse]').forEach((card) => {
-      card.addEventListener('click', (e) => {
-        if ((e.target as HTMLElement).closest('.card-play-btn')) return;
+      const open = () => {
         const browseId = (card as HTMLElement).dataset.browse;
         if (browseId) openBrowseCard(container, browseId, backTarget);
+      };
+      card.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('.card-play-btn')) return;
+        open();
+      });
+      // Klavye: Enter/Space ile aç
+      (card as HTMLElement).addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          open();
+        }
       });
     });
     // Yeşil Oynat butonuna tıklama -> doğrudan ilk şarkıyı çal
@@ -257,7 +305,9 @@
           duration: s.duration || 0, artistId: s.artistId || ''
         })));
         api.store.set('queueIndex', state.queueIndex);
-      } catch {}
+      } catch (e) {
+        dlog('Kuyruk kaydedilemedi:', e);
+      }
     }, 300);
   }
 
@@ -274,7 +324,9 @@
         $$(selector).forEach((r) => {
           r.classList.add('playing');
         });
-      } catch {}
+      } catch (e) {
+        dlog('Satır vurgulanamadı:', e);
+      }
     }
   }
 
@@ -288,7 +340,9 @@
       const savedIdx: number = await api.store.get('queueIndex');
       state.queueIndex = (typeof savedIdx === 'number' && savedIdx >= 0 && savedIdx < state.queue.length)
         ? savedIdx : -1;
-    } catch {}
+    } catch (e) {
+      dlog('Kuyruk geri yüklenemedi:', e);
+    }
   }
 
   function addToQueue(song: Song): void {
@@ -387,7 +441,7 @@
         if (userAvatar) {
           if (state.user.picture) {
             const hiRes = state.user.picture.replace(/=s\d+/, '=s200').replace(/=w\d+.*/, '=s200-c-k-c0x00ffffff-no-rj');
-            userAvatar.style.backgroundImage = `url("${hiRes}")`;
+            userAvatar.style.backgroundImage = `url("${escapeCssUrl(hiRes)}")`;
             userAvatar.style.backgroundSize = 'cover';
             userAvatar.style.backgroundPosition = 'center';
             userAvatar.style.backgroundColor = 'transparent';
@@ -464,7 +518,18 @@
     `;
     document.body.appendChild(modal);
 
-    const close = () => modal.remove();
+    const close = () => {
+      document.removeEventListener('keydown', onKeyDown);
+      modal.remove();
+    };
+    // Escape ile kapatma + arka plana tıklayınca kapatma (erişilebilirlik)
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    modal.addEventListener('mousedown', (e) => {
+      if (e.target === modal) close();
+    });
     modal.querySelector('#closeChromeImport')?.addEventListener('click', close);
     modal.querySelector('#cancelChromeImport')?.addEventListener('click', close);
 
@@ -486,15 +551,34 @@
   }
 
   // ── Toast Notification ─────────────────────
+  // Aynı mesajın tost duvarı oluşturmasını engellemek için son tost kaydı
+  let lastToastMessage = '';
+  let lastToastAt = 0;
+  const MAX_VISIBLE_TOASTS = 4;
+
   function showToast(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') {
+    // Art arda aynı hata mesajı 1.5sn içinde tekrar ederse yoksay (tost duvarı)
+    const now = Date.now();
+    if (message === lastToastMessage && now - lastToastAt < 1500) return;
+    lastToastMessage = message;
+    lastToastAt = now;
+
+    // En fazla N tost görünür — eskiler kaldırılır, oyuncu kapanmaz
+    const visible = document.querySelectorAll('.toast.show');
+    if (visible.length >= MAX_VISIBLE_TOASTS) {
+      (visible[0] as HTMLElement).remove();
+    }
+
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
+    toast.setAttribute('role', 'status');
     const span = document.createElement('span');
     span.textContent = message;
     toast.appendChild(span);
     const closeBtn = document.createElement('button');
     closeBtn.className = 'toast-close';
     closeBtn.textContent = '\u00d7';
+    closeBtn.setAttribute('aria-label', 'Bildirimi kapat');
     toast.appendChild(closeBtn);
     document.body.appendChild(toast);
 
@@ -544,17 +628,31 @@
   let searchTimer: ReturnType<typeof setTimeout> | null = null;
   let lastSearchQuery = '';
 
+  /** Arama boş durum şablonu (çift bakım önlenir). */
+  function renderSearchEmpty(): string {
+    return `
+      <div class="empty-state">
+        <div class="empty-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+        <p class="empty-text">Müzik aramaya başlayın</p>
+        <p class="empty-hint-text">Sanatçı, şarkı veya albüm adı yazın</p>
+      </div>`;
+  }
+
   function setupSearch() {
-    const input = $('#searchInput') as HTMLInputElement;
-    const clear = $('#searchClear');
-    const dropdown = $('#suggestionsDropdown');
+    const input = $opt('#searchInput') as HTMLInputElement | null;
+    const clear = $opt('#searchClear');
+    const dropdown = $opt('#suggestionsDropdown');
+    if (!input || !clear || !dropdown) {
+      dlog('[init] Arama elementleri eksik, arama kurulumu atlandı');
+      return;
+    }
 
     input.addEventListener('input', () => {
       clear.classList.toggle('visible', input.value.length > 0);
       const query = input.value.trim();
 
-      // Anlık arama - 1 karakterden itibaren
-      if (query.length >= 1) {
+      // Anlık arama - tek karakterlik girdiler API'yi yormasın diye 2+ karakter
+      if (query.length >= 2) {
         if (searchTimer) clearTimeout(searchTimer);
         searchTimer = setTimeout(async () => {
           // Önce önerileri göster
@@ -586,12 +684,8 @@
         hide(dropdown);
         // Input temizlendiğinde sonuçları da temizle
         if (query.length === 0) {
-          $('#searchResults').innerHTML = `
-            <div class="empty-state">
-              <div class="empty-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
-              <p class="empty-text">Müzik aramaya başlayın</p>
-              <p class="empty-hint-text">Sanatçı, şarkı veya albüm adı yazın</p>
-            </div>`;
+          const resultsEl = $opt('#searchResults');
+          if (resultsEl) resultsEl.innerHTML = renderSearchEmpty();
           lastSearchQuery = '';
         }
       }
@@ -624,12 +718,8 @@
       input.value = '';
       clear.classList.remove('visible');
       lastSearchQuery = '';
-      $('#searchResults').innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
-          <p class="empty-text">Müzik aramaya başlayın</p>
-          <p class="empty-hint-text">Sanatçı, şarkı veya albüm adı yazın</p>
-        </div>`;
+      const resultsEl = $opt('#searchResults');
+      if (resultsEl) resultsEl.innerHTML = renderSearchEmpty();
       input.focus();
     });
 
@@ -637,7 +727,8 @@
       chip.addEventListener('click', () => {
         $$('.chip').forEach((c) => c.classList.remove('active'));
         chip.classList.add('active');
-        state.searchFilter = (chip as HTMLElement).dataset.filter as any || 'all';
+        const chipFilter = (chip as HTMLElement).dataset.filter;
+        state.searchFilter = (chipFilter === 'songs' || chipFilter === 'videos' || chipFilter === 'albums' || chipFilter === 'artists') ? chipFilter : 'all';
         lastSearchQuery = '';
         if (input.value) doSearch(input.value);
       });
@@ -792,17 +883,23 @@
 
   // ── Player (IPC tabanlı: ses gizli pencereden) ──
   function setupPlayer() {
-    $('#btnPlay').addEventListener('click', togglePlay);
-    $('#btnNext').addEventListener('click', nextSong);
-    $('#btnPrev').addEventListener('click', prevSong);
-    $('#btnShuffle').addEventListener('click', toggleShuffle);
-    $('#btnRepeat').addEventListener('click', toggleRepeat);
-    $('#btnLike').addEventListener('click', () => {
+    // Eksik element tüm arayüzü çökertmesin diye güvenli bağlayıcı kullanılır
+    onClick('#btnPlay', togglePlay);
+    onClick('#btnNext', nextSong);
+    onClick('#btnPrev', prevSong);
+    onClick('#btnShuffle', toggleShuffle);
+    onClick('#btnRepeat', toggleRepeat);
+    onClick('#btnLike', () => {
       if (state.currentSong) toggleLike(state.currentSong.id);
     });
 
     // Scrubber
-    const scrubber = $('#scrubber');
+    const scrubberOpt = $opt('#scrubber');
+    if (!scrubberOpt) {
+      dlog('[init] #scrubber bulunamadı, oynatıcı kontrolleri kısmi kuruldu');
+      return;
+    }
+    const scrubber: HTMLElement = scrubberOpt;
     let isDragging = false;
 
     function seekFromEvent(e: MouseEvent) {
@@ -818,10 +915,11 @@
     });
 
     // Hover tooltip: imleçteki zaman
-    const scrubTooltip = $('#scrubberTooltip');
+    const scrubTooltip = $opt('#scrubberTooltip');
     scrubber.addEventListener('mousemove', (e) => {
-      if (!state.duration) return;
+      if (!state.duration || !scrubTooltip) return;
       const rect = scrubber.getBoundingClientRect();
+      if (rect.width <= 0) return;
       const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
       scrubTooltip.textContent = formatTime(pct * state.duration, '0:00');
       scrubTooltip.style.left = `${pct * 100}%`;
@@ -833,12 +931,16 @@
       const onMove = (ev: MouseEvent) => {
         if (!isDragging || !state.duration) return;
         const rect = scrubber.getBoundingClientRect();
+        if (rect.width <= 0) return;
         const pct = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
         const t = pct * state.duration;
         // Update visual immediately during drag
-        $('#scrubberFill').style.width = `${pct * 100}%`;
-        $('#scrubberThumb').style.left = `${pct * 100}%`;
-        $('#timeNow').textContent = formatTime(t, '0:00');
+        const fillEl = $opt('#scrubberFill');
+        const thumbEl = $opt('#scrubberThumb');
+        const timeEl = $opt('#timeNow');
+        if (fillEl) fillEl.style.width = `${pct * 100}%`;
+        if (thumbEl) thumbEl.style.left = `${pct * 100}%`;
+        if (timeEl) timeEl.textContent = formatTime(t, '0:00');
       };
       const onUp = (ev: MouseEvent) => {
         isDragging = false;
@@ -855,49 +957,52 @@
     });
 
     // Volume
-    const volSlider = $('#volumeSlider') as HTMLInputElement;
+    const volSlider = $opt('#volumeSlider') as HTMLInputElement | null;
+    if (!volSlider) {
+      dlog('[init] #volumeSlider bulunamadı, ses kontrolleri atlandı');
+    }
     function updateVolumeSliderBg() {
+      if (!volSlider) return;
       volSlider.value = String(state.volume);
       volSlider.style.setProperty('--vol-pct', `${state.volume}%`);
-      const btnVol = $('#btnVolume');
+      const btnVol = $opt('#btnVolume');
       if (btnVol) {
-        if (state.volume === 0) {
-          btnVol.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
-        } else if (state.volume < 50) {
-          btnVol.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
-        } else {
-          btnVol.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
-        }
+        btnVol.innerHTML = volumeIconSvg(state.volume);
       }
     }
     updateVolumeSliderBg();
-    volSlider.addEventListener('input', () => {
+    volSlider?.addEventListener('input', () => {
+      if (!volSlider) return;
       state.volume = parseInt(volSlider.value) || 0;
       if (state.volume > 0) state.lastVolume = state.volume;
       updateVolumeSliderBg();
-      api.player.setVolume(state.volume / 100).catch(() => {});
+      api.player.setVolume(state.volume / 100).catch((e: unknown) => dlog('Ses ayarlanamadı:', e));
       api.store.set('volume', state.volume);
     });
     // Volume button: mute toggle
-    $('#btnVolume').addEventListener('click', () => {
+    onClick('#btnVolume', () => {
+      if (!volSlider) return;
       if (state.volume > 0) {
         state.lastVolume = state.volume;
         state.volume = 0;
+        showToast('Ses kapatıldı', 'info');
       } else {
         state.volume = state.lastVolume || 80;
       }
       volSlider.value = String(state.volume);
       updateVolumeSliderBg();
-      api.player.setVolume(state.volume / 100).catch(() => {});
+      api.player.setVolume(state.volume / 100).catch((e: unknown) => dlog('Ses ayarlanamadı:', e));
       api.store.set('volume', state.volume);
     });
     // Volume çift-tık → %50
-    volSlider.addEventListener('dblclick', () => {
+    volSlider?.addEventListener('dblclick', () => {
+      if (!volSlider) return;
       state.volume = 50;
       state.lastVolume = 50;
       volSlider.value = '50';
       updateVolumeSliderBg();
-      api.player.setVolume(0.5).catch(() => {});
+      showToast('Ses %50 olarak ayarlandı', 'info');
+      api.player.setVolume(0.5).catch((e: unknown) => dlog('Ses ayarlanamadı:', e));
       api.store.set('volume', 50);
     });
     // state.volume 0-100 aralığında olmalı; initial setVolume
@@ -911,10 +1016,14 @@
         _endedFor = '';
         _endStallCount = 0;
         _mismatchCount = 0;
-        setTimeout(() => { if (u.isAd) showAdSkipButton(); }, 3000);
+        scheduleAdSkipButton();
         return;
       }
-      try { hideAdSkipButton(); } catch {}
+      try {
+        hideAdSkipButton();
+      } catch (e) {
+        dlog('Reklam butonu gizlenemedi:', e);
+      }
 
       // Reklam bittikten sonraki 4 saniye boyunca geçiş/bitiş koruması
       const isJustAfterAd = Date.now() - _lastAdSeenAt < 4000;
@@ -961,7 +1070,7 @@
 
         $('#playerTitle').textContent = newSong.title;
         $('#playerArtist').textContent = newSong.artist;
-        if (newSong.thumbnail) $('#playerThumb').style.backgroundImage = `url("${newSong.thumbnail.replace(/"/g, '\\"')}")`;
+        if (newSong.thumbnail) $('#playerThumb').style.backgroundImage = `url("${escapeCssUrl(newSong.thumbnail)}")`;
 
         if (state.duration > 0) {
           const pct = Math.min(100, Math.max(0, (state.currentTime / state.duration) * 100));
@@ -1032,7 +1141,7 @@
 
         $('#playerTitle').textContent = newSong.title;
         $('#playerArtist').textContent = newSong.artist;
-        if (newSong.thumbnail) $('#playerThumb').style.backgroundImage = `url("${newSong.thumbnail.replace(/"/g, '\\"')}")`;
+        if (newSong.thumbnail) $('#playerThumb').style.backgroundImage = `url("${escapeCssUrl(newSong.thumbnail)}")`;
         if (state.duration > 0) {
           const pct = Math.min(100, Math.max(0, (state.currentTime / state.duration) * 100));
           $('#scrubberFill').style.width = `${pct}%`;
@@ -1082,7 +1191,7 @@
         if (state.currentSong) state.currentSong.artist = u.artist;
       }
       if (u.thumbnail) {
-        $('#playerThumb').style.backgroundImage = `url("${u.thumbnail.replace(/"/g, '\\"')}")`;
+        $('#playerThumb').style.backgroundImage = `url("${escapeCssUrl(u.thumbnail)}")`;
         if (state.currentSong) state.currentSong.thumbnail = u.thumbnail;
       }
 
@@ -1093,13 +1202,20 @@
 
       if (state.duration > 0) {
         const pct = Math.min(100, Math.max(0, (state.currentTime / state.duration) * 100));
-        $('#scrubberFill').style.width = `${pct}%`;
-        $('#scrubberThumb').style.left = `${pct}%`;
-        $('#timeNow').textContent = formatTime(state.currentTime, '0:00');
-        $('#timeEnd').textContent = formatTime(state.duration, '0:00');
+        const scrubFill = $opt('#scrubberFill');
+        const scrubThumb = $opt('#scrubberThumb');
+        const timeNowEl = $opt('#timeNow');
+        const timeEndEl = $opt('#timeEnd');
+        if (scrubFill && !document.querySelector('#scrubber:active')) scrubFill.style.width = `${pct}%`;
+        if (scrubThumb) scrubThumb.style.left = `${pct}%`;
+        if (timeNowEl) timeNowEl.textContent = formatTime(state.currentTime, '0:00');
+        if (timeEndEl) timeEndEl.textContent = formatTime(state.duration, '0:00');
+        autoScrollLyrics(pct / 100);
       } else {
-        $('#timeNow').textContent = formatTime(state.currentTime, '0:00');
-        if (state.currentSong?.duration) $('#timeEnd').textContent = formatTime(state.currentSong.duration, '0:00');
+        const timeNowEl = $opt('#timeNow');
+        const timeEndEl = $opt('#timeEnd');
+        if (timeNowEl) timeNowEl.textContent = formatTime(state.currentTime, '0:00');
+        if (timeEndEl && state.currentSong?.duration) timeEndEl.textContent = formatTime(state.currentSong.duration, '0:00');
       }
       // Play/pause state
       const incomingPlaying = !u.paused && !u.isAd;
@@ -1162,14 +1278,21 @@
     // Add to recently played
     state.recentlyPlayed = [song, ...state.recentlyPlayed.filter((s) => s.id !== song.id)].slice(0, 100);
 
-    // Update UI
-    $('#playerTitle').textContent = song.title;
-    $('#playerArtist').textContent = song.artist;
-    $('#playerThumb').style.backgroundImage = `url("${song.thumbnail.replace(/"/g, '\\"')}")`;
-    $('#timeNow').textContent = '0:00';
-    if (song.duration) $('#timeEnd').textContent = formatTime(song.duration, '0:00');
-    $('#scrubberFill').style.width = '0%';
-    $('#scrubberThumb').style.left = '0%';
+    // Update UI (eksik elementte çökme yok)
+    const titleEl = $opt('#playerTitle');
+    const artistEl = $opt('#playerArtist');
+    const thumbEl = $opt('#playerThumb');
+    const timeNowEl = $opt('#timeNow');
+    const timeEndEl = $opt('#timeEnd');
+    const fillEl = $opt('#scrubberFill');
+    const thumbDotEl = $opt('#scrubberThumb');
+    if (titleEl) titleEl.textContent = song.title;
+    if (artistEl) artistEl.textContent = song.artist;
+    if (thumbEl) thumbEl.style.backgroundImage = `url("${escapeCssUrl(song.thumbnail)}")`;
+    if (timeNowEl) timeNowEl.textContent = '0:00';
+    if (song.duration && timeEndEl) timeEndEl.textContent = formatTime(song.duration, '0:00');
+    if (fillEl) fillEl.style.width = '0%';
+    if (thumbDotEl) thumbDotEl.style.left = '0%';
     updateLikeBtn();
 
     // Highlight in lists
@@ -1188,9 +1311,9 @@
     state.playing = true;
     state.paused = false;
     updatePlayIcon();
-    api.player.setVolume(Math.max(0, Math.min(100, state.volume)) / 100).catch(() => {});
     const res: any = await ytPlayer(song.id);
-    api.player.setVolume(Math.max(0, Math.min(100, state.volume)) / 100).catch(() => {});
+    // Tek seferlik ses senkronu (gezinti sonrası gizli oynatıcı sıfırlanmış olabilir)
+    api.player.setVolume(Math.max(0, Math.min(100, state.volume)) / 100).catch((e: unknown) => dlog('Ses senkronu hatası:', e));
     dlog('IPC player sonucu:', res);
     if (res?.error === 'not_authenticated') {
       showToast('Oturumunuz dolmuş. Lütfen tekrar giriş yapın.', 'error');
@@ -1539,33 +1662,52 @@
     api.store.set('shuffle', state.shuffle);
   }
 
+  /** Ses düzeyine göre hoparlör simgesi (kurulum + init ortak kullanır). */
+  function volumeIconSvg(volume: number): string {
+    if (volume === 0) {
+      return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
+    } else if (volume < 50) {
+      return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+    }
+    return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+  }
+
+  // Her tekrar modu için görsel olarak ayırt edilebilir simge
+  const REPEAT_ICONS = {
+    one: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><text x="12" y="14" text-anchor="middle" font-size="7" fill="currentColor" stroke="none" font-weight="bold">1</text></svg>',
+    all: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+    off: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" opacity="0.55"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><line x1="3" y1="3" x2="21" y2="21"/></svg>'
+  };
+
   function toggleRepeat() {
     const modes: Array<'off' | 'all' | 'one'> = ['off', 'all', 'one'];
     state.repeat = modes[(modes.indexOf(state.repeat) + 1) % 3];
-    const btn = $('#btnRepeat');
-    btn.classList.toggle('active', state.repeat !== 'off');
-    api.store.set('repeat', state.repeat);
-    if (state.repeat === 'one') {
-      btn.title = 'Tekrar: Tek Parça';
-      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><text x="12" y="14" text-anchor="middle" font-size="7" fill="currentColor" stroke="none" font-weight="bold">1</text></svg>';
-      showToast('Tek parça tekrarı açık', 'info');
-    } else if (state.repeat === 'all') {
-      btn.title = 'Tekrar: Tümü';
-      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
-      showToast('Tümünü tekrarla açık', 'info');
-    } else {
-      btn.title = 'Tekrar: Kapalı';
-      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
-      showToast('Tekrar kapalı', 'info');
+    const btn = $opt('#btnRepeat');
+    if (btn) {
+      btn.classList.toggle('active', state.repeat !== 'off');
+      if (state.repeat === 'one') {
+        btn.title = 'Tekrar: Tek Parça';
+        btn.innerHTML = REPEAT_ICONS.one;
+        showToast('Tek parça tekrarı açık', 'info');
+      } else if (state.repeat === 'all') {
+        btn.title = 'Tekrar: Tümü';
+        btn.innerHTML = REPEAT_ICONS.all;
+        showToast('Tümünü tekrarla açık', 'info');
+      } else {
+        btn.title = 'Tekrar: Kapalı';
+        btn.innerHTML = REPEAT_ICONS.off;
+        showToast('Tekrar kapalı', 'info');
+      }
     }
+    api.store.set('repeat', state.repeat);
   }
 
   function updatePlayIcon() {
-    const playIcon = $('#btnPlay .icon-play') as HTMLElement;
-    const pauseIcon = $('#btnPlay .icon-pause') as HTMLElement;
+    const playIcon = $opt('#btnPlay .icon-play');
+    const pauseIcon = $opt('#btnPlay .icon-pause');
     const isPlaying = state.playing;
-    playIcon.style.display = isPlaying ? 'none' : 'block';
-    pauseIcon.style.display = isPlaying ? 'block' : 'none';
+    if (playIcon) playIcon.style.display = isPlaying ? 'none' : 'block';
+    if (pauseIcon) pauseIcon.style.display = isPlaying ? 'block' : 'none';
 
     // Spotify ekolayzır animasyonunu şarkı duraklatıldığında dondur / oynatıldığında başlat
     $$('.song-row.playing').forEach((row) => {
@@ -1575,22 +1717,27 @@
   
   // ── Like ───────────────────────────────────
   function toggleLike(id: string) {
+    if (!id) return;
     if (state.liked.has(id)) state.liked.delete(id);
     else state.liked.add(id);
     saveLiked();
     updateLikeBtn();
-    $$('.like-btn').forEach((btn) => {
-      if ((btn as HTMLElement).dataset.id === id) {
-        btn.classList.toggle('active', state.liked.has(id));
-        const svg = btn.querySelector('svg');
-        if (svg) svg.setAttribute('fill', state.liked.has(id) ? 'currentColor' : 'none');
-      }
+    // Tüm DOM'u taramak yerine doğrudan ilgili butonlar hedeflenir
+    let selector = '.like-btn';
+    try {
+      selector = `.like-btn[data-id="${CSS.escape(id)}"]`;
+    } catch { /* CSS.escape yoksa genel seçici */ }
+    document.querySelectorAll(selector).forEach((btn) => {
+      btn.classList.toggle('active', state.liked.has(id));
+      const svg = btn.querySelector('svg');
+      if (svg) svg.setAttribute('fill', state.liked.has(id) ? 'currentColor' : 'none');
     });
   }
 
   function updateLikeBtn() {
     if (!state.currentSong) return;
-    const btn = $('#btnLike');
+    const btn = $opt('#btnLike');
+    if (!btn) return;
     const liked = state.liked.has(state.currentSong.id);
     btn.classList.toggle('active', liked);
     const svg = btn.querySelector('svg');
@@ -1602,6 +1749,16 @@
   }
 
   // ── Ad Skip Button ─────────────────────────
+  // Üst üste yığılan zamanlayıcıları engellemek için tekil bayrak
+  let adSkipScheduled = false;
+  function scheduleAdSkipButton() {
+    if (adSkipScheduled) return;
+    adSkipScheduled = true;
+    setTimeout(() => {
+      adSkipScheduled = false;
+      showAdSkipButton();
+    }, 3000);
+  }
   function showAdSkipButton() {
     let btn = document.getElementById('adSkipBtn');
     if (!btn) {
@@ -1609,8 +1766,9 @@
       btn.id = 'adSkipBtn';
       btn.textContent = 'Reklamı Geç';
       btn.className = 'ad-skip-btn';
+      btn.setAttribute('aria-label', 'Reklamı geç');
       btn.addEventListener('click', () => {
-        api.player.skipAd().catch(() => {});
+        api.player.skipAd().catch((e: unknown) => dlog('Reklam geçilemedi:', e));
       });
       document.body.appendChild(btn);
     }
@@ -1624,33 +1782,40 @@
 
   // ── Panels ─────────────────────────────────
   function setupPanels() {
-    const lyricsPanel = $('#lyricsPanel');
-    const queuePanel = $('#queuePanel');
-    const backdrop = $('#panelBackdrop');
+    const lyricsPanel = $opt('#lyricsPanel');
+    const queuePanel = $opt('#queuePanel');
+    const backdrop = $opt('#panelBackdrop');
+    if (!lyricsPanel || !queuePanel) {
+      dlog('[init] Panel elementleri eksik, panel kurulumu atlandı');
+      return;
+    }
 
-    $('#btnLyrics').addEventListener('click', () => {
+    onClick('#btnLyrics', () => {
       if (state.panelOpen === 'lyrics') { closePanels(); return; }
       closePanels();
       state.panelOpen = 'lyrics';
       show(lyricsPanel);
-      show(backdrop);
-      $('#btnLyrics').classList.add('active');
+      if (backdrop) show(backdrop);
+      $opt('#btnLyrics')?.classList.add('active');
+      // Klavye kullanıcıları için odağı panele taşı
+      const heading = lyricsPanel.querySelector('h3, h2, [tabindex]') as HTMLElement | null;
+      if (heading) heading.focus();
       if (state.currentSong) loadLyrics();
     });
 
-    $('#btnQueue').addEventListener('click', () => {
+    onClick('#btnQueue', () => {
       if (state.panelOpen === 'queue') { closePanels(); return; }
       closePanels();
       state.panelOpen = 'queue';
       show(queuePanel);
-      show(backdrop);
-      $('#btnQueue').classList.add('active');
+      if (backdrop) show(backdrop);
+      $opt('#btnQueue')?.classList.add('active');
       renderQueue();
     });
 
-    $('#closeLyrics').addEventListener('click', closePanels);
-    $('#closeQueue').addEventListener('click', closePanels);
-    backdrop.addEventListener('click', closePanels);
+    onClick('#closeLyrics', closePanels);
+    onClick('#closeQueue', closePanels);
+    backdrop?.addEventListener('click', closePanels);
   }
 
   function closePanels() {
@@ -1680,14 +1845,16 @@
     closeContextMenu();
     const menu = document.createElement('div');
     menu.className = 'context-menu';
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', `${song.title} seçenekleri`);
     menu.innerHTML = `
-      <div class="ctx-item" data-action="play">Şimdi Çal</div>
-      <div class="ctx-item" data-action="playNext">Önce Çal</div>
-      <div class="ctx-item" data-action="addToQueue">Sıraya Ekle</div>
-      <div class="ctx-separator"></div>
-      <div class="ctx-item" data-action="addToLiked">${state.liked.has(song.id) ? 'Beğeniyi Kaldır' : 'Beğeniye Ekle'}</div>
-      <div class="ctx-separator"></div>
-      <div class="ctx-item" data-action="copyLink">Bağlantıyı Kopyala</div>
+      <div class="ctx-item" role="menuitem" tabindex="0" data-action="play">Şimdi Çal</div>
+      <div class="ctx-item" role="menuitem" tabindex="0" data-action="playNext">Önce Çal</div>
+      <div class="ctx-item" role="menuitem" tabindex="0" data-action="addToQueue">Sıraya Ekle</div>
+      <div class="ctx-separator" aria-hidden="true"></div>
+      <div class="ctx-item" role="menuitem" tabindex="0" data-action="addToLiked">${state.liked.has(song.id) ? 'Beğeniyi Kaldır' : 'Beğeniye Ekle'}</div>
+      <div class="ctx-separator" aria-hidden="true"></div>
+      <div class="ctx-item" role="menuitem" tabindex="0" data-action="copyLink">Bağlantıyı Kopyala</div>
     `;
 
     // Pozisyon ayarla
@@ -1697,7 +1864,7 @@
     document.body.appendChild(menu);
     activeContextMenu = menu;
 
-    menu.addEventListener('click', (e) => {
+    menu.addEventListener('click', async (e) => {
       const action = (e.target as HTMLElement).dataset.action;
       if (!action) return;
       switch (action) {
@@ -1731,11 +1898,35 @@
           toggleLike(song.id);
           break;
         case 'copyLink':
-          navigator.clipboard?.writeText(`https://music.youtube.com/watch?v=${song.id}`);
-          showToast('Bağlantı kopyalandı', 'success');
+          try {
+            await navigator.clipboard?.writeText(`https://music.youtube.com/watch?v=${song.id}`);
+            showToast('Bağlantı kopyalandı', 'success');
+          } catch (e) {
+            dlog('Panoya kopyalama başarısız:', e);
+            showToast('Kopyalama başarısız oldu.', 'error');
+          }
           break;
       }
       closeContextMenu();
+    });
+
+    // Klavye desteği: Escape kapatır, ok tuşları gezinir, Enter seçer
+    menu.addEventListener('keydown', (e: KeyboardEvent) => {
+      const items = Array.from(menu.querySelectorAll<HTMLElement>('.ctx-item'));
+      const currentIdx = items.indexOf(document.activeElement as HTMLElement);
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeContextMenu();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        items[(currentIdx + 1) % items.length]?.focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        items[(currentIdx - 1 + items.length) % items.length]?.focus();
+      } else if (e.key === 'Enter' && currentIdx >= 0) {
+        e.preventDefault();
+        items[currentIdx].click();
+      }
     });
 
     // Dışarı tıklayınca kapat (tekil ve sızıntısız dinleyici)
@@ -1751,11 +1942,52 @@
     }, 0);
   }
 
+  // Söz paneli: kullanıcının elle kaydırdığı anı hatırla — 8sn boyunca
+  // otomatik kaydırma duraklatılır, sonra kaldığı yerden devam eder.
+  let lastLyricsUserScrollAt = 0;
+  let lyricsScrollTracked = false;
+  function trackLyricsUserScroll() {
+    if (lyricsScrollTracked) return;
+    const body = $opt('#lyricsBody');
+    if (!body) return;
+    lyricsScrollTracked = true;
+    const mark = () => { lastLyricsUserScrollAt = Date.now(); };
+    body.addEventListener('wheel', mark, { passive: true });
+    body.addEventListener('touchmove', mark, { passive: true });
+    body.addEventListener('keydown', mark);
+  }
+
+  /** Şarkı ilerlemesine orantılı söz kaydırma (zaman damgasız sözler için). */
+  function autoScrollLyrics(ratio: number) {
+    if (state.panelOpen !== 'lyrics' || !state.playing) return;
+    if (!Number.isFinite(ratio) || ratio < 0 || ratio > 1) return;
+    if (Date.now() - lastLyricsUserScrollAt < 8000) return;
+    const body = $opt('#lyricsBody');
+    if (!body) return;
+    const maxScroll = body.scrollHeight - body.clientHeight;
+    if (maxScroll <= 0) return;
+    const target = ratio * maxScroll;
+    if (Math.abs(body.scrollTop - target) > 120) {
+      try {
+        body.scrollTo({ top: target, behavior: 'smooth' });
+      } catch {
+        body.scrollTop = target;
+      }
+    }
+  }
+
   async function loadLyrics() {
     if (!state.currentSong) return;
-    const body = $('#lyricsBody');
+    const body = $opt('#lyricsBody');
+    if (!body) return;
+    trackLyricsUserScroll();
+    // Gezinme sayacı: kullanıcı sözler yüklenirken sayfa değiştirirse
+    // eskimiş sonuç panele yazılmaz.
+    const generation = state.navGeneration;
+    const songId = state.currentSong.id;
     body.innerHTML = '<div class="empty-state"><p class="empty-hint-text">Yükleniyor...</p></div>';
-    const lyrics = await ytLyrics(state.currentSong.id);
+    const lyrics = await ytLyrics(songId);
+    if (generation !== state.navGeneration || state.currentSong?.id !== songId) return;
     if (lyrics) {
       body.innerHTML = lyrics.split('\n').map((line: string) =>
         `<div class="lyric-line">${line ? escapeHtml(line) : '&nbsp;'}</div>`
@@ -1789,6 +2021,10 @@
               <div class="song-artist">${escapeHtml(s.artist)}</div>
             </div>
             <span class="song-dur">${formatTime(s.duration)}</span>
+            <span class="queue-move">
+              <button class="icon-btn queue-move-btn" data-move="-1" data-idx="${i}" title="Yukarı taşı" aria-label="${escapeHtml(s.title)} parçasını yukarı taşı" ${i === 0 ? 'disabled' : ''}>▲</button>
+              <button class="icon-btn queue-move-btn" data-move="1" data-idx="${i}" title="Aşağı taşı" aria-label="${escapeHtml(s.title)} parçasını aşağı taşı" ${i === state.userQueue.length - 1 ? 'disabled' : ''}>▼</button>
+            </span>
           </div>`).join('')}</div>
       </div>`;
     }
@@ -1824,6 +2060,23 @@
         renderQueue();
       });
     }
+
+    // Kuyruk sırası değiştirme (yukarı/aşağı) — yalnızca kullanıcı kuyruğu
+    body.querySelectorAll('.queue-move-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt((btn as HTMLElement).dataset.idx || '-1', 10);
+        const delta = parseInt((btn as HTMLElement).dataset.move || '0', 10);
+        const j = idx + delta;
+        if (idx < 0 || j < 0 || j >= state.userQueue.length) return;
+        const tmp = state.userQueue[idx];
+        state.userQueue[idx] = state.userQueue[j];
+        state.userQueue[j] = tmp;
+        state.queue = rebuildMergedQueue();
+        saveQueue();
+        renderQueue();
+      });
+    });
 
     // Queue item click
     body.querySelectorAll('.queue-item').forEach((item) => {
@@ -1863,8 +2116,7 @@
     try {
     const data = await ytHome();
     if (gen !== state.navGeneration) return; // stale, discard
-    console.log('[Aquality Music] Home data:', JSON.stringify({ itemCount: data?.items?.length }));
-    console.log('[Aquality Music] Home first item:', data?.items?.[0] ? JSON.stringify(data.items[0]) : 'null');
+    dlog('Home data:', { itemCount: data?.items?.length });
 
     if (!data.items?.length) {
       container.innerHTML = '<div class="empty-state"><p class="empty-text">İçerik yüklenemedi</p><p class="empty-hint-text">Lütfen internet bağlantınızı kontrol edin</p></div>';
@@ -1874,7 +2126,7 @@
     const songs = data.items.filter((i: any) => i.id) as Song[];
     const cards = data.items.filter((i: any) => i.browseId);
 
-    console.log('[Aquality Music] Songs:', songs.length, 'Cards:', cards.length);
+    dlog('Home Songs:', songs.length, 'Cards:', cards.length);
 
     let html = '';
 
@@ -1924,11 +2176,13 @@
     if (state.isLoggedIn) {
       try {
         [ytPlaylists, ytArtists, ytAlbums] = await Promise.all([
-          api.youtube.libraryPlaylists().catch(() => []),
-          api.youtube.libraryArtists().catch(() => []),
-          api.youtube.libraryAlbums().catch(() => [])
+          api.youtube.libraryPlaylists().catch((e: unknown) => { dlog('Kütüphane listeleri alınamadı:', e); return []; }),
+          api.youtube.libraryArtists().catch((e: unknown) => { dlog('Kütüphane sanatçıları alınamadı:', e); return []; }),
+          api.youtube.libraryAlbums().catch((e: unknown) => { dlog('Kütüphane albümleri alınamadı:', e); return []; })
         ]);
-      } catch {}
+      } catch (e) {
+        dlog('Kütüphane yüklenemedi:', e);
+      }
     }
 
     if (gen !== state.navGeneration) return; // stale, discard
@@ -2012,7 +2266,9 @@
     if (state.isLoggedIn) {
       try {
         ytLiked = await api.youtube.likedSongs();
-      } catch {}
+      } catch (e) {
+        dlog('Beğenilenler alınamadı:', e);
+      }
     }
 
     if (gen !== state.navGeneration) return; // stale, discard
@@ -2166,44 +2422,124 @@
 
   // ── Playlists ──────────────────────────────
   function setupPlaylists() {
-    const modal = $('#playlistModal');
-    const input = $('#playlistNameInput') as HTMLInputElement;
+    const modalOpt = $opt('#playlistModal');
+    const inputOpt = $opt('#playlistNameInput') as HTMLInputElement | null;
+    if (!modalOpt || !inputOpt) {
+      dlog('[init] Liste modali eksik, liste kurulumu atlandı');
+      return;
+    }
+    const modal: HTMLElement = modalOpt;
+    const input: HTMLInputElement = inputOpt;
 
-    $('#btnNewPlaylist').addEventListener('click', () => {
+    onClick('#btnNewPlaylist', () => {
       input.value = '';
+      updatePlaylistCharCount();
       modal.classList.add('visible');
       setTimeout(() => input.focus(), 100);
     });
 
-    $('#closePlaylistModal').addEventListener('click', () => modal.classList.remove('visible'));
-    $('#cancelPlaylist').addEventListener('click', () => modal.classList.remove('visible'));
+    onClick('#closePlaylistModal', () => modal.classList.remove('visible'));
+    onClick('#cancelPlaylist', () => modal.classList.remove('visible'));
 
-    $('#createPlaylist').addEventListener('click', async () => {
-      const name = input.value.trim();
-      if (!name) return;
+    // Enter ile oluşturma + canlı karakter sayacı (maks 60)
+    input.addEventListener('input', updatePlaylistCharCount);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        createPlaylistFromInput();
+      } else if (e.key === 'Escape') {
+        modal.classList.remove('visible');
+      }
+    });
+
+    function updatePlaylistCharCount() {
+      const counter = $opt('#playlistCharCount');
+      if (counter) counter.textContent = `${input.value.length}/60`;
+    }
+
+    async function createPlaylistFromInput() {
+      const name = input.value.trim().slice(0, 60);
+      if (!name) {
+        showToast('Liste adı boş olamaz', 'warning');
+        return;
+      }
       const playlists = await api.store.get('playlists') || [];
-      playlists.push({ id: `pl_${Date.now()}`, name, songs: [], createdAt: Date.now() });
+      const id = `pl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      playlists.push({ id, name, songs: [], createdAt: Date.now() });
       await api.store.set('playlists', playlists);
       modal.classList.remove('visible');
+      showToast(`"${name}" listesi oluşturuldu`, 'success');
       renderPlaylists();
-    });
+    }
+
+    onClick('#createPlaylist', () => { createPlaylistFromInput(); });
 
     renderPlaylists();
   }
 
   async function renderPlaylists() {
-    const container = $('#playlistsContainer');
+    const container = $opt('#playlistsContainer');
+    if (!container) return;
     const playlists = await api.store.get('playlists') || [];
     if (!playlists.length) {
       container.innerHTML = '<div class="empty-hint">Henüz liste yok</div>';
       return;
     }
     container.innerHTML = playlists.map((pl: any) => `
-      <a class="nav-link" href="#" data-pl="${pl.id}">
+      <a class="nav-link" href="#" data-pl="${escapeHtml(pl.id)}" role="button" aria-label="${escapeHtml(pl.name)} listesini aç">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
         <span>${escapeHtml(pl.name)}</span>
       </a>
     `).join('');
+    // Oluşturulan listeler tıklanabilir — detay görünümünü açar
+    container.querySelectorAll('[data-pl]').forEach((link) => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const plId = (link as HTMLElement).dataset.pl;
+        if (plId) openLocalPlaylist(plId);
+      });
+    });
+  }
+
+  /** Yerel çalma listesinin detay görünümü (şarkılar + toplu oynat). */
+  async function openLocalPlaylist(plId: string) {
+    const playlists = await api.store.get('playlists') || [];
+    const pl = playlists.find((p: any) => p.id === plId);
+    if (!pl) {
+      showToast('Liste bulunamadı', 'error');
+      return;
+    }
+    navigateTo('library');
+    const container = $opt('#libraryContent');
+    if (!container) return;
+    // Şarkı referansları id veya nesne olabilir — önbellekten çözümlenir
+    const songs: Song[] = (pl.songs || []).flatMap((s: any): Song[] => {
+      if (!s) return [];
+      if (typeof s === 'string') {
+        const cached = songCache.get(s);
+        return cached ? [cached] : [];
+      }
+      return [s as Song];
+    });
+    const backBtn = `<button class="btn btn-ghost browse-back" style="margin-bottom:16px">← Kütüphane</button>`;
+    let html = `${backBtn}
+      <div style="display:flex;gap:16px;align-items:center;margin-bottom:20px">
+        <h2 style="font-size:22px;font-weight:700">${escapeHtml(pl.name)}</h2>
+        <span style="font-size:12px;color:var(--c-text-2)">${songs.length} parça</span>
+      </div>`;
+    if (songs.length) {
+      html += `<div style="margin-bottom:16px"><button class="btn btn-primary btn-sm" id="btnPlayLocalPlaylist">▶ Tümünü Oynat</button></div>`;
+      html += `<div class="song-list">${songs.map((s, i) => songRow(s, i + 1)).join('')}</div>`;
+      setContext(songs, pl.name, 'playlist');
+    } else {
+      html += `<div class="empty-state"><p class="empty-text">Bu liste henüz boş</p><p class="empty-hint-text">Şarkıların ••• menüsünden listeye ekleyin</p></div>`;
+    }
+    container.innerHTML = html;
+    attachSongEvents(container);
+    container.querySelector('.browse-back')?.addEventListener('click', () => loadLibrary());
+    container.querySelector('#btnPlayLocalPlaylist')?.addEventListener('click', () => {
+      if (songs.length) playSong(songs[0]);
+    });
   }
 
   // ── i18n Localization ─────────────────────
@@ -2295,7 +2631,9 @@
     try {
       const el = document.getElementById('googleOAuthStatus');
       if (el) el.textContent = 'Yapılandırıldı';
-    } catch {}
+    } catch (e) {
+      dlog('Google OAuth durumu okunamadı:', e);
+    }
   }
 
   function setupVolumeLyricsAuthUI(){
@@ -2304,7 +2642,7 @@
     if(ly){ (api as any).lyrics.isEnabled().then((v:boolean)=>ly.checked=v!==false); ly.addEventListener('change',()=> (api as any).lyrics.setEnabled(ly.checked)); }
     const listEl=document.getElementById('authClientsList'); const aId=document.getElementById('authAppId') as HTMLInputElement; const aName=document.getElementById('authAppName') as HTMLInputElement; const btn=document.getElementById('authCreateBtn');
     async function refresh(){ if(!listEl) return; const cs:any[]=await (api as any).authClients.list(); listEl.innerHTML= cs.length? cs.map(c=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--c-border)"><span>${escapeHtml(c.appName)} (${escapeHtml(c.appId)})</span><button data-revoke="${escapeHtml(c.appId)}" style="color:var(--c-error)">Sil</button></div>`).join('') : '<em>Henüz bağlı uygulama yok</em>'; listEl.querySelectorAll('[data-revoke]').forEach(b=> b.addEventListener('click', async()=>{ await (api as any).authClients.revoke((b as HTMLElement).dataset.revoke!); refresh(); })); }
-    refresh(); btn?.addEventListener('click', async()=>{ if(!aId.value||!aName.value) return showToast('appId ve ad gerekli','warning'); await (api as any).authClients.create({appId:aId.value, appName:aName.value}); aId.value=''; aName.value=''; refresh(); showToast('İstemci eklendi','success'); });
+    refresh(); btn?.addEventListener('click', async()=>{ const appId=(aId.value||'').trim().slice(0,120); const appName=(aName.value||'').trim().slice(0,60); if(!appId||!appName) return showToast('appId ve ad gerekli','warning'); await (api as any).authClients.create({appId, appName}); aId.value=''; aName.value=''; refresh(); showToast('İstemci eklendi','success'); });
   }
   function setupDiscord() {
     const enabledToggle = $('#discordEnabled') as HTMLInputElement;
@@ -2326,13 +2664,21 @@
       try {
         let ok = await api.discord.isReady();
         if (!ok && enabledToggle.checked) {
-          ok = await (api.discord as any).reconnect?.().catch(() => false) ?? false;
+          ok = await (api.discord as any).reconnect?.().catch((e: unknown) => {
+            dlog('Discord yeniden bağlanma hatası:', e);
+            return false;
+          }) ?? false;
         }
         statusEl.textContent = ok ? '✓ Bağlı (RPC)' : 'Discord uygulaması bekleniyor...';
-      } catch { statusEl.textContent = '—'; }
+      } catch (e) {
+        dlog('Discord durum okunamadı:', e);
+        statusEl.textContent = '—';
+      }
     }
     refreshDiscordStatus();
-    setInterval(() => { if (enabledToggle.checked) refreshDiscordStatus(); }, 15000);
+    const discordStatusTimer = setInterval(() => { if (enabledToggle.checked) refreshDiscordStatus(); }, 15000);
+    // Sayfa kapanırken zamanlayıcıyı temizle (sızıntı önlenir)
+    window.addEventListener('pagehide', () => clearInterval(discordStatusTimer), { once: true });
 
     // Discord hesabı (resmi OAuth2 — token yapıştırma yok)
     const accName = $('#discordAccountName');
@@ -2344,8 +2690,13 @@
         const u: any = await (api as any).discordAuth.getUser();
         if (u) {
           if (accName) accName.textContent = u.name || u.username || 'Bağlı';
-          if (u.picture) { accAvatar.src = u.picture; accAvatar.style.display = 'block'; }
-          else accAvatar.style.display = 'none';
+          if (u.picture) {
+            accAvatar.src = u.picture;
+            accAvatar.alt = `${u.name || u.username || 'Discord'} avatarı`;
+            accAvatar.style.display = 'block';
+          } else {
+            accAvatar.style.display = 'none';
+          }
           loginBtn.style.display = 'none';
           logoutBtn.style.display = 'flex';
         } else {
@@ -2354,7 +2705,10 @@
           loginBtn.style.display = 'flex';
           logoutBtn.style.display = 'none';
         }
-      } catch { if (accName) accName.textContent = 'Bağlı değil'; }
+      } catch (e) {
+        dlog('Discord hesabı okunamadı:', e);
+        if (accName) accName.textContent = 'Bağlı değil';
+      }
     }
     refreshDiscordAccount();
     loginBtn.addEventListener('click', async () => {
@@ -2367,7 +2721,7 @@
       }
     });
     logoutBtn.addEventListener('click', async () => {
-      await (api as any).discordAuth.logout().catch(() => {});
+      await (api as any).discordAuth.logout().catch((e: unknown) => dlog('Discord çıkışı hatası:', e));
       refreshDiscordAccount();
       showToast('Discord çıkışı yapıldı.', 'info');
     });
@@ -2404,7 +2758,9 @@
             serverStatusEl.style.color = 'var(--c-text-3)';
           }
         }
-      } catch {}
+      } catch (e) {
+        dlog('Bot sunucu durumu okunamadı:', e);
+      }
     }
     checkServerStatus();
 
@@ -2481,7 +2837,9 @@
             if (stopBotBtn) stopBotBtn.style.display = 'none';
           }
         }
-      } catch {}
+      } catch (e) {
+        dlog('Bot süreç durumu okunamadı:', e);
+      }
     }
 
     refreshBotProcessStatus();
@@ -2584,18 +2942,12 @@
       slider.value = String(state.volume);
       slider.style.setProperty('--vol-pct', `${state.volume}%`);
     }
-    const btnVol = $('#btnVolume');
+    const btnVol = $opt('#btnVolume');
     if (btnVol) {
-      if (state.volume === 0) {
-        btnVol.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
-      } else if (state.volume < 50) {
-        btnVol.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
-      } else {
-        btnVol.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
-      }
+      btnVol.innerHTML = volumeIconSvg(state.volume);
     }
     // Başlangıç ses seviyesini hemen player'a aktar
-    api.player.setVolume(Math.max(0, Math.min(100, state.volume)) / 100).catch(() => {});
+    api.player.setVolume(Math.max(0, Math.min(100, state.volume)) / 100).catch((e: unknown) => dlog('Başlangıç sesi ayarlanamadı:', e));
 
     // Load saved queue (önceki oturumdan kalan sıra)
     await restoreQueue();
@@ -2604,8 +2956,11 @@
     const savedShuffle = await api.store.get('shuffle');
     if (savedShuffle != null) {
       state.shuffle = !!savedShuffle;
-      $('#btnShuffle').classList.toggle('active', state.shuffle);
-      $('#btnShuffle').title = state.shuffle ? 'Karıştırma: Açık' : 'Karıştırma: Kapalı';
+      const shuffleBtn = $opt('#btnShuffle');
+      if (shuffleBtn) {
+        shuffleBtn.classList.toggle('active', state.shuffle);
+        shuffleBtn.title = state.shuffle ? 'Karıştırma: Açık' : 'Karıştırma: Kapalı';
+      }
       if (state.shuffle && state.queue.length) {
         const indices = state.queue.map((_, i) => i);
         const curIdx = state.queueIndex >= 0 ? state.queueIndex : 0;
@@ -2614,23 +2969,31 @@
       }
     }
     const savedRepeat = await api.store.get('repeat');
-    if (savedRepeat) {
-      state.repeat = savedRepeat as any;
-      const btn = $('#btnRepeat');
-      btn.classList.toggle('active', state.repeat !== 'off');
-      if (state.repeat === 'one') {
-        btn.title = 'Tekrar: Tek Parça';
-        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><text x="12" y="14" text-anchor="middle" font-size="7" fill="currentColor" stroke="none" font-weight="bold">1</text></svg>';
-      } else if (state.repeat === 'all') {
-        btn.title = 'Tekrar: Tümü';
-        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
-      } else {
-        btn.title = 'Tekrar: Kapalı';
+    if (savedRepeat === 'off' || savedRepeat === 'all' || savedRepeat === 'one') {
+      state.repeat = savedRepeat;
+      const repeatBtn = $opt('#btnRepeat');
+      if (repeatBtn) {
+        repeatBtn.classList.toggle('active', state.repeat !== 'off');
+        if (state.repeat === 'one') {
+          repeatBtn.title = 'Tekrar: Tek Parça';
+          repeatBtn.innerHTML = REPEAT_ICONS.one;
+        } else if (state.repeat === 'all') {
+          repeatBtn.title = 'Tekrar: Tümü';
+          repeatBtn.innerHTML = REPEAT_ICONS.all;
+        } else {
+          repeatBtn.title = 'Tekrar: Kapalı';
+          repeatBtn.innerHTML = REPEAT_ICONS.off;
+        }
       }
     }
 
     navigateTo('home');
   }
 
-  document.addEventListener('DOMContentLoaded', init);
+  // ES modülleri ertelenmeli yüklendiği için DOMContentLoaded kaçmış olabilir
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();

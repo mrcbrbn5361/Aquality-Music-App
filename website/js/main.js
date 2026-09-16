@@ -33,10 +33,21 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   links?.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMenu));
 
-  document.querySelectorAll('.faq-question').forEach(q => {
+  document.querySelectorAll('.faq-question').forEach((q, idx) => {
+    const item = q.closest('.faq-item');
+    const answer = item?.querySelector('.faq-answer');
+    // Soru-cevap ilişkilendirmesi (ekran okuyucular için)
+    const qId = q.id || `faq-q-${idx + 1}`;
+    const aId = `faq-a-${idx + 1}`;
+    q.id = qId;
     q.setAttribute('aria-expanded', 'false');
+    q.setAttribute('aria-controls', aId);
+    if (answer) {
+      answer.id = aId;
+      answer.setAttribute('role', 'region');
+      answer.setAttribute('aria-labelledby', qId);
+    }
     q.addEventListener('click', () => {
-      const item = q.closest('.faq-item');
       if (!item) return;
       const wasActive = item.classList.contains('active');
       document.querySelectorAll('.faq-item').forEach(i => {

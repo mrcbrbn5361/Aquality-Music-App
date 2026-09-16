@@ -3,6 +3,8 @@
   "version": "1.0.1",
   "description": "Aquality Music Official Website",
   "private": true,
+  "author": "Aquality Music Team",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

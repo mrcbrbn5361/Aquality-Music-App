@@ -20,6 +20,7 @@ export class DiscordRPC {
   private isConnected = false;
   private currentAppId = '';
   private connecting = false;
+  private connectGeneration = 0;
 
   async connect(): Promise<void> {
     await this.connectWithId(DISCORD_APP_ID);
@@ -42,20 +43,34 @@ export class DiscordRPC {
     }
 
     this.currentAppId = appId;
-    store.set('discordAppId', appId);
+    // Aynı değer her seferinde diske yazılmasın
+    try {
+      if (store.get('discordAppId') !== appId) {
+        store.set('discordAppId', appId);
+      }
+    } catch (e) {
+      console.warn('[Discord] AppId saklanamadı:', e);
+    }
+
+    // Bağlantı nesli sayacı: zaman aşımından SONRA gelen geç 'ready'
+    // olaylarının durumu tutarsız hale getirmesini engeller.
+    const generation = ++this.connectGeneration;
+    const isCurrent = () => generation === this.connectGeneration;
 
     try {
       this.client = new Client({ transport: 'ipc' });
+      const client = this.client;
 
       const connectPromise = new Promise<void>((resolve) => {
-        this.client!.on('ready', () => {
+        client.on('ready', () => {
+          if (!isCurrent()) return;
           this.isConnected = true;
           console.log('[Discord] Rich Presence bağlandı');
           resolve();
         });
       });
 
-      const loginPromise = this.client.login({ clientId: appId });
+      const loginPromise = client.login({ clientId: appId });
 
       // 3 sn timeout — Discord çalışmıyorsa açılışı geciktirmesin
       const timeoutPromise = new Promise<void>((_, reject) =>
@@ -64,9 +79,11 @@ export class DiscordRPC {
 
       await Promise.race([Promise.all([connectPromise, loginPromise]), timeoutPromise]);
     } catch (err) {
+      // Bu nesil artık geçersiz — geç kalan olaylar yoksayılacak
+      if (isCurrent()) this.connectGeneration++;
       console.log('[Discord] Rich Presence bağlanamadı (Discord açık olmayabilir)');
       this.isConnected = false;
-      try { this.client?.destroy(); } catch (e) { /* client destroy failed */ }
+      try { this.client?.destroy(); } catch (e) { console.warn('[Discord] Client destroy hatası:', e); }
       this.client = null;
     }
   }
@@ -173,8 +190,13 @@ export class DiscordRPC {
   }
 
   disconnect(): void {
+    this.connectGeneration++;
     if (this.client) {
-      this.client.destroy();
+      try {
+        this.client.destroy();
+      } catch (e) {
+        console.warn('[Discord] Disconnect sırasında destroy hatası:', e);
+      }
       this.isConnected = false;
       this.client = null;
     }

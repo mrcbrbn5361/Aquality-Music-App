@@ -8,11 +8,11 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-16 20:51` |
+| **Son Güncelleme** | `2026-09-16 22:33` |
 | **Proje Sürümü** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `605f390 - fix: security hardening, empty catch cleanup, CSS WCAG fixes, build verification (2 seconds ago)` |
-| **TypeScript Derleme Sağlığı** | ⚠️ MOBIL TS HATASI: mobile/app/(tabs)/settings.tsx(24,49): error TS2339: Property 'autoPlay' does not exist on type 'Pla |
+| **Son Commit** | `e9612e8 - fix: update domain to aqualitymusic.vercel.app (73 minutes ago)` |
+| **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Takip Edilen Sorunlar** | 24 / 24 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->
 

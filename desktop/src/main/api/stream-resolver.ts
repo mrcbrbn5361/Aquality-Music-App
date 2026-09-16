@@ -574,8 +574,7 @@ export class StreamResolver {
     const win = this.ensureWindow();
     try {
       // Session'dan cookie'leri al ve account_menu API'sine istek at
-      const { session } = await import('electron');
-      const ses = session.fromPartition('persist:aquality-music');
+      const ses = session.fromPartition(MUSIC_PARTITION);
       const cookies = await ses.cookies.get({ url: 'https://music.youtube.com' });
       if (!cookies.length) {
         console.error('[Auth] profil: cookie yok');
@@ -589,7 +588,7 @@ export class StreamResolver {
           'Cookie': cookieHeader,
           'Origin': 'https://music.youtube.com',
           'Referer': 'https://music.youtube.com/',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36'
+          'User-Agent': CHROME_UA
         },
         body: JSON.stringify({
           context: { client: { hl: 'tr', gl: 'TR', clientName: 'WEB_REMIX', clientVersion: '1.20250801.00.00' } }

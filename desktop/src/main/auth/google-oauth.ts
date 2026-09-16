@@ -4,16 +4,8 @@ import * as http from 'http';
 import { URL } from 'url';
 import Store from 'electron-store';
 import { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } from './google-credentials';
-
-function base64url(buf: Buffer): string {
-  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function escapeHtml(str: string): string {
-  if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-}
+import { base64url, escapeHtml } from '../utils/crypto-util';
+import { decryptJSON, decryptString, encryptJSON, encryptString } from '../utils/secure-store';
 
 interface OAuthTokens {
   access_token: string;
@@ -32,7 +24,8 @@ interface UserData {
 }
 
 interface TokenStore {
-  googleTokens: OAuthTokens | null;
+  // Şifreli (string) veya eski düz metin (OAuthTokens) formatında olabilir
+  googleTokens: OAuthTokens | string | null;
   googleUser: UserData | null;
   googleClientId?: string;
   googleClientSecret?: string;
@@ -61,11 +54,19 @@ export class GoogleOAuth {
   }
 
   getGoogleTokens(): OAuthTokens | null {
-    return this.store.get('googleTokens');
+    try {
+      const raw = this.store.get('googleTokens');
+      if (!raw) return null;
+      if (typeof raw !== 'string') return raw;
+      return decryptJSON<OAuthTokens>(raw);
+    } catch (e) {
+      console.warn('[Google OAuth] Token okunamadı:', e);
+      return null;
+    }
   }
 
   async refreshIfNeeded(): Promise<void> {
-    const tokens = this.store.get('googleTokens');
+    const tokens = this.getGoogleTokens();
     if (tokens && Date.now() >= tokens.expires_at - 60000) {
       await this.refreshGoogleToken(tokens);
     }
@@ -111,7 +112,12 @@ export class GoogleOAuth {
       };
 
       server = http.createServer(async (req, res) => {
-        if (callbackHandled) return;
+        if (callbackHandled) {
+          // Çift tıklama/yeniden deneme durumunda istemciyi asılı bırakma
+          res.writeHead(409, { 'Content-Type': 'text/plain; charset=utf-8' });
+          res.end('Bu giriş isteği zaten işlendi.');
+          return;
+        }
 
         const url = new URL(req.url || '/', 'http://localhost');
 
@@ -163,6 +169,8 @@ export class GoogleOAuth {
         // Token exchange
         try {
           console.log('[Google OAuth] Token exchange başlatılıyor...');
+          const addr = server.address();
+          const listenPort = addr && typeof addr === 'object' ? addr.port : 0;
           const tokenRes = await fetch(GOOGLE_TOKEN_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -170,7 +178,7 @@ export class GoogleOAuth {
               code,
               client_id: clientId,
               client_secret: clientSecret,
-              redirect_uri: `http://127.0.0.1:${(server.address() as any).port}/callback`,
+              redirect_uri: `http://127.0.0.1:${listenPort}/callback`,
               grant_type: 'authorization_code',
               code_verifier: verifier
             }).toString()
@@ -194,7 +202,8 @@ export class GoogleOAuth {
             token_type: tokenData.token_type
           };
 
-          this.store.set('googleTokens', tokens);
+          // Token'lar OS anahtarlığı ile şifreli saklanır
+          this.store.set('googleTokens', encryptJSON(tokens));
 
           // Kullanıcı bilgisi al
           const userRes = await fetch(GOOGLE_USERINFO_URL, {
@@ -247,8 +256,8 @@ export class GoogleOAuth {
       });
 
       server.listen(0, '127.0.0.1', () => {
-        const addr = server.address() as any;
-        const port = addr.port;
+        const addr = server.address();
+        const port = addr && typeof addr === 'object' ? addr.port : 0;
         const redirectUri = `http://127.0.0.1:${port}/callback`;
 
         console.log('[Google OAuth] Server port:', port);
@@ -307,9 +316,11 @@ export class GoogleOAuth {
         const data = await res.json() as any;
         tokens.access_token = data.access_token;
         tokens.expires_at = Date.now() + (data.expires_in * 1000);
-        this.store.set('googleTokens', tokens);
+        this.store.set('googleTokens', encryptJSON(tokens));
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[Google OAuth] Token yenileme hatası:', e);
+    }
   }
 
   // ── Logout ───────────────────────────────────
@@ -321,12 +332,14 @@ export class GoogleOAuth {
   // ── Config ───────────────────────────────────
   setGoogleConfig(clientId: string, clientSecret: string): void {
     this.store.set('googleClientId', clientId);
-    this.store.set('googleClientSecret', clientSecret);
+    // Client secret hassas veridir — şifreli saklanır
+    this.store.set('googleClientSecret', encryptString(clientSecret));
   }
 
   getGoogleConfig(): { clientId: string; clientSecret: string } {
     const clientId = this.store.get('googleClientId') || GOOGLE_CLIENT_ID;
-    const clientSecret = this.store.get('googleClientSecret') || GOOGLE_CLIENT_SECRET;
+    const storedSecret = this.store.get('googleClientSecret') || '';
+    const clientSecret = decryptString(storedSecret) || GOOGLE_CLIENT_SECRET;
     return {
       clientId,
       clientSecret

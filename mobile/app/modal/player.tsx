@@ -1,25 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   Image,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
+  useWindowDimensions,
   ScrollView,
-  ActivityIndicator
+  ActivityIndicator,
+  GestureResponderEvent
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { usePlayer, usePlayerProgress, playerStore } from '../../src/store/player-store';
+import { usePlayerSelector, usePlayerProgress, playerStore } from '../../src/store/player-store';
 import { mobilePlayer } from '../../src/services/player';
 import { mobileApi } from '../../src/api/innertube';
 import { Equalizer } from '../../src/components/Equalizer';
 import { LyricsData, Song } from '../../src/types';
 
-const { width } = Dimensions.get('window');
-const ARTWORK_SIZE = Math.min(width - 64, 340);
+const QUALITY_LABEL: Record<string, { badge: string; footer: string }> = {
+  high: { badge: 'HI-FI', footer: 'REKLAMSIZ • 256 KBPS • METRO MOTORU' },
+  medium: { badge: 'STD', footer: 'REKLAMSIZ • 160 KBPS • METRO MOTORU' },
+  low: { badge: 'ECO', footer: 'REKLAMSIZ • 96 KBPS • METRO MOTORU' }
+};
 
 export interface PlayerModalProps {
   onClose?: () => void;
@@ -27,44 +31,98 @@ export interface PlayerModalProps {
 
 export default function PlayerModal({ onClose }: PlayerModalProps = {}) {
   const router = useRouter();
-  const handleClose = () => {
+  // Döndürme/bölünmüş ekran durumlarında güncel genişlik için hook kullanılır.
+  const { width } = useWindowDimensions();
+  const ARTWORK_SIZE = Math.min(width - 64, 340);
+
+  const handleClose = useCallback(() => {
     playerStore.setPlayerModalOpen(false);
     if (onClose) {
       onClose();
       return;
     }
-    if (router && typeof router.back === 'function') {
-      try {
-        router.back();
-      } catch (e) {}
+    try {
+      router.back();
+    } catch (e) {
+      console.warn('[PlayerModal] Kapatma hatası:', e);
     }
-  };
+  }, [onClose, router]);
 
-  const { currentSong, playing, likedIds, shuffle, repeat, queue, queueIndex } = usePlayer();
+  const currentSong = usePlayerSelector((s) => s.currentSong);
+  const playing = usePlayerSelector((s) => s.playing);
+  const likedIds = usePlayerSelector((s) => s.likedIds);
+  const shuffle = usePlayerSelector((s) => s.shuffle);
+  const repeat = usePlayerSelector((s) => s.repeat);
+  const queue = usePlayerSelector((s) => s.queue);
+  const queueIndex = usePlayerSelector((s) => s.queueIndex);
+  const audioQuality = usePlayerSelector((s) => s.audioQuality);
   const { currentTime, duration } = usePlayerProgress();
 
   const [activeTab, setActiveTab] = useState<'track' | 'lyrics' | 'queue'>('track');
   const [lyrics, setLyrics] = useState<LyricsData | null>(null);
   const [lyricsLoading, setLyricsLoading] = useState(false);
+  const [addingSimilar, setAddingSimilar] = useState(false);
+  const [seekBarWidth, setSeekBarWidth] = useState(0);
 
-  // Şarkı değiştiğinde şarkı sözlerini çek
+  // Şarkı değiştiğinde şarkı sözlerini çek (eskimiş yanıt korumalı)
   useEffect(() => {
     if (!currentSong) return;
+    let cancelled = false;
+    const songId = currentSong.id;
     setLyrics(null);
     setLyricsLoading(true);
 
     mobileApi
       .getLyrics(currentSong.id, currentSong.title, currentSong.artist)
       .then((data) => {
-        setLyrics(data);
+        if (!cancelled) setLyrics(data);
       })
-      .catch(() => {
-        setLyrics(null);
+      .catch((e) => {
+        if (!cancelled) {
+          console.warn('[PlayerModal] Sözler alınamadı:', e);
+          setLyrics(null);
+        }
       })
       .finally(() => {
-        setLyricsLoading(false);
+        if (!cancelled) setLyricsLoading(false);
       });
+    return () => {
+      cancelled = true;
+    };
   }, [currentSong?.id]);
+
+  const handleSeek = useCallback((e: GestureResponderEvent) => {
+    const barWidth = seekBarWidth > 0 ? seekBarWidth : width - 40;
+    if (barWidth <= 0 || duration <= 0) return;
+    const ratio = Math.max(0, Math.min(1, e.nativeEvent.locationX / barWidth));
+    mobilePlayer.seek(ratio * duration).catch((err) => {
+      console.warn('[PlayerModal] Atlama hatası:', err);
+    });
+  }, [seekBarWidth, width, duration]);
+
+  const handleAddSimilar = useCallback(() => {
+    if (!currentSong || addingSimilar) return;
+    setAddingSimilar(true);
+    mobileApi
+      .getNext(currentSong.id)
+      .then((sim) => {
+        if (sim && sim.length > 0) {
+          let added = 0;
+          sim.forEach((s) => {
+            if (playerStore.addToQueue(s)) added++;
+          });
+          if (added === 0) {
+            console.log('[PlayerModal] Benzer parçalar zaten kuyrukta');
+          }
+        }
+      })
+      .catch((e) => {
+        console.warn('[PlayerModal] Benzer parça eklenemedi:', e);
+      })
+      .finally(() => {
+        setAddingSimilar(false);
+      });
+  }, [currentSong, addingSimilar]);
 
   if (!currentSong) {
     return (
@@ -79,10 +137,12 @@ export default function PlayerModal({ onClose }: PlayerModalProps = {}) {
     );
   }
 
+  const qualityInfo = QUALITY_LABEL[audioQuality] || QUALITY_LABEL.high;
   const isLiked = likedIds.includes(currentSong.id);
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   const formatTime = (secs: number) => {
+    if (!Number.isFinite(secs) || secs < 0) return '0:00';
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
@@ -128,7 +188,7 @@ export default function PlayerModal({ onClose }: PlayerModalProps = {}) {
           </View>
 
           <View style={styles.hiFiBadge}>
-            <Text style={styles.hiFiBadgeText}>HI-FI</Text>
+            <Text style={styles.hiFiBadgeText}>{qualityInfo.badge}</Text>
           </View>
         </View>
 
@@ -143,7 +203,7 @@ export default function PlayerModal({ onClose }: PlayerModalProps = {}) {
                     currentSong.thumbnail ||
                     'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400'
                 }}
-                style={styles.artwork}
+                style={[styles.artwork, { width: ARTWORK_SIZE, height: ARTWORK_SIZE }]}
               />
             </View>
 
@@ -165,9 +225,11 @@ export default function PlayerModal({ onClose }: PlayerModalProps = {}) {
               </View>
 
               <TouchableOpacity
-                onPress={() => playerStore.toggleLike(currentSong.id)}
+                onPress={() => playerStore.toggleLike(currentSong)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={styles.heartBtn}
+                accessibilityRole="button"
+                accessibilityLabel={isLiked ? 'Beğenmekten vazgeç' : 'Beğen'}
               >
                 <Ionicons
                   name={isLiked ? 'heart' : 'heart-outline'}
@@ -182,16 +244,14 @@ export default function PlayerModal({ onClose }: PlayerModalProps = {}) {
               <TouchableOpacity
                 activeOpacity={0.9}
                 style={styles.progressBarHitBox}
-                onPress={(e) => {
-                  const { locationX } = e.nativeEvent;
-                  const barWidth = width - 48;
-                  const ratio = Math.max(0, Math.min(1, locationX / barWidth));
-                  if (duration > 0) {
-                    mobilePlayer.seek(ratio * duration);
-                  }
-                }}
+                onPress={handleSeek}
+                accessibilityRole="adjustable"
+                accessibilityLabel="Şarkı konumu"
               >
-                <View style={styles.progressBarBg}>
+                <View
+                  style={styles.progressBarBg}
+                  onLayout={(e) => setSeekBarWidth(e.nativeEvent.layout.width)}
+                >
                   <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
                 </View>
               </TouchableOpacity>
@@ -265,7 +325,7 @@ export default function PlayerModal({ onClose }: PlayerModalProps = {}) {
             <View style={styles.footerShield}>
               <Ionicons name="shield-checkmark" size={13} color="#00f0ff" />
               <Text style={styles.footerShieldText}>
-                REKLAMSIZ • 256 KBPS • METRO MOTORU
+                {qualityInfo.footer}
               </Text>
             </View>
           </View>
@@ -332,13 +392,16 @@ export default function PlayerModal({ onClose }: PlayerModalProps = {}) {
             <View style={styles.queueHeaderRow}>
               <Text style={styles.queueTitle}>Çalma Sırası ({queue.length} Parça)</Text>
               <TouchableOpacity
-                onPress={() => {
-                  mobileApi.getNext(currentSong.id).then((sim) => {
-                    sim.forEach((s) => playerStore.addToQueue(s));
-                  });
-                }}
+                onPress={handleAddSimilar}
+                disabled={addingSimilar}
+                accessibilityRole="button"
+                accessibilityLabel="Benzer parçaları kuyruğa ekle"
               >
-                <Text style={styles.queueAutoAddText}>+ Benzer Parça Ekle</Text>
+                {addingSimilar ? (
+                  <ActivityIndicator size="small" color="#00f0ff" />
+                ) : (
+                  <Text style={styles.queueAutoAddText}>+ Benzer Parça Ekle</Text>
+                )}
               </TouchableOpacity>
             </View>
 
@@ -355,7 +418,9 @@ export default function PlayerModal({ onClose }: PlayerModalProps = {}) {
                     style={[styles.queueItem, isPlayingItem && styles.activeQueueItem]}
                     onPress={() => {
                       playerStore.setQueue(queue, idx);
-                      mobilePlayer.play(song);
+                      mobilePlayer.play(song).catch((e) => {
+                        console.warn('[PlayerModal] Kuyruktan oynatma hatası:', e);
+                      });
                     }}
                     activeOpacity={0.7}
                   >
@@ -491,8 +556,6 @@ const styles = StyleSheet.create({
     elevation: 12
   },
   artwork: {
-    width: ARTWORK_SIZE,
-    height: ARTWORK_SIZE,
     borderRadius: 20,
     backgroundColor: '#121927',
     borderWidth: 1,

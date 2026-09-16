@@ -20,7 +20,7 @@ export default function TabsLayout() {
           name="index"
           options={{
             title: 'Ana Sayfa',
-            tabBarIcon: ({ color, focused }: { color: any; focused: boolean }) => (
+            tabBarIcon: ({ color, focused }) => (
               <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
             )
           }}
@@ -29,7 +29,7 @@ export default function TabsLayout() {
           name="search"
           options={{
             title: 'Keşfet & Ara',
-            tabBarIcon: ({ color, focused }: { color: any; focused: boolean }) => (
+            tabBarIcon: ({ color, focused }) => (
               <Ionicons name={focused ? 'search' : 'search-outline'} size={22} color={color} />
             )
           }}
@@ -38,7 +38,7 @@ export default function TabsLayout() {
           name="library"
           options={{
             title: 'Kitaplık',
-            tabBarIcon: ({ color, focused }: { color: any; focused: boolean }) => (
+            tabBarIcon: ({ color, focused }) => (
               <Ionicons name={focused ? 'library' : 'library-outline'} size={22} color={color} />
             )
           }}
@@ -47,7 +47,7 @@ export default function TabsLayout() {
           name="settings"
           options={{
             title: 'Ayarlar',
-            tabBarIcon: ({ color, focused }: { color: any; focused: boolean }) => (
+            tabBarIcon: ({ color, focused }) => (
               <Ionicons name={focused ? 'options' : 'options-outline'} size={22} color={color} />
             )
           }}
