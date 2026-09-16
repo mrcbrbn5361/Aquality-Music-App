@@ -4,10 +4,10 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-16 22:33` |
+| **Son Güncelleme** | `2026-09-16 22:51` |
 | **Proje Versiyonu** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`, Mobil: `v1.0.1`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `e9612e8 - fix: update domain to aqualitymusic.vercel.app (73 minutes ago)` |
+| **Son Git Commit** | `2bcd48c - fix(ci): restore 7za symlink for mac build and sync bot doc commands (1 second ago)` |
 | **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Kod Hacmi (LOC)** | Ana Süreç: ~5405 satır, Arayüz: ~5175 satır, Mobil (Expo): ~5833 satır, Web: ~1788 satır |
 
@@ -55,44 +55,7 @@
 
 ## 📁 3. Son Değiştirilen / İzlenen Dosyalar (Git Status)
 
-| Dosya Yolu | Durum |
-|---|---|
-| `PROJE-DURUM.md` | Düzenlendi |
-| `desktop/src/main/api/bot-server.ts` | Düzenlendi |
-| `desktop/src/main/api/innertube.ts` | Düzenlendi |
-| `desktop/src/main/api/stream-resolver.ts` | Düzenlendi |
-| `desktop/src/main/auth/discord-oauth.ts` | Düzenlendi |
-| `desktop/src/main/auth/google-oauth.ts` | Düzenlendi |
-| `desktop/src/main/auth/music-auth.ts` | Düzenlendi |
-| `desktop/src/main/main.ts` | Düzenlendi |
-| `desktop/src/main/providers/lyrics-provider.ts` | Düzenlendi |
-| `desktop/src/main/types/discord-rpc.d.ts` | Düzenlendi |
-| `desktop/src/main/utils/discord.ts` | Düzenlendi |
-| `desktop/src/main/utils/store.ts` | Düzenlendi |
-| `desktop/src/renderer/components/app.ts` | Düzenlendi |
-| `desktop/src/renderer/index.html` | Düzenlendi |
-| `desktop/src/renderer/styles/login.css` | Silindi |
-| `desktop/src/renderer/styles/main.css` | Düzenlendi |
-| `docs/01-MIMARI-VE-SISTEM-TASARIMI.md` | Düzenlendi |
-| `docs/02-API-VE-STREAM-MOTORU.md` | Düzenlendi |
-| `docs/03-AUTH-VE-GUVENLIK.md` | Düzenlendi |
-| `docs/04-RENDERER-VE-ARAYUZ.md` | Düzenlendi |
-| `docs/05-VERI-STORE-VE-DURUM.md` | Düzenlendi |
-| `docs/06-PAKETLEME-VE-DAGITIM.md` | Düzenlendi |
-| `docs/07-WEB-SITESI-VE-SEO.md` | Düzenlendi |
-| `docs/08-SORUNLAR-VE-COZUMLER.md` | Düzenlendi |
-| `docs/09-GELISTIRICI-KILAVUZU.md` | Düzenlendi |
-| `docs/10-MOBIL-EXPO-REHBERI.md` | Düzenlendi |
-| `docs/11-DISCORD-BOT-VE-RPC-ENTEGRASYONU.md` | Düzenlendi |
-| `docs/CICD-SCRIPTS-SORUNLARI.md` | Düzenlendi |
-| `docs/DESKTOP-SORUNLARI.md` | Düzenlendi |
-| `docs/GENEL-OZET.md` | Düzenlendi |
-| `docs/MOBILE-SORUNLARI.md` | Düzenlendi |
-| `docs/README.md` | Düzenlendi |
-| `docs/WEBSITE-SORUNLARI.md` | Düzenlendi |
-| `mobile/app/(tabs)/_layout.tsx` | Düzenlendi |
-| `mobile/app/(tabs)/index.tsx` | Düzenlendi |
-| _...ve 48 diğer dosya_ | - |
+_Çalışma ağacı temiz. İzlenen herhangi bir kaydedilmemiş değişiklik bulunmuyor._
 
 ---
 
