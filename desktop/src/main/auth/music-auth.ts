@@ -1,4 +1,4 @@
-import { BrowserWindow, session, Session, shell } from 'electron';
+import { app, BrowserWindow, session, Session, shell } from 'electron';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -15,16 +15,13 @@ import CDP, { CDPClient } from 'chrome-remote-interface';
 export const MUSIC_PARTITION = 'persist:aquality-music';
 const CHROME_DEBUG_PORTS = [9222, 9333]; // Önce varsayılan 9222 (hedef: doğrudan ID ile bul)
 
-// Google, UA'sında "Electron" geçen pencerelerden girişi reddediyor
-// ("Bir sorun oluştu" hatası). Gerçek Chrome kimliği kullanıyoruz.
-// Sürüm Electron'un dahili Chromium'undan alınır — Electron güncellenince
-// otomatik güncellenir, sabit sürüm eskimez.
+// Google'ın Electron tarayıcılarını 'Bu tarayıcı veya uygulama güvenli olmayabilir'
+// uyarısıyla engellemesini önlemek için güncel Chrome 131 UA'sı kullanılır.
 function buildChromeUA(): string {
-  const fullVer = process.versions?.chrome || '126.0.0.0';
-  return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${fullVer} Safari/537.36`;
+  return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 }
 export const CHROME_UA = buildChromeUA();
-export const CHROME_MAJOR = (process.versions?.chrome || '126.0.0.0').split('.')[0] || '126';
+export const CHROME_MAJOR = '131';
 
 // Geçersiz hesap isimlerini filtrele
 const INVALID_NAMES = /^(guide|hamburger|menu|account|hesap|profil|open guide|rehber|kläravuz|youtube music)$/i;
@@ -71,20 +68,24 @@ export class MusicAuth {
     this.migrateDirtyStore();
     // Profil yenileme: cookie'ler var ama isim boşsa veya "YouTube Music" fallback ise API'den çek
     this.refreshProfileIfNeeded();
-    // Google, "Client Hints" header'ları olmadan Electron tarayıcısını
-    // "güvenli değil" diye reddediyor ("Oturumunuz açılamadı" hatası).
-    // Bu header'lar gerçek Chrome'dan geliyormuş gibi gösteriyor.
+    // Google, 'Client Hints' header'ları olmadan veya uyumsuz sürümlerde Electron tarayıcısını
+    // 'güvenli değil' diye reddediyor ('Oturumunuz açılamadı' hatası).
     const ses = this.getSession();
+    ses.setUserAgent(CHROME_UA);
     ses.webRequest.onBeforeSendHeaders(
       { urls: ['*://*.google.com/*', '*://*.youtube.com/*', '*://*.googleusercontent.com/*'] },
       (details, cb) => {
         const h: Record<string, string> = { ...details.requestHeaders };
-        h['Sec-CH-UA'] = `"Chromium";v="${CHROME_MAJOR}", "Google Chrome";v="${CHROME_MAJOR}", "Not.A/Brand";v="8"`;
+        h['User-Agent'] = CHROME_UA;
+        h['Sec-CH-UA'] = `"Google Chrome";v="${CHROME_MAJOR}", "Chromium";v="${CHROME_MAJOR}", "Not_A Brand";v="24"`;
         h['Sec-CH-UA-Mobile'] = '?0';
         h['Sec-CH-UA-Platform'] = '"Windows"';
+        h['Sec-CH-UA-Platform-Version'] = '"15.0.0"';
         h['Accept-Language'] = h['Accept-Language'] || 'tr-TR,tr;q=0.9,en;q=0.8';
         h['Accept'] = h['Accept'] || 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8';
-        h['X-Client-Data'] = h['X-Client-Data'] || 'CJW2yQEIpLbJAQimtskBCKmdygEIv6HKAQ==';
+        delete h['X-Client-Data'];
+        delete h['x-client-data'];
+        delete h['X-Electron'];
         cb({ requestHeaders: h });
       }
     );
@@ -236,16 +237,80 @@ export class MusicAuth {
       return { opened:true, alreadyRunning:true, url:target.url, externalFound:true, targetId: target.id };
     }
     try {
-      if (this.loginWindow && !this.loginWindow.isDestroyed()) { this.loginWindow.focus(); return { opened:true, alreadyRunning:true, url:this.getLoginUrl() }; }
+      if (this.loginWindow && !this.loginWindow.isDestroyed()) {
+        this.loginWindow.focus();
+        return { opened: true, alreadyRunning: true, url: this.getLoginUrl() };
+      }
+
+      // Preload yolunu derlenmiş konuma göre dinamik belirle
+      const preloadCandidates = [
+        path.join(__dirname, 'login-preload.js'),
+        path.join(__dirname, 'auth/login-preload.js'),
+        path.join(app.getAppPath(), 'dist/main/auth/login-preload.js')
+      ];
+      const preloadPath = preloadCandidates.find(p => fs.existsSync(p));
+
       this.loginWindow = new BrowserWindow({
-        width: 1000, height: 700, show: true, autoHideMenuBar:true,
-        webPreferences: { partition: MUSIC_PARTITION, nodeIntegration:false, contextIsolation:true, sandbox:true }
+        width: 1040,
+        height: 720,
+        show: true,
+        autoHideMenuBar: true,
+        title: 'Aquality Music - YouTube Music Oturum Aç',
+        webPreferences: {
+          partition: MUSIC_PARTITION,
+          nodeIntegration: false,
+          contextIsolation: false,
+          sandbox: false,
+          preload: preloadPath
+        }
       });
-      try { (this.loginWindow.webContents as any).setUserAgent(CHROME_UA); } catch {}
-      this.loginWindow.loadURL(this.getLoginUrl());
-      this.loginWindow.on('closed', ()=> this.loginWindow=null);
-      return { opened:true, url:this.getLoginUrl() };
-    } catch(e:any){ return { opened:false, error:e?.message||String(e), url:this.getLoginUrl() }; }
+
+      try {
+        (this.loginWindow.webContents as any).setUserAgent(CHROME_UA);
+      } catch {}
+
+      // Webdriver ve window.chrome simülasyonunu tüm alt sayfalara da doğrudan enjekte et
+      const STEALTH_INJECTION = `
+        try {
+          delete Object.getPrototypeOf(navigator).webdriver;
+          Object.defineProperty(navigator, 'webdriver', { get: () => undefined, configurable: true });
+          if (!window.chrome) window.chrome = {};
+          window.chrome.app = window.chrome.app || { isInstalled: false, InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' }, RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' } };
+          window.chrome.csi = window.chrome.csi || function () {};
+          window.chrome.loadTimes = window.chrome.loadTimes || function () { return { commitLoadTime: Date.now()/1000, connectionInfo: 'http/1.1', finishDocumentLoadTime: Date.now()/1000, finishLoadTime: Date.now()/1000, firstPaintAfterLoadTime: 0, firstPaintTime: Date.now()/1000, navigationType: 'Other', npnNegotiatedProtocol: 'unknown', requestTime: Date.now()/1000, startLoadTime: Date.now()/1000, wasAlternateProtocolAvailable: false, wasFetchedViaSpdy: false, wasNpnNegotiated: false }; };
+        } catch(e) {}
+      `;
+      this.loginWindow.webContents.on('did-start-navigation', () => {
+        try { this.loginWindow?.webContents.executeJavaScript(STEALTH_INJECTION, true).catch(() => {}); } catch {}
+      });
+      this.loginWindow.webContents.on('dom-ready', () => {
+        try { this.loginWindow?.webContents.executeJavaScript(STEALTH_INJECTION, true).catch(() => {}); } catch {}
+      });
+
+      // Oturum tamamlandığında (Google yönlendirmesi music.youtube.com'a döndüğünde) otomatik aktar
+      this.loginWindow.webContents.on('did-navigate', async (_, navUrl) => {
+        if (navUrl && navUrl.includes('music.youtube.com') && !navUrl.includes('accounts.google.com')) {
+          setTimeout(async () => {
+            try {
+              const hasLogin = await this.isAuthenticated();
+              if (hasLogin) {
+                console.log('[Auth] Oturum açma tespit edildi, profil aktarılıyor...');
+                await this.importFromChrome();
+              }
+            } catch {}
+          }, 1500);
+        }
+      });
+
+      this.loginWindow.loadURL(this.getLoginUrl(), {
+        httpReferrer: 'https://music.youtube.com/',
+        userAgent: CHROME_UA
+      });
+      this.loginWindow.on('closed', () => this.loginWindow = null);
+      return { opened: true, url: this.getLoginUrl() };
+    } catch (e: any) {
+      return { opened: false, error: e?.message || String(e), url: this.getLoginUrl() };
+    }
   }
 
   // Artık loginWindow'un kendi session'ında cookie zaten var — direkt profili çekip kapat

@@ -45,7 +45,7 @@ function isValidStoreValue(key: string, value: unknown): boolean {
 import { DiscordRPC } from './utils/discord';
 import { DiscordOAuth } from './auth/discord-oauth';
 import { GoogleOAuth } from './auth/google-oauth';
-import { MusicAuth } from './auth/music-auth';
+import { MusicAuth, CHROME_UA } from './auth/music-auth';
 import { StreamResolver } from './api/stream-resolver';
 import { authProvider } from './providers/auth-provider';
 import { volumeRatioProvider } from './providers/volume-ratio';
@@ -53,6 +53,9 @@ import { lyricsProvider } from './providers/lyrics-provider';
 import { autoUpdater } from 'electron-updater';
 import { BotServer } from './api/bot-server';
 
+// Google oturum açma sayfasının 'Bu tarayıcı veya uygulama güvenli olmayabilir' hatası vermemesi için
+// Chromium otomasyon bayraklarını ve webdriver tespitini devre dışı bırak
+app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
 // Gizli çözücü penceresinde otomatik oynatmaya izin ver (kullanıcı hareketi gerekmesin)
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 // Google girişi için Client Hints desteği (mevcut enable-features değerini koru)
@@ -495,13 +498,10 @@ function setupIPC(): void {
     }
   });
   ipcMain.handle('yt:player', async (_, videoId: string) => {
-    // Girişli session ile gizli pencerede şarkıyı oynat
+    // Girişli veya misafir modda gizli pencerede şarkıyı oynat
     const safeVideoId = typeof videoId === 'string' && /^[A-Za-z0-9_-]{11}$/.test(videoId) ? videoId : '';
     if (!safeVideoId) {
       return { error: 'invalid_id', id: '' };
-    }
-    if (!(await musicAuth.isAuthenticated())) {
-      return { error: 'not_authenticated', id: safeVideoId };
     }
     // Oynatmayı başlat (fire & forget — ana pencere state'i update event'iyle alır)
     streamResolver.play(safeVideoId).catch((err) => console.error('[Player] play error:', err));
@@ -812,6 +812,7 @@ if (!gotLock) {
 
 app.whenReady().then(async () => {
   if (!gotLock) return;
+  app.userAgentFallback = CHROME_UA;
   // Protokol kaydı ready içinde (Windows'ta ready öncesi kayıt tutarsız olur)
   try {
     if (!app.isDefaultProtocolClient('aquality-music')) app.setAsDefaultProtocolClient('aquality-music');
