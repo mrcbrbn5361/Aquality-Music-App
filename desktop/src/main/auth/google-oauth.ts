@@ -107,7 +107,7 @@ export class GoogleOAuth {
           timeoutTimer = null;
         }
         if (server) {
-          try { server.close(); } catch {}
+          try { server.close(); } catch (e) { /* OAuth callback sunucusu zaten kapalı */ }
         }
       };
 

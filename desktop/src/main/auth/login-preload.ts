@@ -15,12 +15,12 @@ try {
   const navProto = (typeof navigator !== 'undefined' ? Object.getPrototypeOf(navigator) : null) || (typeof navigator !== 'undefined' ? navigator : null);
   try {
     delete (navProto as any).webdriver;
-  } catch {}
+  } catch (e) { /* bilerek sessiz: webdriver bayrağı yoksa geç */ }
   Object.defineProperty(navigator, 'webdriver', {
     get: () => undefined,
     configurable: true
   });
-} catch {}
+} catch (e) { /* bilerek sessiz: preload asla fırlatmamalı */ }
 
 try {
   // 2. Google Accounts kontrolü için window.chrome nesnesini tanımla
@@ -52,4 +52,4 @@ try {
       wasNpnNegotiated: false
     };
   };
-} catch {}
+} catch (e) { /* bilerek sessiz: preload asla fırlatmamalı */ }

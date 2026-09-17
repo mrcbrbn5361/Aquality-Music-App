@@ -190,7 +190,9 @@ export class MusicAuth {
           console.log('[Auth] Profil yenilendi:', merged.name || '(isim yok)', merged.picture ? 'pp var' : 'pp yok');
         }
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[Auth] Profil yenileme hatası:', e);
+    }
   }
 
   // İki adımlı giriş akışı:
@@ -208,7 +210,9 @@ export class MusicAuth {
         const buf = fs.readFileSync(p);
         if (buf.includes(Buffer.from('music.youtube.com')) || buf.includes(Buffer.from('youtube'))) return true;
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[Auth] Chrome cookie dosyası okunamadı:', e);
+    }
     return false;
   }
   async findYouTubeMusicTarget(): Promise<{ id: string; url: string } | null> {
@@ -222,7 +226,9 @@ export class MusicAuth {
         const targets = await res.json() as any[];
         const hit = targets.find(t => t.type === 'page' && (t.url?.includes('music.youtube.com') || t.title?.toLowerCase().includes('youtube music')));
         if (hit) return { id: hit.id, url: hit.url };
-      } catch {}
+      } catch (e) {
+        console.debug(`[Auth] Debug portu kapalı (${port}):`, (e as Error)?.message || e);
+      }
     }
     return null;
   }
@@ -233,7 +239,7 @@ export class MusicAuth {
   async openChromeLogin(): Promise<{ opened: boolean; error?: string; alreadyRunning?: boolean; url?: string; externalFound?: boolean; targetId?: string }> {
     const target = await this.findYouTubeMusicTarget();
     if(target){
-      try{ const { execSync } = await import('child_process'); execSync(`powershell -NoProfile -Command "Add-Type -AssemblyName System; (Get-Process chrome | Where-Object { $_.MainWindowTitle -like '*YouTube*Music*' } | Select-Object -First 1).MainWindowHandle | ForEach-Object { Add-Type -MemberDefinition '[DllImport(\\"user32.dll\\")] public static extern bool SetForegroundWindow(IntPtr hWnd);' -Name Win -NamespaceTmp -PassThru | % { $_.SetForegroundWindow($_) } } 2>nul"`, { timeout:1500 } as any); }catch{}
+      try{ const { execSync } = await import('child_process'); execSync(`powershell -NoProfile -Command "Add-Type -AssemblyName System; (Get-Process chrome | Where-Object { $_.MainWindowTitle -like '*YouTube*Music*' } | Select-Object -First 1).MainWindowHandle | ForEach-Object { Add-Type -MemberDefinition '[DllImport(\\"user32.dll\\")] public static extern bool SetForegroundWindow(IntPtr hWnd);' -Name Win -NamespaceTmp -PassThru | % { $_.SetForegroundWindow($_) } } 2>nul"`, { timeout:1500 } as any); } catch (e) { /* pencere öne çıkarma best-effort */ }
       return { opened:true, alreadyRunning:true, url:target.url, externalFound:true, targetId: target.id };
     }
     try {
@@ -267,7 +273,7 @@ export class MusicAuth {
 
       try {
         (this.loginWindow.webContents as any).setUserAgent(CHROME_UA);
-      } catch {}
+      } catch (e) { console.warn('[Auth] UA ayarlanamadı:', e); }
 
       // Webdriver ve window.chrome simülasyonunu tüm alt sayfalara da doğrudan enjekte et
       const STEALTH_INJECTION = `
@@ -281,10 +287,10 @@ export class MusicAuth {
         } catch(e) {}
       `;
       this.loginWindow.webContents.on('did-start-navigation', () => {
-        try { this.loginWindow?.webContents.executeJavaScript(STEALTH_INJECTION, true).catch(() => {}); } catch {}
+        try { this.loginWindow?.webContents.executeJavaScript(STEALTH_INJECTION, true).catch(() => {}); } catch (e) { /* stealth enjeksiyon best-effort */ }
       });
       this.loginWindow.webContents.on('dom-ready', () => {
-        try { this.loginWindow?.webContents.executeJavaScript(STEALTH_INJECTION, true).catch(() => {}); } catch {}
+        try { this.loginWindow?.webContents.executeJavaScript(STEALTH_INJECTION, true).catch(() => {}); } catch (e) { /* stealth enjeksiyon best-effort */ }
       });
 
       // Oturum tamamlandığında (Google yönlendirmesi music.youtube.com'a döndüğünde) otomatik aktar
@@ -297,7 +303,9 @@ export class MusicAuth {
                 console.log('[Auth] Oturum açma tespit edildi, profil aktarılıyor...');
                 await this.importFromChrome();
               }
-            } catch {}
+            } catch (e) {
+              console.warn('[Auth] Otomatik profil aktarımı hatası:', e);
+            }
           }, 1500);
         }
       });
@@ -319,7 +327,7 @@ export class MusicAuth {
       const ses=this.getSession();
       // tüm domainlerde ara — accounts.google.com'da cookie olabilir ama music.youtube.com'da henüz yok
       const urls=['https://music.youtube.com','https://accounts.google.com','https://youtube.com','https://www.youtube.com'];
-      let all: Electron.Cookie[]=[]; for(const u of urls){ try{ const cs=await ses.cookies.get({url:u}); all.push(...cs);}catch{} }
+      let all: Electron.Cookie[]=[]; for(const u of urls){ try{ const cs=await ses.cookies.get({url:u}); all.push(...cs);}catch(e){ console.debug('[Auth] Cookie okunamadı:', u, (e as Error)?.message || e); } }
       // dedupe by name+domain
       const uniq=new Map<string,Electron.Cookie>(); for(const c of all){ uniq.set(c.name+'|'+c.domain, c); }
       const cookies=[...uniq.values()];
@@ -335,13 +343,15 @@ export class MusicAuth {
             const curUrl = this.loginWindow.webContents.getURL() || '';
             if (!curUrl.includes('music.youtube.com')) {
               await this.loginWindow.webContents.loadURL('https://music.youtube.com/');
-              for(let i=0;i<12;i++){ await new Promise(r=>setTimeout(r,1000)); try{ const has=await this.loginWindow!.webContents.executeJavaScript(`!!(document.querySelector('ytmusic-nav-bar #avatar img')||document.querySelector('#account-name'))`,true); if(has) break; }catch{} }
+              for(let i=0;i<12;i++){ await new Promise(r=>setTimeout(r,1000)); try{ const has=await this.loginWindow!.webContents.executeJavaScript(`!!(document.querySelector('ytmusic-nav-bar #avatar img')||document.querySelector('#account-name'))`,true); if(has) break; }catch(e){ /* avatar bekleme best-effort */ } }
             }
-          } catch {}
+          } catch (e) {
+            console.warn('[Auth] Giriş sayfası hazırlanamadı:', e);
+          }
           // hesap menüsü kapalıysa avatar'a tıklayıp aç
           try {
             await this.loginWindow.webContents.executeJavaScript(`(function(){ if(!document.querySelector('ytd-active-account-header-renderer #account-name')){ const b=document.querySelector('ytmusic-nav-bar #avatar button')||document.querySelector('ytmusic-nav-bar #avatar')||document.querySelector('#avatar-btn'); if(b){ (b as HTMLElement).click(); } } })()`, true);
-          } catch {}
+          } catch (e) { /* avatar tıklama best-effort */ }
           await new Promise(r=>setTimeout(r,2500));
           const domData: any = await this.loginWindow.webContents.executeJavaScript(`(function(){
             const acc=document.querySelector('ytd-active-account-header-renderer');
@@ -360,7 +370,9 @@ export class MusicAuth {
           const parsed = typeof domData==='string' ? JSON.parse(domData) : domData;
           if(parsed && (parsed.name || parsed.picture)) prof = { name: parsed.name, email: parsed.email, picture: parsed.picture };
         }
-      } catch {}
+      } catch (e) {
+        console.warn('[Auth] Giriş penceresi DOM profil hatası:', e);
+      }
       // 2. yol: hidden window ile DOM çek (pp VEYA isim eksikse dene)
       if (!prof || !prof.picture || !prof.name) {
         try {
@@ -372,7 +384,9 @@ export class MusicAuth {
             if(hProf.name && hProf.name.length>1 && !prof.name) prof.name = hProf.name;
             if(hProf.email && !prof.email) prof.email = hProf.email;
           }
-        } catch {}
+        } catch (e) {
+          console.warn('[Auth] API profil yedeği hatası:', e);
+        }
       }
       // 3. yol: CDP (hâlâ isim yoksa)
       if (!prof || !prof.name) {
@@ -387,7 +401,9 @@ export class MusicAuth {
             if(cdpProf.email && !prof.email) prof.email = cdpProf.email;
             if(cdpProf.picture && !prof.picture) prof.picture = cdpProf.picture;
           }
-        } catch {}
+        } catch (e) {
+          console.warn('[Auth] CDP profil yedeği hatası:', e);
+        }
       }
       if(prof && (prof.name||prof.email||prof.picture)){
         const existing = this.store.get('musicUser');
@@ -395,7 +411,7 @@ export class MusicAuth {
         const existingName = existing && sanitizeName(existing.name) ? existing.name : '';
         const finalName = sanitizeName(rawName) || existingName;
         if (!finalName) {
-          try{ this.loginWindow?.close(); }catch{}
+          try { this.loginWindow?.close(); } catch (e) { /* pencere kapatma best-effort */ }
           return { success:false, cookies: cookies.length, error:'Profil ismi okunamadı. Pencerede avatar menüsünü bir kez açıp tekrar "Girişi Aktar"a basın.' };
         }
         this.store.set('musicUser', {
@@ -406,10 +422,10 @@ export class MusicAuth {
           provider:'youtube-music'
         });
       } else {
-        try{ this.loginWindow?.close(); }catch{}
+        try { this.loginWindow?.close(); } catch (e) { /* pencere kapatma best-effort */ }
         return { success:false, cookies: cookies.length, error:'Profil okunamadı. Music ana sayfası tam yüklenince tekrar "Girişi Aktar"a basın.' };
       }
-      try{ this.loginWindow?.close(); }catch{}
+      try { this.loginWindow?.close(); } catch (e) { /* pencere kapatma best-effort */ }
       return { success:true, cookies: cookies.length };
     } catch(e:any){ return { success:false, cookies:0, error:e?.message||String(e)}; }
   }
@@ -437,7 +453,7 @@ export class MusicAuth {
       return { success:false, cookies:0, error:e?.message||String(e) };
     } finally {
       if (tmp) {
-        try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch {}
+        try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch (e) { console.warn('[Auth] Geçici cookie dosyası silinemedi:', tmp, e); }
       }
     }
   }
@@ -521,7 +537,7 @@ export class MusicAuth {
         try {
           const res = await Network.getCookies({ urls: [url] });
           if (res?.cookies) all.push(...res.cookies);
-        } catch {}
+        } catch (e) { console.debug('[Auth] Cookie alınamadı:', url, (e as Error)?.message || e); }
       }
       if (!all.length) {
         return { success: false, cookies: 0, error: 'Chrome\'da YouTube/Google için cookie bulunamadı. Giriş yaptığınızdan emin olun.' };
@@ -583,7 +599,7 @@ export class MusicAuth {
     } catch (e: any) {
       return { success: false, cookies: 0, error: e?.message || String(e) };
     } finally {
-      try { await client?.close(); } catch {}
+      try { await client?.close(); } catch (e) { console.warn('[Auth] CDP kapatma hatası:', e); }
     }
   }
 
@@ -598,12 +614,12 @@ export class MusicAuth {
         try { win.webContents.setUserAgent(CHROME_UA); } catch (e) { console.warn('[Auth] UA ayarlanamadı:', e); }
         await win.loadURL('https://music.youtube.com/');
         // sayfa + nav-bar avatar yüklenene kadar 15sn bekle
-        for(let i=0;i<15;i++){ await new Promise(r=>setTimeout(r,1000)); try{ const has=await win.webContents.executeJavaScript(`!!(document.querySelector('ytmusic-nav-bar #avatar img')||document.querySelector('ytd-active-account-header-renderer #account-name')||document.querySelector('#account-name'))`,true); if(has) break; }catch{} }
+        for(let i=0;i<15;i++){ await new Promise(r=>setTimeout(r,1000)); try{ const has=await win.webContents.executeJavaScript(`!!(document.querySelector('ytmusic-nav-bar #avatar img')||document.querySelector('ytd-active-account-header-renderer #account-name')||document.querySelector('#account-name'))`,true); if(has) break; }catch(e){ /* avatar bekleme best-effort */ } }
         // hesap menüsü kapalıyken header renderer DOM'da olmaz — avatar'a tıklayıp aç
         try {
           await win.webContents.executeJavaScript(`(function(){ const b=document.querySelector('ytmusic-nav-bar #avatar button')||document.querySelector('ytmusic-nav-bar #avatar')||document.querySelector('#avatar-btn'); if(b){ (b as HTMLElement).click(); } })()`, true);
-        } catch {}
-        for(let i=0;i<8;i++){ await new Promise(r=>setTimeout(r,1000)); try{ const has=await win.webContents.executeJavaScript(`!!(document.querySelector('ytd-active-account-header-renderer #account-name')||document.querySelector('#account-name'))`,true); if(has) break; }catch{} }
+        } catch (e) { /* avatar tıklama best-effort */ }
+        for(let i=0;i<8;i++){ await new Promise(r=>setTimeout(r,1000)); try{ const has=await win.webContents.executeJavaScript(`!!(document.querySelector('ytd-active-account-header-renderer #account-name')||document.querySelector('#account-name'))`,true); if(has) break; }catch(e){ /* header bekleme best-effort */ } }
         try {
           const data: any = await win.webContents.executeJavaScript(`(function(){
             const acc=document.querySelector('ytd-active-account-header-renderer');
@@ -690,7 +706,9 @@ export class MusicAuth {
           }
         }
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[Auth] HTML profil çekme hatası:', e);
+    }
     try {
       const cookies = await this.getSession().cookies.get({ url: 'https://music.youtube.com' });
       if (!cookies.length) {
@@ -792,7 +810,7 @@ export class MusicAuth {
       const { Page, Runtime } = client;
       await Page.enable();
       await Runtime.enable();
-      try { await Page.navigate({ url: 'https://music.youtube.com/' }); } catch {}
+      try { await Page.navigate({ url: 'https://music.youtube.com/' }); } catch (e) { /* CDP navigasyon best-effort */ }
       await new Promise((r) => setTimeout(r, 7000));
       const res = await Runtime.evaluate({
         expression: `(function(){

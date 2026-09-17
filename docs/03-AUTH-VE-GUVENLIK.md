@@ -8,10 +8,10 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-17 16:39` |
-| **Proje Sürümü** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`) |
+| **Son Güncelleme** | `2026-09-17 16:44` |
+| **Proje Sürümü** | `v1.0.2` (Masaüstü: `v1.0.2`, Web: `v1.0.2`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `7007be1 - docs: document Docs Engine churn loop rule in memory.md (0 seconds ago)` |
+| **Son Commit** | `c9e4046 - chore(release): sync version to 1.0.2 across workspaces (0 seconds ago)` |
 | **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Takip Edilen Sorunlar** | 24 / 24 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->

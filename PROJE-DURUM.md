@@ -4,10 +4,10 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-17 16:39` |
-| **Proje Versiyonu** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`, Mobil: `v1.0.1`) |
+| **Son Güncelleme** | `2026-09-17 16:44` |
+| **Proje Versiyonu** | `v1.0.2` (Masaüstü: `v1.0.2`, Web: `v1.0.2`, Mobil: `v1.0.2`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `7007be1 - docs: document Docs Engine churn loop rule in memory.md (0 seconds ago)` |
+| **Son Git Commit** | `c9e4046 - chore(release): sync version to 1.0.2 across workspaces (0 seconds ago)` |
 | **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Kod Hacmi (LOC)** | Ana Süreç: ~5527 satır, Arayüz: ~5175 satır, Mobil (Expo): ~5833 satır, Web: ~1788 satır |
 
