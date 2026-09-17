@@ -107,18 +107,60 @@ Commit: **`f1dc31d`** (2026-09-16), header sync: **`454597e`** (HEAD) — push e
 11. **Docs Engine sonsuz döngüsüne girme (doğrulandı 2026-09-17):** Repo'da commit sonrası çalışan "Aquality Docs Engine" hook'u (`scripts/update-docs.cjs`) `PROJE-DURUM.md` ve `docs/01-11-README` başlıklarındaki `Son Güncelleme` + `Son Git Commit` satırlarını her commit'te yeniden yazar. Sonuç: **her commit'ten sonra ağaçta ~26 satırlık başlık churn'ü kalır ve bunu ayrı commit'lemek döngüyü asla bitirmez** (churn, yeni commit hash'ini içerir). Kural: bu churn'ü tek başına commit'leme; bir sonraki GERÇEK değişikliğin commit'ine paketle (`git add -A`). Çalışma ağacında bu 13 dosyanın `M` görünmesi normaldir, kirli ağaç paniği yapma.
 12. **Edit güvenliği (2026-09-17'de 3 kez doğrulandı):** (a) `oldString` ASLA tek başına `} catch {}` gibi kısa/jenerik olmamalı — her zaman çevresindeki benzersiz satırlarla birlikte verilir. (b) `oldString`'e dahil edilen HER satır (`}`, `}, 1500);`, `const ...`, comment) `newString`'de de birebir yer almalı; düşen satır = bozulan build. (c) Her edit'ten sonra ilgili bölge `read` ile teyit edilir, her dosya bitiminde `typecheck` çalıştırılır. Typecheck kırmızıysa commit YOK.
 
-## 6. Sıradaki Adım (kaldığımız yer — buradan devam et)
+## 6. Sıradaki Adım (ANTIGRAVITY DEVİR — 2026-09-17, OpenCode'dan)
 
-Öncelik sırasına göre, her biri ayrı commit:
+> OpenCode oturumu burada temiz noktada kapatıldı: tüm commit'ler push'lu,
+> typecheck/build yeşil, kırık kod yok. Aşağıdaki 3 görev Antigravity'nindir.
+> Her görev ayrı commit + push + memory.md güncellemesi ile ilerler.
 
-1. ~~**Sürüm eşitleme (küçük, risksiz):** kök + `desktop` + `mobile` + `website` `package.json` → `1.0.2`; commit `chore(release): sync version to 1.0.2`; push (tag ATMA — bir sonraki feature ile birlikte).~~ ✅ TAMAMLANDI (2026-09-17, commit aşağıda). Ek olarak kök + mobile `app.json` expo.version da `1.0.2` yapıldı (unutulmuştu). Tag ATILMADI — kural korunuyor.
-2. ~~**`music-auth.ts` boş catch'leri (~18 adet):** her birini tek tek oku; CDP/cookie/temp-dosya akışında gerçek hata yutma varsa anlamlı log + temizlik ekle; DOM/stealth enjeksiyonlarındakilere dokunma. Sonra typecheck + desktop build.~~ ✅ TAMAMLANDI (2026-09-17). 18/18 düzeltildi: gerçek hatalara `console.warn('[Auth] ...')`, sık polling döngülerine `console.debug`, best-effort DOM/kapatma/navigasyonlara açıklayıcı yorum. Sayfa-içi enjekte JS string'lerine (STEALTH_INJECTION, CDP expression) dokunulmadı. Bonus: `login-preload.ts` 3 catch'e yorum (davranış değişikliği yok — f1dc31d düzeltmesi korunuyor), `google/discord-oauth.ts` `server.close()` temizliklerine yorum. `auth/` klasöründe `catch {}` kalmadı (grep doğruladı). Typecheck + `desktop build` (tsc + vite) yeşil.
-   - ⚠️ Ara not: bir düzenlemede `}, 1500);` satırı yanlışlıkla düşürüldü, hemen fark edilip geri eklendi ve bölge yeniden okunarak doğrulandı. Ders: çok satırlı `oldString`'lerde kapanış satırları her zaman `read` ile teyit edilir.
-3. ~~**`innertube.ts` 5 boş catch:** API hata yolları — hangilerinin sessiz geçmesi gerektiğine karar ver, en azından debug log ekle.~~ ✅ TAMAMLANDI (2026-09-17). 5/5 düzeltildi — tamamı fallback zinciri olduğu için `console.debug` kullanıldı (normal akışta log kirliliği yapmaz): session cookie, lyrics-browse, oEmbed, LRCLIB, dış catch, Liked Songs LM fallback. Bonus: `bot-server.ts` `appVersion()` catch'ine debug + stale `'1.0.1'` fallback'ı `'1.0.2'` yapıldı. Typecheck + desktop build yeşil.
-   - ⚠️ Ara not (önemli, 3 kez tekrarlandı): kısa `oldString` (`} catch {}` gibi) kullanıldığında edit aracı **dosyadaki ilk eşleşmeye** uygulayabiliyor (cookie mesajı oEmbed bloğuna gitti) ve `oldString`'e dahil edilen kapanış satırları (`}, 1500);`, `}`, `const data = ...`) `newString`'de unutulursa kod bozuluyor. Typecheck her seferinde yakaladı ve düzeltildi. **Yeni kural 12 olarak eklendi.**
-4. ~~**`AudioBridge.tsx` güvenlik incelemesi (M-005/006/007):** önce dosyayı oku + risk analizi yaz; düzeltme ancak kullanıcı onayıyla.~~ ✅ TAMAMLANDI (2026-09-17, "devam et" onayı). **Bulgu: dosya ZATEN sertleştirilmiş** (`55da5a8`, v1.0.1 security hardening — memory.md öncesi olduğu için kayıtsız kalmış): `sanitizeVideoId` (11-karakter regex), `clampNumber`, `JSON.stringify` enjeksiyon koruması, `mixedContentMode="never"`, `originWhitelist` youtube/googlevideo/gstatic ile sınırlı, `onShouldStartLoadWithRequest={() => false}`, `allowFileAccess*={false}`, `handleMessage` uzunluk limiti (65536) + tip kontrolleri. Yapılan TEK ekleme: `onError`/`onHttpError` warn-only tanı handler'ları (sıfır davranış değişikliği). Doğrulama: `npx tsc --noEmit -p mobile/tsconfig.json` temiz. M-005/006/007 kapatıldı.
-5. ~~**Kalan UI/UX maddeleri** (`docs/UI-UX-SORUNLARI.md` — dosya Docs Engine tarafından kırpılmamış, 749 satır tam duruyor): tekrar (repeat) ikon ayrımı, şarkı sözü otomatik kaydırma, context menu ikonları.~~ ⚠️ KISMEN TAMAMLANDI (2026-09-17) — **önemli bulgu: dokümandaki başlık maddeleri STALE.** Doğrulananlar (kod okundu, düzeltme gerekmedi): UX-D-013 playlist tıklama (`app.ts:2494-2501` handler mevcut), UX-D-029 lyrics auto-scroll (`autoScrollLyrics` + 8sn kullanıcı-kaydırma koruması, `app.ts:1961-1976`), repeat ikon ayrımı (`REPEAT_ICONS` off/all/one + title + persist, `app.ts:1675-1702,2971-2985`), UX-M-063 mobil tab layout (her iki `_layout.tsx` mevcut). **Kural: UI-UX dokümanındaki HER madde koda dokunmadan önce dosyada doğrulanır; stale çıkanlar için kod yazılmaz, sadece buraya not düşülür.** Kalan ~98 maddenin tek tek doğrulanması SONRAKİ OTURUMA bırakıldı (büyük iş — Antigravity'ye devredilebilir, talimat: madde madde doğrula, gerçek olanları küçük commit'lerle düzelt).
-6. Bunlar bitince: version bump → tag → release → build çıktılarını `desktop/release/` + GitHub Release'te doğrula.
+### Görev A — UI/UX backlog doğrulaması (~98 madde, büyük iş)
+- Kaynak: `docs/UI-UX-SORUNLARI.md` (749 satır, tam duruyor).
+- Yöntem: maddeleri tek tek ele al; HER madde için önce ilgili dosyayı `read` ile açıp
+  gerçekten var mı yok mu doğrula (4 başlık maddenin stale çıktığı görüldü —
+  UX-D-013, UX-D-029, repeat ikonları, UX-M-063).
+- Stale çıkan: kod yazma, sadece bu dosyadaki listeye "stale" notu düş.
+- Gerçek çıkan: küçük, tek konulu commit'le düzelt (`fix(desktop): ...` /
+  `fix(mobile): ...`), her commit öncesi ilgili typecheck/build.
+- Öncelikli adaylar (doğrulanmadı): context menu ikonları, mobil boş-durum
+  ekranları, website erişilebilirlik maddeleri.
+
+### Görev B — v1.0.2 build + release asset güncelleme (orta)
+- Durum: sürümler eşitlendi (`1.0.2` ×6 dosya), ama GitHub Release `v1.0.2`'de
+  hâlâ `1.0.1` isimli asset'ler duruyor; `v1.0.2` tag'i atılmadı (bilerek).
+- Adımlar:
+  1. `npm run build:win` çalıştır → `desktop/release/` altında
+     `Aquality-Music-Setup-1.0.2-*.exe` + Portable + `.blockmap` + `latest.yml`
+     üretildiğini doğrula.
+  2. `npm run build:website` çalıştır → `website/dist` doğrulansın
+     (Vercel zaten otomatik deploy ediyor, bu sadece teyit).
+  3. Mac build YERELDE DENENMEZ (Windows'ta beklenen şekilde hata verir) —
+     CI'daki `build-mac.yml`'e bırakılır.
+  4. `git tag -a v1.0.2 -m "..."` + `git push origin v1.0.2` → Actions
+     Windows+macOS build'leri otomatik koşar ve asset'leri release'e yükler.
+  5. Release sayfasında 4 asset grubunu gözle doğrula:
+     Windows Setup + Portable (+blockmap, latest.yml), macOS DMG x64+arm64
+     (+zip, blockmap, latest-mac.yml).
+- Risk notu: tag push CI'yı tetikler; workflow'lar zaten tag-tetiklemeli
+  (`startsWith(github.ref, 'refs/tags/v')`), sürpriz yok.
+
+### Görev C — Kalan teknik borç (küçük, fırsat bulunca)
+- `desktop/src/main/api/stream-resolver.ts` içindeki ~50 `catch {}`:
+  BİLEREK BIRAKILDI (enjekte DOM-query JS'i, kural 5/12). Topluca değiştirme;
+  sadece gerçek hata yutan main-process noktaları varsa tek tek ele al.
+- `website/vercel.json`: rewrite yok, `cleanUrls: true` + `404.html` yeterli
+  görünüyor; 404 davranışını canlı sitede test edip sonucu buraya yaz.
+- Önceki oturum iddiası çürütüldü ("404 rewrite eklendi" — yoktu); bu tür
+  iddialar dosyada doğrulanmadan memory.md'ye "tamamlandı" yazılmaz.
+
+## 6b. Antigravity'ye verilecek İLK KOMUT (kopyala-yapıştır)
+
+```
+Önce kökteki memory.md dosyasını tamamını oku. Bu projenin kalıcı hafızasıdır.
+Bölüm 5'teki 12 kurala ve Bölüm 7'deki oturum protokolüne harfiyen uy.
+Bölüm 6'daki Görev A'dan başla (UI/UX backlog doğrulaması).
+Her görev sonunda memory.md'nin 6. ve 8. bölümlerini güncelle, commit at ve push et.
+Emin olmadığın yerde kod yazma, bana sor.
+```
 
 ## 7. Oturum Kapanış Protokolü (her ajan, her seferinde)
 
@@ -131,6 +173,7 @@ Oturum bitmeden ÖNCE:
 
 ## 8. Oturum Kaydı (her güncellemede buraya ekle — en üste)
 
+- **2026-09-17 · OpenCode (Muse Spark) → ANTIGRAVITY DEVİR:** Bölüm 6, Antigravity görev listesine (A/B/C) + kopyala-yapıştır ilk komuta (6b) çevrildi. Devir anı durumu: HEAD `fafd359`, remote senkron, typecheck/build yeşil, kırık kod yok. Kullanıcı onayı ile devir.
 - **2026-09-17 · OpenCode (Muse Spark):** UI/UX doğrulama turu — UX-D-013, UX-D-029, repeat ikonları, UX-M-063 stale çıktı (kodda zaten düzgün), değişiklik YOK. Kural eklendi: doküman maddesi önce kodda doğrulanır.
 - **2026-09-17 · OpenCode (Muse Spark):** `fix(mobile): AudioBridge inceleme + WebView tani loglari` — dosya zaten sertleştirilmiş (`55da5a8`), sadece `onError`/`onHttpError` warn eklendi. Mobile tsc temiz. Push edildi.
 - **2026-09-17 · OpenCode (Muse Spark):** `fix(desktop): innertube fallback zincirlerine debug loglar` — `innertube.ts` 5/5 + `bot-server.ts` appVersion. Doğrulama: typecheck + desktop build yeşil (2 ara kırılma typecheck ile yakalanıp düzeltildi). Push edildi.
