@@ -14,7 +14,7 @@ const { renderPlayerCard } = require('./cardRenderer');
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const AQUALITY_APP_ID = '1547602880427724841';
-const AQUALITY_GUILD_ID = '1504574003594137680'; // Özel Aquality Sunucusu
+const AQUALITY_GUILD_ID = process.env.DISCORD_GUILD_ID || '';
 
 // Güvenlik: Kullanıcı başına cooldown (anti-spam)
 const cooldowns = new Map();
@@ -34,7 +34,7 @@ const client = new Client({
 async function fetchLocalBotState() {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 800);
+    const timeout = setTimeout(() => controller.abort(), 2000);
     const headers = {};
     if (process.env.BOT_SERVER_TOKEN) {
       headers['Authorization'] = `Bearer ${process.env.BOT_SERVER_TOKEN}`;
@@ -46,7 +46,7 @@ async function fetchLocalBotState() {
     clearTimeout(timeout);
     if (res.ok) {
       const data = await res.json();
-      if (data && data.isPlaying && data.track) return data;
+      if (data && data.track) return data;
     }
   } catch (e) {
     // Local API not available, fallback to null
@@ -112,9 +112,10 @@ client.on(Events.MessageCreate, async (message) => {
 
   if (!isAquaMusicCmd) return;
 
-  // 🛡️ GÜVENLİK KONTROLÜ 1: Sunucu İzolasyonu (Sadece 1504574003594137680 sunucusunda çalışır)
-  if (!message.guild || message.guild.id !== AQUALITY_GUILD_ID) {
-    // Özel Aquality sunucusu dışındaki yerlerde komut sessizce yoksayılır
+  console.log(`[Discord Bot] Komut alındı: "${message.content}" | Sunucu: ${message.guild?.name || 'DM'} (${message.guild?.id || 'DM'}) | Kullanıcı: ${message.author.tag}`);
+
+  // Sunucu İzolasyonu: Eğer ortam değişkeniyle DISCORD_GUILD_ID zorunlu kılınmışsa sınırla, aksi halde botun eklendiği her sunucuda çalış
+  if (AQUALITY_GUILD_ID && message.guild && message.guild.id !== AQUALITY_GUILD_ID) {
     return;
   }
 
@@ -134,11 +135,15 @@ client.on(Events.MessageCreate, async (message) => {
   cooldowns.set(message.author.id, now + COOLDOWN_MS);
 
   // 🛡️ GÜVENLİK KONTROLÜ 3: Kanal Yetki Doğrulaması
-  if (message.channel && message.guild.members.me) {
-    const perms = message.channel.permissionsFor(message.guild.members.me);
-    if (perms && (!perms.has(PermissionsBitField.Flags.SendMessages) || !perms.has(PermissionsBitField.Flags.EmbedLinks) || !perms.has(PermissionsBitField.Flags.AttachFiles))) {
-      console.warn(`[Discord Bot] Kanalda mesaj gönderme veya dosya ekleme yetkisi yok: ${message.channel.id}`);
-      return;
+  if (message.guild && message.channel && message.guild.members?.me) {
+    try {
+      const perms = message.channel.permissionsFor(message.guild.members.me);
+      if (perms && !perms.has(PermissionsBitField.Flags.SendMessages)) {
+        console.warn(`[Discord Bot] Kanalda mesaj gönderme yetkisi yok: ${message.channel.id}`);
+        return;
+      }
+    } catch (e) {
+      // Ignore permission check error
     }
   }
 
