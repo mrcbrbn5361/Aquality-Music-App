@@ -104,6 +104,7 @@ Commit: **`f1dc31d`** (2026-09-16), header sync: **`454597e`** (HEAD) — push e
 8. **Tag/release disiplini:** Tag atmadan ÖNCE tüm `package.json` sürümlerini eşitle (kök + desktop + mobile + website), SONRA `git tag -a vX.Y.Z` + push. Release notları Türkçe + İngilizce kısa özet içerir.
 9. **`docs/` uyarısı:** Uzun el yazımı dokümanlar Docs Engine tarafından kırpılabilir. Kalıcı kararlar ve durum **bu dosyaya** yazılır.
 10. **Şüphede dur:** Emin olmadığın bir mimari kararda (ör. AudioBridge WebView, InnerTube client, Portable veri yolu) kod yazmak yerine analiz edip seçenekleri kullanıcıya sor.
+11. **Docs Engine sonsuz döngüsüne girme (doğrulandı 2026-09-17):** Repo'da commit sonrası çalışan "Aquality Docs Engine" hook'u (`scripts/update-docs.cjs`) `PROJE-DURUM.md` ve `docs/01-11-README` başlıklarındaki `Son Güncelleme` + `Son Git Commit` satırlarını her commit'te yeniden yazar. Sonuç: **her commit'ten sonra ağaçta ~26 satırlık başlık churn'ü kalır ve bunu ayrı commit'lemek döngüyü asla bitirmez** (churn, yeni commit hash'ini içerir). Kural: bu churn'ü tek başına commit'leme; bir sonraki GERÇEK değişikliğin commit'ine paketle (`git add -A`). Çalışma ağacında bu 13 dosyanın `M` görünmesi normaldir, kirli ağaç paniği yapma.
 
 ## 6. Sıradaki Adım (kaldığımız yer — buradan devam et)
 
@@ -127,5 +128,5 @@ Oturum bitmeden ÖNCE:
 
 ## 8. Oturum Kaydı (her güncellemede buraya ekle — en üste)
 
-- **2026-09-17 · OpenCode (Muse Spark):** `memory.md` oluşturuldu. Doğrulamalar: `escapeHtml` (google-oauth.ts:7,233,248), `Bearer` (bot-server.ts:42,69,178), `main.ts`'te `catch {}` kalmadığı, `desktop/src`'te 79 `catch {}` kaldığı (stream-resolver/music-auth/innertube/login-preload/oauth), `package.json` version `1.0.1` vs tag `v1.0.2` uyumsuzluğu, `vercel.json`'da rewrite olmadığı, Docs Engine'in `memory` kelimesine dokunmadığı. Henüz commit/push edilmedi (bu madde ile birlikte edilecek).
+- **2026-09-17 · OpenCode (Muse Spark):** `memory.md` oluşturuldu (`284ff9d`) + push. Ardından Docs Engine churn'ü ayrı commit'lendi (`cbb1076`) — bunun sonsuz döngü olduğu doğrulandı (fark yalnızca `Son Güncelleme`/`Son Git Commit` satırları), Bölüm 5'e **kural 11** eklendi. Bundan sonra churn yalnızca gerçek değişikliklerle paketlenerek commit'lenecek.
 - **2026-09-16 · OpenCode:** `605f390` güvenlik/WCAG/CI paketi + push; `e9612e8` alan adı `aqualitymusic.vercel.app` + website rebuild + push; `f1dc31d` Google login/misafir çalma düzeltmesi; `454597e` docs sync (HEAD); `v1.0.2` tag + GitHub Release; Windows Setup+Portable yerelde build edildi (~96 MB).
