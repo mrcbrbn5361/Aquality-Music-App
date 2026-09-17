@@ -147,6 +147,12 @@ Commit: **`f1dc31d`** (2026-09-16), header sync: **`454597e`** (HEAD) — push e
   4. Renderer arayüzünde (`app.ts`): Hem tam hesap ismi hem de `@handle` kullanıcı adı alt alta eksiksiz gösterilecek şekilde `updateAuthUI` güncellendi.
   5. Windows derlemesi (`npm run build:win`) yerelde çalıştırılıp güncel paketler oluşturuldu; website rebuild edildi.
 
+### Port 9863 REST API Salt Okunur Erişim & Vercel Alan Adı Senkronizasyonu (TAMAMLANDI)
+- **Yapılanlar:**
+  1. `desktop/src/main/api/bot-server.ts`: `/api/v1/state`, `/query`, `/state`, `/api/v1/health`, `/health` uç noktalarına yapılan isteklerdeki bloklayıcı Bearer token zorunluluğu kaldırıldı. Tarayıcıdan (`http://127.0.0.1:9863/api/v1/state`) ve yerel araçlardan (curl, bot) yapılan GET sorguları salt-okunur olarak doğrudan çalan şarkı JSON'ını dönecek şekilde açıldı (401 Unauthorized sorunu çözüldü).
+  2. Güvenlik ve CORS: `Access-Control-Allow-Origin` başlığı yalnızca yerel origin'ler (`localhost`, `127.0.0.1`, `chrome-extension://`) ve canlı web sitesi (`https://aqualitymusic.vercel.app`) için dinamik olarak izin verecek şekilde sıkılaştırıldı; yetkisiz web sitelerinin yerel API'yi gizlice okuması engellendi.
+  3. Eski `https://aquality-music-app-desktop.vercel.app` alan adı tamamen temizlendi ve tüm projede `https://aqualitymusic.vercel.app` alan adına geçirildi (`bot-server.ts`, `scripts/discord-bot/index.js`, `desktop/src/renderer/components/app.ts`).
+
 ### Görev C — Kalan teknik borç (küçük, fırsat bulunca)
 - `desktop/src/main/api/stream-resolver.ts` içindeki ~50 `catch {}`:
   BİLEREK BIRAKILDI (enjekte DOM-query JS'i, kural 5/12). Topluca değiştirme;
@@ -176,6 +182,8 @@ Oturum bitmeden ÖNCE:
 5. **Kota kuralı (kritik):** Limitin dolmasına yakınsan YENİ kod yazmayı bırak; sadece analiz edip bu dosyayı güncelle ve Bölüm 6'yı netleştir. Yarım kalmış, build'i kırık kod ASLA bırakma — ya bitir ya başlama.
 
 ## 8. Oturum Kaydı (her güncellemede buraya ekle — en üste)
+
+- **2026-09-17 · Antigravity:** Port 9863 REST API 401 Hatası Düzeltmesi & `aqualitymusic.vercel.app` Alan Adı Güncellemesi — `desktop/src/main/api/bot-server.ts`'te `GET /api/v1/state`, `/query` ve `/health` için tarayıcı / curl sorgularını engelleyen Bearer token kontrolü kaldırıldı (tarayıcılar rastgele üretilen dahili token'ı bilemediğinden 401 alıyordu); CORS izinleri güvenli origin'lere (`localhost`, `127.0.0.1`, `aqualitymusic.vercel.app`) bağlandı. Projede kalan eski `aquality-music-app-desktop.vercel.app` referansları (`bot-server.ts`, `discord-bot/index.js`, `app.ts`) yeni `https://aqualitymusic.vercel.app` adresine taşındı. Typecheck 0 hata, desktop build yeşil. Push edildi.
 
 - **2026-09-17 · Antigravity:** Discord Bot .aquamusic Çakışma Önleme & YouTube Music Profil Adı/Kullanıcı Adı Düzeltmesi — `scripts/discord-bot/index.js`'te `.aqua` kaldırılıp tekil `.aquamusic` yapıldı; `withPresences: true` ve `GuildMembers` intent'i eklenerek kullanıcının çaldığı şarkı tespiti garantiye alındı. `desktop/src/main/main.ts`'te `BOT_SERVER_TOKEN` aktarıldı. `desktop/src/main/auth/music-auth.ts`'te InnerTube `SAPISIDHASH` yetkilendirmesi, `handle` alanı ve `extractAccountInfo` eklendi. `desktop/src/renderer/components/app.ts`'te hem ad hem kullanıcı adı (`@handle`) gösterimi sağlandı. Windows Setup + Portable yerelde yeniden derlendi, website rebuild edildi, typecheck 0 hata. Push edildi.
 

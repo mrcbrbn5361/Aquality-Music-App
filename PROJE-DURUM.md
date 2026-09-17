@@ -4,12 +4,12 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-17 19:05` |
+| **Son Güncelleme** | `2026-09-17 19:49` |
 | **Proje Versiyonu** | `v1.0.2` (Masaüstü: `v1.0.2`, Web: `v1.0.2`, Mobil: `v1.0.2`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `a1a8c24 - feat(desktop): secure system browser login with custom google url and direct cookie import (1 second ago)` |
+| **Son Git Commit** | `8dcc92f - fix(desktop): allow open read-only state on port 9863 and update domain to aqualitymusic.vercel.app (1 second ago)` |
 | **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
-| **Kod Hacmi (LOC)** | Ana Süreç: ~5558 satır, Arayüz: ~5264 satır, Mobil (Expo): ~5835 satır, Web: ~1788 satır |
+| **Kod Hacmi (LOC)** | Ana Süreç: ~5644 satır, Arayüz: ~5271 satır, Mobil (Expo): ~5835 satır, Web: ~1787 satır |
 
 ---
 

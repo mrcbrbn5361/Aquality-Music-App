@@ -2848,7 +2848,7 @@
 
     // 3. Doküman & Klasör
     openDocsBtn?.addEventListener('click', () => {
-      api.shell?.openExternal?.('https://aquality-music-app-desktop.vercel.app/bot');
+      api.shell?.openExternal?.('https://aqualitymusic.vercel.app/bot');
     });
 
     openFolderBtn?.addEventListener('click', async () => {

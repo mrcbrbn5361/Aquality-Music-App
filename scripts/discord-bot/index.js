@@ -57,9 +57,9 @@ async function fetchLocalBotState() {
 // iTunes API üzerinden sanatçıya ait benzer şarkı önerilerini getirir
 async function fetchSuggestions(artist, currentTitle) {
   const fallback = [
-    { title: 'Benzer Şarkı 1', artist: artist || 'Aquality Music', url: 'https://aquality-music-app-desktop.vercel.app' },
-    { title: 'Benzer Şarkı 2', artist: artist || 'Aquality Music', url: 'https://aquality-music-app-desktop.vercel.app' },
-    { title: 'Benzer Şarkı 3', artist: artist || 'Aquality Music', url: 'https://aquality-music-app-desktop.vercel.app' }
+    { title: 'Benzer Şarkı 1', artist: artist || 'Aquality Music', url: 'https://aqualitymusic.vercel.app' },
+    { title: 'Benzer Şarkı 2', artist: artist || 'Aquality Music', url: 'https://aqualitymusic.vercel.app' },
+    { title: 'Benzer Şarkı 3', artist: artist || 'Aquality Music', url: 'https://aqualitymusic.vercel.app' }
   ];
 
   if (!artist || artist === 'Bilinmeyen Sanatçı') return fallback;
@@ -179,7 +179,7 @@ client.on(Events.MessageCreate, async (message) => {
       .setDescription(
         `Hey <@${message.author.id}>, şu anda **Aquality Music** üzerinde dinlediğin bir şarkı tespit edilemedi!\n\n` +
         `**Nasıl Çalışır?**\n` +
-        `1. Bilgisayarında [Aquality Music](https://aquality-music-app-desktop.vercel.app/) uygulamasını aç.\n` +
+        `1. Bilgisayarında [Aquality Music](https://aqualitymusic.vercel.app/) uygulamasını aç.\n` +
         `2. Ayarlar menüsünden **Discord'da Göster** seçeneğinin açık olduğundan emin ol.\n` +
         `3. İstediğin bir şarkıyı çal ve bu kanala tekrar **\`.aquamusic\`** yaz!`
       )
@@ -196,7 +196,7 @@ client.on(Events.MessageCreate, async (message) => {
   let coverUrl = null;
   let currentSec = 0;
   let durationSec = 0;
-  let trackUrl = 'https://aquality-music-app-desktop.vercel.app';
+  let trackUrl = 'https://aqualitymusic.vercel.app';
 
   if (localState && localState.track) {
     title = localState.track.title || title;

@@ -164,8 +164,20 @@ export class BotServer {
 
     return new Promise((resolve) => {
       this.server = http.createServer((req, res) => {
-        // CORS Headers
-        res.setHeader('Access-Control-Allow-Origin', '*');
+        const origin = req.headers.origin;
+        // Güvenli Origin kontrolü: Localhost, 127.0.0.1, Vercel app veya tarayıcı direkt ziyaret / curl (Origin yok)
+        const isAllowedOrigin = !origin ||
+          origin.startsWith('http://localhost') ||
+          origin.startsWith('http://127.0.0.1') ||
+          origin.startsWith('https://aqualitymusic.vercel.app') ||
+          origin.startsWith('chrome-extension://');
+
+        if (isAllowedOrigin && origin) {
+          res.setHeader('Access-Control-Allow-Origin', origin);
+        } else if (!origin) {
+          res.setHeader('Access-Control-Allow-Origin', '*');
+        }
+
         res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
@@ -175,24 +187,19 @@ export class BotServer {
           return;
         }
 
-        const authHeader = req.headers.authorization;
-        if (!authHeader || authHeader !== `Bearer ${this.apiToken}`) {
-          res.writeHead(401, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Unauthorized' }));
-          return;
-        }
+        const parsedUrl = (req.url || '/').split('?')[0];
 
-        const url = req.url || '/';
-
-        if (url === '/' || url === '/api/v1/state' || url === '/query' || url === '/state') {
-          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(JSON.stringify(this.state, null, 2));
-          return;
-        }
-
-        if (url === '/api/v1/health' || url === '/health') {
+        // Sağlık kontrolleri her zaman açıktır
+        if (parsedUrl === '/api/v1/health' || parsedUrl === '/health') {
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify({ status: 'ok', app: 'Aquality Music', version: this.state.version, port: this.port }));
+          return;
+        }
+
+        // Salt okunur durum sorguları (tarayıcı, curl, Discord botu, yerel araçlar)
+        if (parsedUrl === '/' || parsedUrl === '/api/v1/state' || parsedUrl === '/query' || parsedUrl === '/state') {
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify(this.state, null, 2));
           return;
         }
 
