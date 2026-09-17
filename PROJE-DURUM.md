@@ -4,12 +4,12 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-17 17:05` |
+| **Son Güncelleme** | `2026-09-17 18:22` |
 | **Proje Versiyonu** | `v1.0.2` (Masaüstü: `v1.0.2`, Web: `v1.0.2`, Mobil: `v1.0.2`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `f120c18 - docs: memory.md Antigravity devrine hazirla (gorev listesi + ilk komut) (0 seconds ago)` |
+| **Son Git Commit** | `85389f1 - fix(desktop): add context menu icons, dynamic positioning, and modal responsiveness (1 second ago)` |
 | **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
-| **Kod Hacmi (LOC)** | Ana Süreç: ~5557 satır, Arayüz: ~5175 satır, Mobil (Expo): ~5835 satır, Web: ~1788 satır |
+| **Kod Hacmi (LOC)** | Ana Süreç: ~5557 satır, Arayüz: ~5224 satır, Mobil (Expo): ~5835 satır, Web: ~1788 satır |
 
 ---
 

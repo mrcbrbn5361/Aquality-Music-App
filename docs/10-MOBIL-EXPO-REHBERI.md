@@ -8,10 +8,10 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-17 17:05` |
+| **Son Güncelleme** | `2026-09-17 18:22` |
 | **Proje Sürümü** | `v1.0.2` (Masaüstü: `v1.0.2`, Web: `v1.0.2`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `f120c18 - docs: memory.md Antigravity devrine hazirla (gorev listesi + ilk komut) (0 seconds ago)` |
+| **Son Commit** | `85389f1 - fix(desktop): add context menu icons, dynamic positioning, and modal responsiveness (1 second ago)` |
 | **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Takip Edilen Sorunlar** | 24 / 24 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->

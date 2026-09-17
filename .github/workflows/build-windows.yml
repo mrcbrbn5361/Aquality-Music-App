@@ -34,6 +34,13 @@ jobs:
       - name: Build Desktop (Vite & TSC)
         run: npm --workspace=desktop run build
 
+      - name: Ensure desktop node_modules
+        run: |
+          if (-not (Test-Path "desktop/node_modules")) {
+            New-Item -ItemType Junction -Path "desktop/node_modules" -Target "node_modules"
+          }
+        shell: pwsh
+
       - name: Package Windows Installer & Portable (.exe)
         run: npm run build:win
         env:

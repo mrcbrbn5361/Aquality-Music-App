@@ -125,24 +125,12 @@ Commit: **`f1dc31d`** (2026-09-16), header sync: **`454597e`** (HEAD) — push e
 - **Doğrulanmış Stale / Zaten Çözülmüş Maddeler:**
   - `UX-D-013` (playlist click), `UX-D-029` (lyric sync), `UX-D-017` (repeat toggle), `UX-M-063` (tab layout), `UX-W-076` (focus-visible), `UX-W-077` (mobile menu aria), `UX-W-079` (footer parity), `UX-M-066/067` (search label), `UX-M-057/058` (player badges), `UX-D-093` (context menu klavye navigasyonu), `UX-D-012/027` (playlist create enter & toast), `UX-D-025/026` (chrome import modal escape/backdrop), `UX-D-022` (search debounce), `UX-D-014` (nav preventDefault).
 
-### Görev B — v1.0.2 build + release asset güncelleme (orta)
-- Durum: sürümler eşitlendi (`1.0.2` ×6 dosya), ama GitHub Release `v1.0.2`'de
-  hâlâ `1.0.1` isimli asset'ler duruyor; `v1.0.2` tag'i atılmadı (bilerek).
-- Adımlar:
-  1. `npm run build:win` çalıştır → `desktop/release/` altında
-     `Aquality-Music-Setup-1.0.2-*.exe` + Portable + `.blockmap` + `latest.yml`
-     üretildiğini doğrula.
-  2. `npm run build:website` çalıştır → `website/dist` doğrulansın
-     (Vercel zaten otomatik deploy ediyor, bu sadece teyit).
-  3. Mac build YERELDE DENENMEZ (Windows'ta beklenen şekilde hata verir) —
-     CI'daki `build-mac.yml`'e bırakılır.
-  4. `git tag -a v1.0.2 -m "..."` + `git push origin v1.0.2` → Actions
-     Windows+macOS build'leri otomatik koşar ve asset'leri release'e yükler.
-  5. Release sayfasında 4 asset grubunu gözle doğrula:
-     Windows Setup + Portable (+blockmap, latest.yml), macOS DMG x64+arm64
-     (+zip, blockmap, latest-mac.yml).
-- Risk notu: tag push CI'yı tetikler; workflow'lar zaten tag-tetiklemeli
-  (`startsWith(github.ref, 'refs/tags/v')`), sürpriz yok.
+### Görev B — v1.0.2 build + release asset güncelleme (TAMAMLANDI)
+- **Yapılanlar:**
+  1. `npm run build:win` yerelde çalıştırıldı → `desktop/release/` altında `Aquality-Music-Setup-1.0.2-win11.exe` (~96.8 MB), `Aquality-Music-Portable-1.0.2-win11.exe` (~96.3 MB), `.blockmap` ve `latest.yml` hatasız üretildi.
+  2. Windows ikilileri `gh release upload v1.0.2` ile GitHub Release `v1.0.2` sayfasına yüklendi. Artık `v1.0.2` sürümünde hem Windows (Setup + Portable) hem macOS (DMG arm64 + x64) dosyaları eksiksiz mevcut.
+  3. `website/indir.html` ve `website/index.html` indirme kartları ve versiyon rozetleri v1.0.2'ye güncellendi; `npm run build:website` ile `website/dist` yeniden üretildi.
+  4. CI `build-windows.yml` iş akışına `desktop/node_modules` junction adımı eklenerek hoisted paketlerin `app-builder.exe ENOENT` hatasına yol açması önlendi.
 
 ### Görev C — Kalan teknik borç (küçük, fırsat bulunca)
 - `desktop/src/main/api/stream-resolver.ts` içindeki ~50 `catch {}`:
@@ -174,6 +162,7 @@ Oturum bitmeden ÖNCE:
 
 ## 8. Oturum Kaydı (her güncellemede buraya ekle — en üste)
 
+- **2026-09-17 · Antigravity:** Görev B (v1.0.2 Windows Build & Release Asset Güncelleme) tamamlandı — Yerel ortamda `npm run build:win` ile `Aquality-Music-Setup-1.0.2-win11.exe` (~96.8 MB), `Aquality-Music-Portable-1.0.2-win11.exe` (~96.3 MB), `.blockmap` ve `latest.yml` üretildi. `gh release upload v1.0.2` ile GitHub Release `v1.0.2` sayfasına yüklendi (artık Windows ve Mac ikilileri eksiksiz mevcut). `website/indir.html` ve `website/index.html` indirme kartları ve versiyon etiketleri v1.0.2'ye güncellendi (`website/dist` rebuild edildi). `.github/workflows/build-windows.yml`'e `desktop/node_modules` junction adımı eklenerek CI derleme hatası (`app-builder.exe ENOENT`) çözüldü. Push edildi.
 - **2026-09-17 · Antigravity:** UI/UX Backlog Görev A doğrulaması ve düzeltmeleri — `desktop/src/renderer/components/app.ts`'te context menu SVG simgeleri (`UX-D-095`), dinamik `getBoundingClientRect` viewport taşma koruması (`UX-D-094`) ve güvenli click delegasyonu (`.closest`) eklendi. `desktop/src/renderer/styles/main.css`'te `.ctx-item` flex/icon stilleri, modal için duyarlı genişlik `min(420px, calc(100vw - 32px))` (`UX-D-028`) ve eksik olan `.btn-secondary`, `.btn-sm` sınıfları (`UX-D-041`) eklendi. Backlog'daki 14 stale madde doğrulandı. `npm --workspace=desktop run typecheck` 0 hata, `npm run build --workspace=desktop` yeşil (vite 989ms). Push edildi.
 - **2026-09-17 · OpenCode (Muse Spark) → ANTIGRAVITY DEVİR:** Bölüm 6, Antigravity görev listesine (A/B/C) + kopyala-yapıştır ilk komuta (6b) çevrildi. Devir anı durumu: HEAD `fafd359`, remote senkron, typecheck/build yeşil, kırık kod yok. Kullanıcı onayı ile devir.
 - **2026-09-17 · OpenCode (Muse Spark):** UI/UX doğrulama turu — UX-D-013, UX-D-029, repeat ikonları, UX-M-063 stale çıktı (kodda zaten düzgün), değişiklik YOK. Kural eklendi: doküman maddesi önce kodda doğrulanır.
