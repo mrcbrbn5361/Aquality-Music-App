@@ -135,7 +135,9 @@ export class YouTubeAPI {
       if (cookieHeader) {
         headers['Cookie'] = cookieHeader;
       }
-    } catch {}
+    } catch (e) {
+      console.debug('[InnerTube] Session cookie eklenemedi:', (e as Error)?.message || e);
+    }
 
     if (this.accessToken) {
       headers['Authorization'] = `Bearer ${this.accessToken}`;
@@ -827,7 +829,9 @@ export class YouTubeAPI {
               }
             }
           }
-        } catch {}
+        } catch (e) {
+          console.debug('[InnerTube] Şarkı sözü (browse) alınamadı:', (e as Error)?.message || e);
+        }
       }
 
       // 3) LRCLIB.org fallback (açık kaynaklı söz API'si)
@@ -851,7 +855,9 @@ export class YouTubeAPI {
               else songTitle = String(o.title || '');
               songArtist = songArtist || String(o.author_name || '').replace(/ - Topic$/, '');
             }
-          } catch {}
+          } catch (e) {
+            console.debug('[InnerTube] oEmbed başlık alınamadı:', (e as Error)?.message || e);
+          }
         }
 
         if (songTitle) {
@@ -864,10 +870,13 @@ export class YouTubeAPI {
             if (lrcData.plainLyrics) return lrcData.plainLyrics;
           }
         }
-      } catch {}
+      } catch (e) {
+        console.debug('[InnerTube] Şarkı sözü (LRCLIB) alınamadı:', (e as Error)?.message || e);
+      }
 
       return null;
-    } catch {
+    } catch (e) {
+      console.debug('[InnerTube] Şarkı sözü alınamadı:', (e as Error)?.message || e);
       return null;
     }
   }
@@ -911,7 +920,9 @@ export class YouTubeAPI {
       if (liked && liked.browseId) {
         targetBrowseId = liked.browseId;
       }
-    } catch {}
+    } catch (e) {
+      console.debug('[InnerTube] Dinamik Liked Songs araması başarısız, LM fallback:', (e as Error)?.message || e);
+    }
 
     const data = await this.request('browse', { browseId: targetBrowseId });
     const songs: Song[] = [];

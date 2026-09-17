@@ -53,8 +53,9 @@ export class BotServer {
   private appVersion(): string {
     try {
       return app.getVersion();
-    } catch {
-      return '1.0.1';
+    } catch (e) {
+      console.debug('[BotServer] Uygulama sürümü okunamadı:', (e as Error)?.message || e);
+      return '1.0.2';
     }
   }
 
