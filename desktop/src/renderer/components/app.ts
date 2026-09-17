@@ -2684,6 +2684,16 @@
 
     // OAuth settings
     setupOAuthSettings();
+
+    // Dinamik sürüm gösterimi
+    const versionEl = document.getElementById('app-version-value');
+    if (versionEl) {
+      api.autoUpdate?.getUpdateStatus?.().then((res: any) => {
+        if (res?.version) {
+          versionEl.textContent = `v${res.version}`;
+        }
+      }).catch(() => {});
+    }
   }
 
   function applyTheme(theme: string) {
