@@ -8,10 +8,10 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-17 16:50` |
+| **Son Güncelleme** | `2026-09-17 17:00` |
 | **Proje Sürümü** | `v1.0.2` (Masaüstü: `v1.0.2`, Web: `v1.0.2`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `a27a691 - fix(desktop): innertube fallback zincirlerine debug loglar (0 seconds ago)` |
+| **Son Commit** | `b9d62b2 - fix(mobile): AudioBridge inceleme + WebView tani loglari (0 seconds ago)` |
 | **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Takip Edilen Sorunlar** | 24 / 24 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->
