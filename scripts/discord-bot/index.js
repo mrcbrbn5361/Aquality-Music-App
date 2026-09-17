@@ -25,7 +25,8 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildPresences
+    GatewayIntentBits.GuildPresences,
+    GatewayIntentBits.GuildMembers
   ]
 });
 
@@ -34,7 +35,14 @@ async function fetchLocalBotState() {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 800);
-    const res = await fetch('http://127.0.0.1:9863/api/v1/state', { signal: controller.signal });
+    const headers = {};
+    if (process.env.BOT_SERVER_TOKEN) {
+      headers['Authorization'] = `Bearer ${process.env.BOT_SERVER_TOKEN}`;
+    }
+    const res = await fetch('http://127.0.0.1:9863/api/v1/state', {
+      headers,
+      signal: controller.signal
+    });
     clearTimeout(timeout);
     if (res.ok) {
       const data = await res.json();
@@ -100,7 +108,7 @@ client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
 
   const content = message.content.trim().toLowerCase();
-  const isAquaMusicCmd = content === '.aquamusic' || content.startsWith('.aquamusic ') || content === '.aqua';
+  const isAquaMusicCmd = content === '.aquamusic' || content.startsWith('.aquamusic ');
 
   if (!isAquaMusicCmd) return;
 
@@ -134,19 +142,25 @@ client.on(Events.MessageCreate, async (message) => {
     }
   }
 
-  // Kullanıcı Presence (Durum) Bilgisini Çek
+  // Kullanıcı Presence (Durum) Bilgisini Çek (discord.js v14 için withPresences: true zorunludur)
   let member = message.member;
   if (!member || !member.presence) {
     try {
-      member = await message.guild.members.fetch({ user: message.author.id, force: true });
-    } catch (err) {}
+      member = await message.guild.members.fetch({ user: message.author.id, withPresences: true, force: true });
+    } catch (err) {
+      console.warn('[Discord Bot] Member fetch withPresences hatası:', err?.message || err);
+    }
   }
 
   // 1. Öncelik: Discord Gateway Presence (Aquality Music Desktop RPC)
   const activities = member?.presence?.activities || [];
   let activity = activities.find(a => 
-    a.applicationId === AQUALITY_APP_ID || 
-    (a.name && a.name.toLowerCase().includes('aquality'))
+    (a.applicationId && String(a.applicationId) === String(AQUALITY_APP_ID)) ||
+    (a.name && (
+      a.name.toLowerCase().includes('aquality') ||
+      a.name.toLowerCase().includes('aquamusic') ||
+      a.name.toLowerCase() === 'music'
+    ))
   );
 
   // Fallback: Kullanıcı Spotify dinliyorsa onu da destekle
@@ -197,15 +211,21 @@ client.on(Events.MessageCreate, async (message) => {
     artist = activity.state || artist;
     album = activity.assets?.largeText || album;
 
-    if (activity.assets?.largeImageURL) {
-      coverUrl = activity.assets.largeImageURL({ size: 512 });
-    } else if (activity.assets?.largeImage) {
-      if (activity.assets.largeImage.startsWith('http')) {
-        coverUrl = activity.assets.largeImage;
-      } else if (activity.assets.largeImage.startsWith('mp:')) {
-        coverUrl = `https://media.discordapp.net/${activity.assets.largeImage.replace('mp:', '')}`;
-      } else if (activity.assets.largeImage.startsWith('spotify:')) {
-        coverUrl = `https://i.scdn.co/image/${activity.assets.largeImage.replace('spotify:', '')}`;
+    if (activity.assets) {
+      if (typeof activity.assets.largeImageURL === 'function') {
+        try { coverUrl = activity.assets.largeImageURL({ size: 512 }); } catch {}
+      }
+      if (!coverUrl && activity.assets.largeImage) {
+        const raw = String(activity.assets.largeImage);
+        if (raw.startsWith('http://') || raw.startsWith('https://')) {
+          coverUrl = raw;
+        } else if (raw.startsWith('mp:')) {
+          coverUrl = `https://media.discordapp.net/${raw.replace('mp:', '')}`;
+        } else if (raw.startsWith('spotify:')) {
+          coverUrl = `https://i.scdn.co/image/${raw.replace('spotify:', '')}`;
+        } else if (activity.applicationId) {
+          coverUrl = `https://cdn.discordapp.com/app-assets/${activity.applicationId}/${raw}.png`;
+        }
       }
     }
 

@@ -428,6 +428,7 @@ function setupIPC(): void {
       const env = {
         ...process.env,
         DISCORD_TOKEN: token,
+        BOT_SERVER_TOKEN: botServer.getApiToken(),
         ...extraEnv
       };
 

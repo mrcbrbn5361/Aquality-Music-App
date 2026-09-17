@@ -8,10 +8,10 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-17 18:56` |
+| **Son Güncelleme** | `2026-09-17 19:05` |
 | **Proje Sürümü** | `v1.0.2` (Masaüstü: `v1.0.2`, Web: `v1.0.2`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `36f21b8 - chore(release): update v1.0.2 download links, windows ci junction, and memory (0 seconds ago)` |
+| **Son Commit** | `a1a8c24 - feat(desktop): secure system browser login with custom google url and direct cookie import (1 second ago)` |
 | **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Takip Edilen Sorunlar** | 24 / 24 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->

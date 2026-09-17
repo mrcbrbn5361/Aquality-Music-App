@@ -39,6 +39,7 @@ interface MusicUser {
   email: string;
   picture: string;
   provider: 'youtube-music';
+  handle?: string;
 }
 
 export type { MusicUser };
@@ -114,20 +115,25 @@ export class MusicAuth {
 
   getUser(): MusicUser | null {
     const user = this.store.get('musicUser');
-    // googleUser'dan gerçek isim/alın
     const googleUser = this.store.get('googleUser');
     
-    // musicUser'da gerçek isim varsa direkt dön (sanitizeName "YouTube Music" filtreler)
-    if (user && sanitizeName(user.name) && user.email) return user;
+    // musicUser'da gerçek isim, handle, e-posta veya resim varsa dön
+    if (user && (sanitizeName(user.name) || user.handle || user.email || user.picture)) {
+      if (!sanitizeName(user.name) && user.handle) {
+        user.name = user.handle;
+      }
+      return user;
+    }
     
     // Aksi halde googleUser'dan doldur
     if (googleUser && (googleUser.name || googleUser.email)) {
       const merged: MusicUser = {
         id: 'ytmusic',
-        name: sanitizeName(user?.name) || sanitizeName(googleUser.name) || 'YouTube Music',
-        email: user?.email || googleUser.email || '',
+        name: sanitizeName(user?.name) || sanitizeName(googleUser.name) || user?.handle || 'YouTube Music',
+        email: user?.email || googleUser.email || user?.handle || '',
         picture: user?.picture || googleUser.picture || '',
-        provider: 'youtube-music'
+        provider: 'youtube-music',
+        handle: user?.handle
       };
       this.store.set('musicUser', merged);
       return merged;
@@ -178,17 +184,18 @@ export class MusicAuth {
       if (!authed) return;
       console.log('[Auth] Profil yenileniyor (pp eksik)...');
       const prof = await this.fetchProfileViaAPI().catch(() => null);
-      if (prof && (prof.name || prof.email || prof.picture)) {
+      if (prof && (prof.name || prof.email || prof.handle || prof.picture)) {
         const merged: MusicUser = {
           id: 'ytmusic',
-          name: sanitizeName(prof.name) || sanitizeName(googleUser?.name) || sanitizeName(user?.name) || '',
-          email: prof.email || user?.email || googleUser?.email || '',
+          name: sanitizeName(prof.name) || sanitizeName(googleUser?.name) || sanitizeName(user?.name) || prof.handle || user?.handle || '',
+          email: prof.email || user?.email || googleUser?.email || prof.handle || '',
           picture: prof.picture || user?.picture || googleUser?.picture || '',
-          provider: 'youtube-music'
+          provider: 'youtube-music',
+          handle: prof.handle || user?.handle || ''
         };
-        if (merged.name || merged.email || merged.picture) {
+        if (merged.name || merged.email || merged.picture || merged.handle) {
           this.store.set('musicUser', merged);
-          console.log('[Auth] Profil yenilendi:', merged.name || '(isim yok)', merged.picture ? 'pp var' : 'pp yok');
+          console.log('[Auth] Profil yenilendi:', merged.name || '(isim yok)', merged.handle || '(handle yok)', merged.picture ? 'pp var' : 'pp yok');
         }
       }
     } catch (e) {
@@ -392,18 +399,19 @@ export class MusicAuth {
   private async refreshProfileAfterCookieImport(written: number): Promise<{ success: boolean; cookies: number; error?: string }> {
     await new Promise((r) => setTimeout(r, 1000));
     let prof = await this.fetchProfileViaAPI().catch(() => null);
-    if (!prof || (!prof.name && !prof.email)) {
+    if (!prof || (!prof.name && !prof.handle && !prof.email)) {
       await new Promise((r) => setTimeout(r, 1500));
       prof = await this.fetchProfileViaAPI().catch(() => null);
     }
     const existing = this.store.get('musicUser');
-    const finalName = sanitizeName(prof?.name) || sanitizeName(existing?.name) || 'YouTube Music';
+    const finalName = sanitizeName(prof?.name) || sanitizeName(existing?.name) || prof?.handle || existing?.handle || 'YouTube Music';
     this.store.set('musicUser', {
       id: 'ytmusic',
       name: finalName,
-      email: prof?.email || existing?.email || '',
+      email: prof?.email || existing?.email || prof?.handle || existing?.handle || '',
       picture: prof?.picture || existing?.picture || '',
-      provider: 'youtube-music'
+      provider: 'youtube-music',
+      handle: prof?.handle || existing?.handle || ''
     });
     return { success: true, cookies: written };
   }
@@ -611,189 +619,259 @@ export class MusicAuth {
     }
   }
 
-  // Gerçek profil: ytd-active-account-header-renderer ham verisi (verdiğin dump) doğrudan
-  async fetchProfileViaAPI(): Promise<{ name: string; email: string; picture: string } | null> {
-    // 1. Hidden window ile music.youtube.com DOM'undan direkt çek — 10sn bekle, ytd render gelene kadar
-    let win: BrowserWindow | null = null;
+  // Gerçek profil: InnerTube account_menu + hidden window + DOM / Regex
+  async fetchProfileViaAPI(): Promise<{ name: string; email: string; picture: string; handle?: string } | null> {
     try {
       const cookies = await this.getSession().cookies.get({ url: 'https://music.youtube.com' });
-      if (cookies.some(c=>c.name==='SAPISID' || c.name==='LOGIN_INFO')) {
-        win = new BrowserWindow({ show:false, width:1024, height:700, webPreferences:{ partition: MUSIC_PARTITION } });
-        try { win.webContents.setUserAgent(CHROME_UA); } catch (e) { console.warn('[Auth] UA ayarlanamadı:', e); }
-        await win.loadURL('https://music.youtube.com/');
-        // sayfa + nav-bar avatar yüklenene kadar 15sn bekle
-        for(let i=0;i<15;i++){ await new Promise(r=>setTimeout(r,1000)); try{ const has=await win.webContents.executeJavaScript(`!!(document.querySelector('ytmusic-nav-bar #avatar img')||document.querySelector('ytd-active-account-header-renderer #account-name')||document.querySelector('#account-name'))`,true); if(has) break; }catch(e){ /* avatar bekleme best-effort */ } }
-        // hesap menüsü kapalıyken header renderer DOM'da olmaz — avatar'a tıklayıp aç
+      const sapisidCookie = cookies.find((c) => c.name === 'SAPISID' || c.name === '__Secure-3PAPISID' || c.name === '__Secure-1PAPISID');
+      const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+
+      // 1. SAPISIDHASH ile doğrudan YouTube Music InnerTube API (en hızlı ve garantili JSON)
+      if (sapisidCookie && cookieHeader) {
         try {
-          await win.webContents.executeJavaScript(`(function(){ const b=document.querySelector('ytmusic-nav-bar #avatar button')||document.querySelector('ytmusic-nav-bar #avatar')||document.querySelector('#avatar-btn'); if(b){ (b as HTMLElement).click(); } })()`, true);
-        } catch (e) { /* avatar tıklama best-effort */ }
-        for(let i=0;i<8;i++){ await new Promise(r=>setTimeout(r,1000)); try{ const has=await win.webContents.executeJavaScript(`!!(document.querySelector('ytd-active-account-header-renderer #account-name')||document.querySelector('#account-name'))`,true); if(has) break; }catch(e){ /* header bekleme best-effort */ } }
-        try {
-          const data: any = await win.webContents.executeJavaScript(`(function(){
-            const acc=document.querySelector('ytd-active-account-header-renderer');
-            let name='', email='', picture='', handle='';
-            if(acc){
-              const n=acc.querySelector('#account-name'); if(n) name=(n.getAttribute('title')||n.textContent||'').trim();
-              const av=acc.querySelector('#avatar img#img'); let raw=''; if(av) raw=av.currentSrc||av.src||av.getAttribute('src')||'';
-              if(!raw){ const av2=acc.querySelector('#avatar img'); if(av2) raw=av2.currentSrc||av2.src||''; }
-              // jWzVq... s108 doğrudan ham veriden — verdiğin dump ile birebir
-              if(raw && (raw.includes('yt3.ggpht.com') || raw.includes('googleusercontent'))) picture=raw;
-              const em=acc.querySelector('#email'); if(em) email=(em.getAttribute('title')||em.textContent||'').trim();
-              const h=acc.querySelector('#channel-handle'); if(h) handle=(h.getAttribute('title')||h.textContent||'').trim();
-              if(!email && handle) email=handle;
-            }
-            if(!picture){
-              const m=document.documentElement.innerHTML.match(/https:\/\/yt3\.ggpht\.com\/[^"']*\/[^"']*s108[^"']*/);
-              if(m) picture=m[0];
-              else {
-                const m2=document.documentElement.innerHTML.match(/https:\/\/yt3\.ggpht\.com\/[^"']+/);
-                if(m2) picture=m2[0];
+          const origin = 'https://music.youtube.com';
+          const timestamp = Math.floor(Date.now() / 1000);
+          const hash = crypto.createHash('sha1').update(`${timestamp} ${sapisidCookie.value} ${origin}`).digest('hex');
+          const authHeader = `SAPISIDHASH ${timestamp}_${hash}`;
+
+          const res = await fetch('https://music.youtube.com/youtubei/v1/account/account_menu', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': authHeader,
+              'X-Origin': origin,
+              'Origin': origin,
+              'Cookie': cookieHeader,
+              'User-Agent': CHROME_UA,
+              'X-YouTube-Client-Name': '67',
+              'X-YouTube-Client-Version': '1.20240101.01.00'
+            },
+            body: JSON.stringify({
+              context: {
+                client: {
+                  hl: 'tr',
+                  gl: 'TR',
+                  clientName: 'WEB_REMIX',
+                  clientVersion: '1.20240101.01.00'
+                }
               }
+            })
+          });
+
+          if (res.ok) {
+            const data: any = await res.json();
+            const info = this.extractAccountInfo(data);
+            if (info.name || info.handle || info.picture) {
+              console.log('[Auth] InnerTube API profil OK:', info.name, info.handle, info.picture ? 'pp var' : 'pp yok');
+              return {
+                name: sanitizeName(info.name) || info.handle || '',
+                email: info.email || info.handle || '',
+                picture: info.picture || '',
+                handle: info.handle || ''
+              };
             }
-            if(picture) { picture=picture.replace(/=s\d+[^"]*/, '=s400-c-k-c0x00ffffff-no-rj').replace(/=w\d+.*/, '=s400-c-k-c0x00ffffff-no-rj'); }
-            if(!name) {
-              const n2=document.querySelector('#account-name'); if(n2) name=n2.getAttribute('title')||n2.textContent||'';
-              if(!name){
-                const mN=document.documentElement.innerHTML.match(/id="account-name"[^>]*title="([^"]+)"/);
-                if(mN) name=mN[1];
-              }
-            }
-            if(!email){
-              const mE=document.documentElement.innerHTML.match(/id="channel-handle"[^>]*title="([^"]+)"/);
-              if(mE) email=mE[1];
-            }
-            return JSON.stringify({name: (name||'').trim(), email: (email||'').trim(), picture: (picture||'').trim(), handle: (handle||'').trim()});
-          })()`, true);
-          let parsed: { name?: string; email?: string; picture?: string } = {};
+          }
+        } catch (e: any) {
+          console.warn('[Auth] InnerTube account_menu hatası:', e?.message || e);
+        }
+      }
+
+      // 2. Hidden window fallback: music.youtube.com DOM + in-page fetch
+      let win: BrowserWindow | null = null;
+      try {
+        if (cookies.some(c => c.name === 'SAPISID' || c.name === 'LOGIN_INFO')) {
+          win = new BrowserWindow({ show: false, width: 1024, height: 700, webPreferences: { partition: MUSIC_PARTITION } });
+          try { win.webContents.setUserAgent(CHROME_UA); } catch (e) { console.warn('[Auth] UA ayarlanamadı:', e); }
+          await win.loadURL('https://music.youtube.com/');
+
+          // Yükleme için bekleme
+          for (let i = 0; i < 10; i++) {
+            await new Promise(r => setTimeout(r, 1000));
+            try {
+              const has = await win.webContents.executeJavaScript(`!!(window.ytcfg || document.querySelector('ytmusic-nav-bar #avatar img') || document.querySelector('#account-name'))`, true);
+              if (has) break;
+            } catch (e) {}
+          }
+
           try {
-            parsed = typeof data==='string' ? JSON.parse(data) : (data as typeof parsed);
+            const data: any = await win.webContents.executeJavaScript(`(async function(){
+              let name = '', handle = '', email = '', picture = '';
+
+              // In-page fetch
+              try {
+                const ytcfg = window.ytcfg;
+                const clientVersion = (ytcfg && ytcfg.get && ytcfg.get('INNERTUBE_CLIENT_VERSION')) || '1.20240101.01.00';
+                const context = (ytcfg && ytcfg.get && ytcfg.get('INNERTUBE_CONTEXT')) || {
+                  client: { clientName: 'WEB_REMIX', clientVersion }
+                };
+                const r = await fetch('/youtubei/v1/account/account_menu', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ context })
+                });
+                if (r.ok) {
+                  const d = await r.json();
+                  const walk = (node) => {
+                    if (!node || typeof node !== 'object') return;
+                    if (Array.isArray(node)) { for (const item of node) walk(item); return; }
+                    if (node.accountName && !name) {
+                      name = (typeof node.accountName.simpleText === 'string' ? node.accountName.simpleText : (node.accountName.runs?.[0]?.text || ''));
+                    }
+                    if (node.channelHandle && !handle) {
+                      handle = (typeof node.channelHandle.simpleText === 'string' ? node.channelHandle.simpleText : (node.channelHandle.runs?.[0]?.text || ''));
+                    }
+                    if (node.email && !email) {
+                      email = (typeof node.email.simpleText === 'string' ? node.email.simpleText : (node.email.runs?.[0]?.text || ''));
+                    }
+                    if (!picture) {
+                      const thumbs = node.avatar?.thumbnails || node.accountPhoto?.thumbnails;
+                      if (Array.isArray(thumbs) && thumbs.length) picture = thumbs[thumbs.length - 1]?.url || '';
+                    }
+                    for (const k of Object.keys(node)) walk(node[k]);
+                  };
+                  walk(d);
+                }
+              } catch (e) {}
+
+              // DOM kontrolleri
+              if (!name || !handle || !picture) {
+                const b = document.querySelector('ytmusic-nav-bar #avatar button') || document.querySelector('ytmusic-nav-bar ytmusic-settings-button button') || document.querySelector('#avatar-btn');
+                if (b) { try { (b).click(); } catch(e){} }
+                await new Promise(res => setTimeout(res, 500));
+
+                const n = document.querySelector('#account-name'); if (n && !name) name = (n.getAttribute('title') || n.textContent || '').trim();
+                const h = document.querySelector('#channel-handle'); if (h && !handle) handle = (h.getAttribute('title') || h.textContent || '').trim();
+                const em = document.querySelector('#email'); if (em && !email) email = (em.getAttribute('title') || em.textContent || '').trim();
+
+                const av = document.querySelector('ytmusic-nav-bar ytmusic-settings-button img') ||
+                           document.querySelector('ytmusic-nav-bar #avatar img') ||
+                           document.querySelector('ytd-active-account-header-renderer img') ||
+                           document.querySelector('img[src*="googleusercontent"]') ||
+                           document.querySelector('img[src*="ggpht.com"]');
+                if (av && !picture) picture = av.src || av.getAttribute('src') || '';
+              }
+
+              // Regex fallback
+              if (!picture) {
+                const m = document.documentElement.innerHTML.match(/https:\\/\\/(?:yt3\\.ggpht\\.com|lh3\\.googleusercontent\\.com)\\/[^"'\\s]+/);
+                if (m) picture = m[0];
+              }
+              if (!name) {
+                const mN = document.documentElement.innerHTML.match(/id="account-name"[^>]*title="([^"]+)"/);
+                if (mN) name = mN[1];
+              }
+              if (!handle) {
+                const mH = document.documentElement.innerHTML.match(/id="channel-handle"[^>]*title="([^"]+)"/);
+                if (mH) handle = mH[1];
+              }
+
+              return JSON.stringify({ name: name.trim(), handle: handle.trim(), email: email.trim(), picture: picture.trim() });
+            })()`, true);
+
+            let parsed: any = {};
+            try { parsed = typeof data === 'string' ? JSON.parse(data) : data; } catch (e) {}
+
+            const validName = sanitizeName(parsed?.name) || parsed?.handle || '';
+            if (validName || parsed?.picture || parsed?.handle) {
+              console.log('[Auth] Hidden window profil OK:', validName, parsed?.handle, parsed?.picture ? 'pp var' : 'pp yok');
+              return {
+                name: validName,
+                email: parsed?.email || parsed?.handle || '',
+                picture: parsed?.picture || '',
+                handle: parsed?.handle || ''
+              };
+            }
           } catch (e) {
-            console.warn('[Auth] Profil JSON çözümlenemedi:', e);
+            console.warn('[Auth] Hidden window profil JS hatası:', e);
+          } finally {
+            if (win && !win.isDestroyed()) {
+              try { win.destroy(); } catch (e) {}
+              win = null;
+            }
           }
-          const validName = parsed && parsed.name && parsed.name.length>1 && parsed.name!=='Y' && parsed.name!=='YouTube Music' ? parsed.name : '';
-          if (validName || (parsed && parsed.picture)) {
-            console.log('[Auth] Hidden window profil OK:', validName || '(sadece pp)', parsed.picture ? 'pp var' : 'pp yok');
-            const rawEmail = parsed.email || '';
-            const email = rawEmail.startsWith('@') ? '' : rawEmail;
-            return { name: validName, email, picture: parsed.picture || '' };
+        }
+      } catch (e) {
+        console.warn('[Auth] Hidden window aşaması hatası:', e);
+      }
+
+      // 3. HTML direct fetch fallback
+      if (cookieHeader) {
+        try {
+          const htmlRes = await fetch('https://music.youtube.com/', {
+            headers: { 'Cookie': cookieHeader, 'User-Agent': CHROME_UA, 'Accept-Language': 'tr-TR,tr;q=0.9' }
+          });
+          if (htmlRes.ok) {
+            const html = await htmlRes.text();
+            const mName = html.match(/id="account-name"[^>]*title="([^"]+)"/) || html.match(/id="account-name"[^>]*>([^<]+)</);
+            const mPic = html.match(/id="avatar"[^]*?src="([^"]+(?:googleusercontent|ggpht\.com)[^"]+)"/);
+            const mHandle = html.match(/id="channel-handle"[^>]*title="([^"]+)"/);
+            const mEmail = html.match(/id="email"[^>]*title="([^"]+)"/);
+            const name = (mName?.[1] || '').trim();
+            const handle = (mHandle?.[1] || '').trim();
+            const picture = (mPic?.[1] || '').trim();
+            const email = (mEmail?.[1] || handle || '').trim();
+            if (name || handle || picture) {
+              return { name: sanitizeName(name) || handle, email, picture, handle };
+            }
           }
-          console.error('[Auth] Hidden window profil bulunamadı');
         } catch (e) {
-          console.warn('[Auth] Hidden window profil okunamadı:', e);
-        } finally {
-          // Pencere her durumda yok edilir — sızıntı engellenir
-          if (win && !win.isDestroyed()) {
-            try { win.destroy(); } catch (e) { console.warn('[Auth] Gizli pencere yok edilemedi:', e); }
-            win = null;
-          }
+          console.warn('[Auth] HTML direct fetch hatası:', e);
         }
       }
-    } catch (e) {
-      console.warn('[Auth] fetchProfileViaAPI cookie aşaması hatası:', e);
-    }
-    // 2. Direct fetch HTML fallback
-    try {
-      const cookies = await this.getSession().cookies.get({ url: 'https://music.youtube.com' });
-      const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
-      if (cookieHeader.includes('SAPISID') || cookieHeader.includes('LOGIN_INFO')) {
-        const htmlRes = await fetch('https://music.youtube.com/', {
-          headers: { 'Cookie': cookieHeader, 'User-Agent': CHROME_UA, 'Accept-Language': 'tr-TR,tr;q=0.9' }
-        });
-        if (htmlRes.ok) {
-          const html = await htmlRes.text();
-          const mName = html.match(/id="account-name"[^>]*title="([^"]+)"/) || html.match(/id="account-name"[^>]*>([^<]+)</);
-          const mPic = html.match(/id="avatar"[^]*?src="([^"]+(?:googleusercontent|ggpht\.com)[^"]+)"/);
-          const mHandle = html.match(/id="channel-handle"[^>]*title="([^"]+)"/);
-          const mEmail = html.match(/id="email"[^>]*title="([^"]+)"/);
-          const name = (mName?.[1]||'').trim();
-          const picture = (mPic?.[1]||'').trim();
-          const email = (mEmail?.[1]||mHandle?.[1]||'').trim();
-          if (name && name.length>1 && name!=='Y') {
-            console.log('[Auth] HTML fetch profil OK:', name);
-            return { name, email: email.startsWith('@')?'':email, picture };
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('[Auth] HTML profil çekme hatası:', e);
-    }
-    try {
-      const cookies = await this.getSession().cookies.get({ url: 'https://music.youtube.com' });
-      if (!cookies.length) {
-        console.error('[Auth] API profil: cookie yok');
-        return null;
-      }
-      const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
-      const res = await fetch('https://music.youtube.com/youtubei/v1/account/account_menu', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cookie': cookieHeader,
-          'Origin': 'https://music.youtube.com',
-          'Referer': 'https://music.youtube.com/',
-          'User-Agent': CHROME_UA
-        },
-        body: JSON.stringify({
-          context: { client: { hl: 'tr', gl: 'TR', clientName: 'WEB_REMIX', clientVersion: '1.20250801.00.00' } }
-        })
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error('[Auth] API profil HTTP:', res.status, '-', errText.substring(0, 200));
-        return null;
-      }
-      const data: any = await res.json();
-      console.log('[Auth] API profil ham veri anahtarları:', Object.keys(data).slice(0, 15));
-      const item = this.findAccountItem(data);
-      if (item) {
-        const name = this.runsText(item.accountName);
-        const picture = item.accountPhoto?.thumbnails?.slice(-1)?.[0]?.url || '';
-        const email = this.runsText(item.accountBylineText)
-          || this.runsText(item.accountEmail)
-          || this.extractEmail(JSON.stringify(data));
-        if (name || email) {
-          console.log('[Auth] API profil OK:', name || email);
-          return { name, email, picture };
-        }
-      }
-      // Yedek: ham metinde hesap adı/e-posta regex'i
-      const raw = JSON.stringify(data);
-      const nm = raw.match(/"accountName":\s*\{\s*"simpleText":\s*"((?:[^"\\]|\\.)*)"/)
-        || raw.match(/"accountName":\s*\{\s*"runs":\s*\[\s*\{\s*"text":\s*"((?:[^"\\]|\\.)*)"/);
-      const name = nm ? nm[1] : '';
-      const emailMatch = raw.match(/"accountEmail":\s*\{\s*"simpleText":\s*"((?:[^"\\]|\\.)*)"/);
-      const email = emailMatch ? emailMatch[1] : '';
-      if ((name && name !== 'Guide' && name.length > 1) || email) {
-        console.log('[Auth] API profil OK (regex):', name || email);
-        return { name: (name === 'Guide') ? '' : name, email, picture: '' };
-      }
-      console.error('[Auth] API profil: accountItem bulunamadı');
+
       return null;
     } catch (e: any) {
-      console.error('[Auth] API profil hatası:', e?.message || e);
+      console.error('[Auth] fetchProfileViaAPI genel hatası:', e?.message || e);
       return null;
     }
   }
 
-  private findAccountItem(node: any): any {
-    if (!node || typeof node !== 'object') return null;
-    if (Array.isArray(node)) {
-      for (const el of node) {
-        const f = this.findAccountItem(el);
-        if (f) return f;
+  private extractAccountInfo(data: any): { name: string; handle: string; email: string; picture: string } {
+    let name = '';
+    let handle = '';
+    let email = '';
+    let picture = '';
+
+    const walk = (node: any) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) {
+        for (const item of node) walk(item);
+        return;
       }
-      return null;
+      if (node.accountName && !name) {
+        name = this.runsText(node.accountName) || (typeof node.accountName.simpleText === 'string' ? node.accountName.simpleText : '');
+      }
+      if (node.channelHandle && !handle) {
+        handle = this.runsText(node.channelHandle) || (typeof node.channelHandle.simpleText === 'string' ? node.channelHandle.simpleText : '');
+      }
+      if (node.email && !email) {
+        email = this.runsText(node.email) || (typeof node.email.simpleText === 'string' ? node.email.simpleText : '');
+      }
+      if (node.accountEmail && !email) {
+        email = this.runsText(node.accountEmail) || (typeof node.accountEmail.simpleText === 'string' ? node.accountEmail.simpleText : '');
+      }
+      if (node.accountBylineText && !handle && !email) {
+        const bl = this.runsText(node.accountBylineText);
+        if (bl.startsWith('@')) handle = bl;
+        else email = bl;
+      }
+      if (!picture) {
+        const thumbs = node.avatar?.thumbnails || node.accountPhoto?.thumbnails;
+        if (Array.isArray(thumbs) && thumbs.length > 0) {
+          const u = thumbs[thumbs.length - 1]?.url;
+          if (u && typeof u === 'string') picture = u;
+        }
+      }
+      for (const k of Object.keys(node)) {
+        walk(node[k]);
+      }
+    };
+
+    walk(data);
+    if (picture) {
+      picture = picture.replace(/=s\d+[^"]*/, '=s200-c-k-c0x00ffffff-no-rj').replace(/=w\d+.*/, '=s200-c-k-c0x00ffffff-no-rj');
     }
-    if (node.accountName && (node.accountPhoto || node.accountBylineText || node.accountEmail)) return node;
-    // Also check for any key that matches account fields
-    const keyNames = Object.keys(node).join('');
-    const hasAccountFields = /accountName|accountPhoto|accountBylineText|accountEmail/.test(keyNames);
-    if (hasAccountFields && node.accountName) return node;
-    for (const k of Object.keys(node)) {
-      const f = this.findAccountItem(node[k]);
-      if (f) return f;
-    }
-    return null;
+    return { name: name.trim(), handle: handle.trim(), email: email.trim(), picture: picture.trim() };
   }
 
   private runsText(t: any): string {

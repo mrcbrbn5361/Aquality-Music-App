@@ -139,6 +139,14 @@ Commit: **`f1dc31d`** (2026-09-16), header sync: **`454597e`** (HEAD) — push e
   3. Alternatif tarayıcılar (Firefox vb.) için manuel cookie yapıştırma (`importFromCookieString`) arayüze ve IPC'ye eklendi.
   4. Typecheck (`npm --workspace=desktop run typecheck`) ve desktop build (`npm run build --workspace=desktop`) 0 hata ile doğrulandı.
 
+### Discord Bot Entegrasyonu & Profil (İsim + Kullanıcı Adı) Düzeltmesi (TAMAMLANDI)
+- **Yapılanlar:**
+  1. Discord Bot tetikleyicisi strictly `.aquamusic` olarak sınırlandırıldı (çakışma yaratan `.aqua` kaldırıldı). Bot intent'lerine `GuildMembers` eklendi; `guild.members.fetch({ user, withPresences: true, force: true })` yapılandırılarak kullanıcı presence durumu garantilendi.
+  2. Local bot sunucusu ve desktop entegrasyonu: `main.ts` üzerinden bot alt işlemine `BOT_SERVER_TOKEN` ortam değişkeni aktarılarak Bearer doğrulaması korundu ve 401 hatası önlendi.
+  3. YouTube Music profil çekimi (`music-auth.ts`): InnerTube `account_menu` API'si `SAPISIDHASH` yetkilendirmesiyle doğrudan çağrılacak şekilde güçlendirildi; kullanıcı adı (`handle`, örn. `@miracteksaslioglu`), tam isim (`name`), e-posta ve yüksek çözünürlüklü avatar recursive JSON yürüyücüsü (`extractAccountInfo`) ile eksiksiz çekilip kaydedildi.
+  4. Renderer arayüzünde (`app.ts`): Hem tam hesap ismi hem de `@handle` kullanıcı adı alt alta eksiksiz gösterilecek şekilde `updateAuthUI` güncellendi.
+  5. Windows derlemesi (`npm run build:win`) yerelde çalıştırılıp güncel paketler oluşturuldu; website rebuild edildi.
+
 ### Görev C — Kalan teknik borç (küçük, fırsat bulunca)
 - `desktop/src/main/api/stream-resolver.ts` içindeki ~50 `catch {}`:
   BİLEREK BIRAKILDI (enjekte DOM-query JS'i, kural 5/12). Topluca değiştirme;
@@ -168,6 +176,8 @@ Oturum bitmeden ÖNCE:
 5. **Kota kuralı (kritik):** Limitin dolmasına yakınsan YENİ kod yazmayı bırak; sadece analiz edip bu dosyayı güncelle ve Bölüm 6'yı netleştir. Yarım kalmış, build'i kırık kod ASLA bırakma — ya bitir ya başlama.
 
 ## 8. Oturum Kaydı (her güncellemede buraya ekle — en üste)
+
+- **2026-09-17 · Antigravity:** Discord Bot .aquamusic Çakışma Önleme & YouTube Music Profil Adı/Kullanıcı Adı Düzeltmesi — `scripts/discord-bot/index.js`'te `.aqua` kaldırılıp tekil `.aquamusic` yapıldı; `withPresences: true` ve `GuildMembers` intent'i eklenerek kullanıcının çaldığı şarkı tespiti garantiye alındı. `desktop/src/main/main.ts`'te `BOT_SERVER_TOKEN` aktarıldı. `desktop/src/main/auth/music-auth.ts`'te InnerTube `SAPISIDHASH` yetkilendirmesi, `handle` alanı ve `extractAccountInfo` eklendi. `desktop/src/renderer/components/app.ts`'te hem ad hem kullanıcı adı (`@handle`) gösterimi sağlandı. Windows Setup + Portable yerelde yeniden derlendi, website rebuild edildi, typecheck 0 hata. Push edildi.
 
 - **2026-09-17 · Antigravity:** Güvenli Sistem Tarayıcısı ile Giriş & DPAPI Cookie Aktarımı — `desktop/src/main/auth/music-auth.ts`, `main.ts`, `preload.ts`, `app.ts` güncellendi. Kullanıcının verdiği özel Google login bağlantısı varsayılan sistem tarayıcısında açılacak şekilde yapılandırıldı (`shell.openExternal`). Chrome/Edge/Brave oturum çerezlerini çözen Windows DPAPI + AES-256-GCM + `node:sqlite` altyapısı ve alternatif cookie yapıştırma desteği eklendi. Typecheck 0 hata, desktop build temiz. Push edildi.
 - **2026-09-17 · Antigravity:** Görev B (v1.0.2 Windows Build & Release Asset Güncelleme) tamamlandı — Yerel ortamda `npm run build:win` ile `Aquality-Music-Setup-1.0.2-win11.exe` (~96.8 MB), `Aquality-Music-Portable-1.0.2-win11.exe` (~96.3 MB), `.blockmap` ve `latest.yml` üretildi. `gh release upload v1.0.2` ile GitHub Release `v1.0.2` sayfasına yüklendi (artık Windows ve Mac ikilileri eksiksiz mevcut). `website/indir.html` ve `website/index.html` indirme kartları ve versiyon etiketleri v1.0.2'ye güncellendi (`website/dist` rebuild edildi). `.github/workflows/build-windows.yml`'e `desktop/node_modules` junction adımı eklenerek CI derleme hatası (`app-builder.exe ENOENT`) çözüldü. Push edildi.

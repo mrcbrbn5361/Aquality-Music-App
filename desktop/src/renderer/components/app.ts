@@ -407,7 +407,7 @@
 
       if (loggedIn) {
         state.user = await api.auth.getMusicUser();
-        if (state.user && !sanitizeName(state.user.name)) {
+        if (state.user && !sanitizeName(state.user.name) && !(state.user as any).handle) {
           state.user.name = '';
         }
       } else {
@@ -435,9 +435,16 @@
       if (loginBtn) loginBtn.style.display = 'none';
       if (userInfo) {
         userInfo.style.display = 'flex';
-        const displayName = state.user.name && state.user.name.length > 1 ? state.user.name : (state.user.email ? state.user.email.split('@')[0] : state.user.name);
+        const name = (state.user.name && state.user.name.length > 1 && state.user.name !== 'YouTube Music') ? state.user.name : '';
+        const handle = (state.user as any).handle || '';
+        const email = state.user.email || '';
+        const userIdentifier = handle || (email && !email.includes('@') ? `@${email}` : email);
+
+        const displayName = name || userIdentifier || 'YouTube Music';
         if (userName) userName.textContent = displayName;
-        if (userEmail) userEmail.textContent = state.user.email;
+        if (userEmail) {
+          userEmail.textContent = (name && userIdentifier) ? userIdentifier : (email && email !== displayName ? email : '');
+        }
         if (userAvatar) {
           if (state.user.picture) {
             const hiRes = state.user.picture.replace(/=s\d+/, '=s200').replace(/=w\d+.*/, '=s200-c-k-c0x00ffffff-no-rj');
@@ -447,10 +454,10 @@
             userAvatar.style.backgroundColor = 'transparent';
             userAvatar.textContent = '';
             if (avatarText) avatarText.style.display = 'none';
-          } else if (avatarText && state.user.name) {
+          } else if (avatarText && displayName) {
             userAvatar.style.backgroundImage = 'none';
             avatarText.style.display = 'block';
-            avatarText.textContent = state.user.name.charAt(0).toUpperCase();
+            avatarText.textContent = displayName.replace(/^@/, '').charAt(0).toUpperCase();
           }
         }
       }
