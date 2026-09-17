@@ -1308,6 +1308,18 @@ input, select { font: inherit; color: inherit; }
 
 .btn-primary:hover { background: var(--c-accent-hover); }
 
+.btn-secondary {
+  background: var(--c-bg-3);
+  color: var(--c-text-1);
+  border: 1px solid var(--c-border);
+}
+
+.btn-secondary:hover {
+  background: var(--c-bg-hover);
+  color: var(--c-text-0);
+  border-color: var(--c-text-3);
+}
+
 .btn-ghost {
   background: transparent;
   color: var(--c-text-2);
@@ -1315,6 +1327,11 @@ input, select { font: inherit; color: inherit; }
 }
 
 .btn-ghost:hover { background: var(--c-bg-hover); color: var(--c-text-0); border-color: var(--c-text-4); }
+
+.btn-sm {
+  padding: 5px 12px;
+  font-size: 12px;
+}
 
 /* ============================================
    Tab Bar
@@ -1362,7 +1379,8 @@ input, select { font: inherit; color: inherit; }
   background: var(--c-bg-2);
   border: 1px solid var(--c-border);
   border-radius: var(--r-xl);
-  width: 380px;
+  width: min(420px, calc(100vw - 32px));
+  max-width: 100%;
   box-shadow: var(--shadow-xl);
   transform: scale(0.95);
   transition: transform var(--t-normal);
@@ -1553,6 +1571,9 @@ input, select { font: inherit; color: inherit; }
   to { opacity: 1; transform: scale(1); }
 }
 .ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 8px 12px;
   border-radius: 4px;
   font-size: 13px;
@@ -1560,8 +1581,15 @@ input, select { font: inherit; color: inherit; }
   cursor: pointer;
   transition: background 0.12s;
 }
+.ctx-item svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
 .ctx-item:hover {
   background: var(--c-bg-3, #2a2a2a);
+}
+.ctx-item:hover svg {
+  opacity: 1;
 }
 .ctx-separator {
   height: 1px;

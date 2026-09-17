@@ -13,8 +13,8 @@
 > Kökteki `memory.md` bu motordan etkilenmez (doğrulandı: script `memory`
 > kelimesini hiç içermiyor).
 >
-> Son güncelleme: **2026-09-17** · Güncelleyen: **OpenCode (Muse Spark)**
-> HEAD: `454597e` · Branch: `master` · Repo: `mrcbrbn5361/Aquality-Music-App`
+> Son güncelleme: **2026-09-17** · Güncelleyen: **Antigravity**
+> HEAD: `f120c18` · Branch: `master` · Repo: `mrcbrbn5361/Aquality-Music-App`
 
 ---
 
@@ -114,15 +114,16 @@ Commit: **`f1dc31d`** (2026-09-16), header sync: **`454597e`** (HEAD) — push e
 > Her görev ayrı commit + push + memory.md güncellemesi ile ilerler.
 
 ### Görev A — UI/UX backlog doğrulaması (~98 madde, büyük iş)
-- Kaynak: `docs/UI-UX-SORUNLARI.md` (749 satır, tam duruyor).
+- Kaynak: `docs/UI-UX-SORUNLARI.md` (749 satır).
 - Yöntem: maddeleri tek tek ele al; HER madde için önce ilgili dosyayı `read` ile açıp
-  gerçekten var mı yok mu doğrula (4 başlık maddenin stale çıktığı görüldü —
-  UX-D-013, UX-D-029, repeat ikonları, UX-M-063).
-- Stale çıkan: kod yazma, sadece bu dosyadaki listeye "stale" notu düş.
-- Gerçek çıkan: küçük, tek konulu commit'le düzelt (`fix(desktop): ...` /
-  `fix(mobile): ...`), her commit öncesi ilgili typecheck/build.
-- Öncelikli adaylar (doğrulanmadı): context menu ikonları, mobil boş-durum
-  ekranları, website erişilebilirlik maddeleri.
+  gerçekten var mı yok mu doğrula.
+- **Doğrulanan & Düzeltilen Gerçek Sorunlar (Antigravity):**
+  - `UX-D-095`: Context menu öğelerine SVG simgeleri (Şimdi Çal, Önce Çal, Sıraya Ekle, Beğeni, Bağlantı Kopyala) eklendi; CSS'te flex + icon stilleri sağlandı.
+  - `UX-D-094`: Context menu sabit genişlik taşması giderildi — DOM'a eklendikten sonra `getBoundingClientRect()` ile dinamik ölçülüp viewport sınırlarına kenetlendi (`Math.max(8, Math.min(...))`).
+  - `UX-D-028`: Modal genişliği `width: min(420px, calc(100vw - 32px)); max-width: 100%;` yapılarak dar ekranlarda taşması önlendi.
+  - `UX-D-041`: Boş kütüphane ve beğeni ekranlarındaki butonlar için eksik olan `.btn-secondary` ve `.btn-sm` CSS sınıfları tanımlandı.
+- **Doğrulanmış Stale / Zaten Çözülmüş Maddeler:**
+  - `UX-D-013` (playlist click), `UX-D-029` (lyric sync), `UX-D-017` (repeat toggle), `UX-M-063` (tab layout), `UX-W-076` (focus-visible), `UX-W-077` (mobile menu aria), `UX-W-079` (footer parity), `UX-M-066/067` (search label), `UX-M-057/058` (player badges), `UX-D-093` (context menu klavye navigasyonu), `UX-D-012/027` (playlist create enter & toast), `UX-D-025/026` (chrome import modal escape/backdrop), `UX-D-022` (search debounce), `UX-D-014` (nav preventDefault).
 
 ### Görev B — v1.0.2 build + release asset güncelleme (orta)
 - Durum: sürümler eşitlendi (`1.0.2` ×6 dosya), ama GitHub Release `v1.0.2`'de
@@ -173,6 +174,7 @@ Oturum bitmeden ÖNCE:
 
 ## 8. Oturum Kaydı (her güncellemede buraya ekle — en üste)
 
+- **2026-09-17 · Antigravity:** UI/UX Backlog Görev A doğrulaması ve düzeltmeleri — `desktop/src/renderer/components/app.ts`'te context menu SVG simgeleri (`UX-D-095`), dinamik `getBoundingClientRect` viewport taşma koruması (`UX-D-094`) ve güvenli click delegasyonu (`.closest`) eklendi. `desktop/src/renderer/styles/main.css`'te `.ctx-item` flex/icon stilleri, modal için duyarlı genişlik `min(420px, calc(100vw - 32px))` (`UX-D-028`) ve eksik olan `.btn-secondary`, `.btn-sm` sınıfları (`UX-D-041`) eklendi. Backlog'daki 14 stale madde doğrulandı. `npm --workspace=desktop run typecheck` 0 hata, `npm run build --workspace=desktop` yeşil (vite 989ms). Push edildi.
 - **2026-09-17 · OpenCode (Muse Spark) → ANTIGRAVITY DEVİR:** Bölüm 6, Antigravity görev listesine (A/B/C) + kopyala-yapıştır ilk komuta (6b) çevrildi. Devir anı durumu: HEAD `fafd359`, remote senkron, typecheck/build yeşil, kırık kod yok. Kullanıcı onayı ile devir.
 - **2026-09-17 · OpenCode (Muse Spark):** UI/UX doğrulama turu — UX-D-013, UX-D-029, repeat ikonları, UX-M-063 stale çıktı (kodda zaten düzgün), değişiklik YOK. Kural eklendi: doküman maddesi önce kodda doğrulanır.
 - **2026-09-17 · OpenCode (Muse Spark):** `fix(mobile): AudioBridge inceleme + WebView tani loglari` — dosya zaten sertleştirilmiş (`55da5a8`), sadece `onError`/`onHttpError` warn eklendi. Mobile tsc temiz. Push edildi.

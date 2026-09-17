@@ -1847,25 +1847,46 @@
     menu.className = 'context-menu';
     menu.setAttribute('role', 'menu');
     menu.setAttribute('aria-label', `${song.title} seçenekleri`);
+    const isLiked = state.liked.has(song.id);
     menu.innerHTML = `
-      <div class="ctx-item" role="menuitem" tabindex="0" data-action="play">Şimdi Çal</div>
-      <div class="ctx-item" role="menuitem" tabindex="0" data-action="playNext">Önce Çal</div>
-      <div class="ctx-item" role="menuitem" tabindex="0" data-action="addToQueue">Sıraya Ekle</div>
+      <div class="ctx-item" role="menuitem" tabindex="0" data-action="play">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <span>Şimdi Çal</span>
+      </div>
+      <div class="ctx-item" role="menuitem" tabindex="0" data-action="playNext">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+        <span>Önce Çal</span>
+      </div>
+      <div class="ctx-item" role="menuitem" tabindex="0" data-action="addToQueue">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="16" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        <span>Sıraya Ekle</span>
+      </div>
       <div class="ctx-separator" aria-hidden="true"></div>
-      <div class="ctx-item" role="menuitem" tabindex="0" data-action="addToLiked">${state.liked.has(song.id) ? 'Beğeniyi Kaldır' : 'Beğeniye Ekle'}</div>
+      <div class="ctx-item" role="menuitem" tabindex="0" data-action="addToLiked">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        <span>${isLiked ? 'Beğeniyi Kaldır' : 'Beğeniye Ekle'}</span>
+      </div>
       <div class="ctx-separator" aria-hidden="true"></div>
-      <div class="ctx-item" role="menuitem" tabindex="0" data-action="copyLink">Bağlantıyı Kopyala</div>
+      <div class="ctx-item" role="menuitem" tabindex="0" data-action="copyLink">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        <span>Bağlantıyı Kopyala</span>
+      </div>
     `;
-
-    // Pozisyon ayarla
-    menu.style.left = `${Math.min(x, window.innerWidth - 200)}px`;
-    menu.style.top = `${Math.min(y, window.innerHeight - 250)}px`;
 
     document.body.appendChild(menu);
     activeContextMenu = menu;
 
+    // Pozisyon ayarla (taşmayı önlemek için eklenen elemanın boyutunu dinamik ölç)
+    const rect = menu.getBoundingClientRect();
+    const padding = 8;
+    const posX = Math.max(padding, Math.min(x, window.innerWidth - rect.width - padding));
+    const posY = Math.max(padding, Math.min(y, window.innerHeight - rect.height - padding));
+    menu.style.left = `${posX}px`;
+    menu.style.top = `${posY}px`;
+
     menu.addEventListener('click', async (e) => {
-      const action = (e.target as HTMLElement).dataset.action;
+      const item = (e.target as HTMLElement).closest<HTMLElement>('.ctx-item');
+      const action = item?.dataset.action;
       if (!action) return;
       switch (action) {
         case 'play': {
