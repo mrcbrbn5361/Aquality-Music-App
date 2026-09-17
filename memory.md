@@ -132,10 +132,17 @@ Commit: **`f1dc31d`** (2026-09-16), header sync: **`454597e`** (HEAD) — push e
   3. `website/indir.html` ve `website/index.html` indirme kartları ve versiyon rozetleri v1.0.2'ye güncellendi; `npm run build:website` ile `website/dist` yeniden üretildi.
   4. CI `build-windows.yml` iş akışına `desktop/node_modules` junction adımı eklenerek hoisted paketlerin `app-builder.exe ENOENT` hatasına yol açması önlendi.
 
+### Güvenli Sistem Tarayıcısı ile Giriş ve Doğrudan Cookie Aktarımı (TAMAMLANDI)
+- **Yapılanlar:**
+  1. Kullanıcının belirttiği özel `GlifWebSignIn` Google bağlantısı (`accounts.google.com/v3/signin/...`) doğrudan kullanıcının varsayılan sistem tarayıcısında (`shell.openExternal`) açılarak Electron içi WebView/tarayıcı penceresi ve Google'ın güvensiz tarayıcı engeli ("This browser or app may not be secure") tamamen bertaraf edildi.
+  2. Tarayıcıda oturum açıldıktan sonra Windows DPAPI anahtar çözümü (`[System.Security.Cryptography.ProtectedData]::Unprotect`) + SQLite (`node:sqlite` `DatabaseSync`) + AES-256-GCM kullanılarak Chrome/Edge/Brave çerezleri güvenle ve yerel olarak çözülüp Electron'un `session.fromPartition('persist:aquality-music')` oturumuna aktarılıyor.
+  3. Alternatif tarayıcılar (Firefox vb.) için manuel cookie yapıştırma (`importFromCookieString`) arayüze ve IPC'ye eklendi.
+  4. Typecheck (`npm --workspace=desktop run typecheck`) ve desktop build (`npm run build --workspace=desktop`) 0 hata ile doğrulandı.
+
 ### Görev C — Kalan teknik borç (küçük, fırsat bulunca)
 - `desktop/src/main/api/stream-resolver.ts` içindeki ~50 `catch {}`:
   BİLEREK BIRAKILDI (enjekte DOM-query JS'i, kural 5/12). Topluca değiştirme;
-  sadece gerçek hata yutan main-process noktaları varsa tek tek ele al.
+  sadece gerçek hata yutan main-process noktaları varsa tek test ele al.
 - `website/vercel.json`: rewrite yok, `cleanUrls: true` + `404.html` yeterli
   görünüyor; 404 davranışını canlı sitede test edip sonucu buraya yaz.
 - Önceki oturum iddiası çürütüldü ("404 rewrite eklendi" — yoktu); bu tür
@@ -162,6 +169,7 @@ Oturum bitmeden ÖNCE:
 
 ## 8. Oturum Kaydı (her güncellemede buraya ekle — en üste)
 
+- **2026-09-17 · Antigravity:** Güvenli Sistem Tarayıcısı ile Giriş & DPAPI Cookie Aktarımı — `desktop/src/main/auth/music-auth.ts`, `main.ts`, `preload.ts`, `app.ts` güncellendi. Kullanıcının verdiği özel Google login bağlantısı varsayılan sistem tarayıcısında açılacak şekilde yapılandırıldı (`shell.openExternal`). Chrome/Edge/Brave oturum çerezlerini çözen Windows DPAPI + AES-256-GCM + `node:sqlite` altyapısı ve alternatif cookie yapıştırma desteği eklendi. Typecheck 0 hata, desktop build temiz. Push edildi.
 - **2026-09-17 · Antigravity:** Görev B (v1.0.2 Windows Build & Release Asset Güncelleme) tamamlandı — Yerel ortamda `npm run build:win` ile `Aquality-Music-Setup-1.0.2-win11.exe` (~96.8 MB), `Aquality-Music-Portable-1.0.2-win11.exe` (~96.3 MB), `.blockmap` ve `latest.yml` üretildi. `gh release upload v1.0.2` ile GitHub Release `v1.0.2` sayfasına yüklendi (artık Windows ve Mac ikilileri eksiksiz mevcut). `website/indir.html` ve `website/index.html` indirme kartları ve versiyon etiketleri v1.0.2'ye güncellendi (`website/dist` rebuild edildi). `.github/workflows/build-windows.yml`'e `desktop/node_modules` junction adımı eklenerek CI derleme hatası (`app-builder.exe ENOENT`) çözüldü. Push edildi.
 - **2026-09-17 · Antigravity:** UI/UX Backlog Görev A doğrulaması ve düzeltmeleri — `desktop/src/renderer/components/app.ts`'te context menu SVG simgeleri (`UX-D-095`), dinamik `getBoundingClientRect` viewport taşma koruması (`UX-D-094`) ve güvenli click delegasyonu (`.closest`) eklendi. `desktop/src/renderer/styles/main.css`'te `.ctx-item` flex/icon stilleri, modal için duyarlı genişlik `min(420px, calc(100vw - 32px))` (`UX-D-028`) ve eksik olan `.btn-secondary`, `.btn-sm` sınıfları (`UX-D-041`) eklendi. Backlog'daki 14 stale madde doğrulandı. `npm --workspace=desktop run typecheck` 0 hata, `npm run build --workspace=desktop` yeşil (vite 989ms). Push edildi.
 - **2026-09-17 · OpenCode (Muse Spark) → ANTIGRAVITY DEVİR:** Bölüm 6, Antigravity görev listesine (A/B/C) + kopyala-yapıştır ilk komuta (6b) çevrildi. Devir anı durumu: HEAD `fafd359`, remote senkron, typecheck/build yeşil, kırık kod yok. Kullanıcı onayı ile devir.

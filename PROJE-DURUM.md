@@ -4,10 +4,10 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-17 18:22` |
+| **Son Güncelleme** | `2026-09-17 18:56` |
 | **Proje Versiyonu** | `v1.0.2` (Masaüstü: `v1.0.2`, Web: `v1.0.2`, Mobil: `v1.0.2`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `85389f1 - fix(desktop): add context menu icons, dynamic positioning, and modal responsiveness (1 second ago)` |
+| **Son Git Commit** | `36f21b8 - chore(release): update v1.0.2 download links, windows ci junction, and memory (0 seconds ago)` |
 | **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Kod Hacmi (LOC)** | Ana Süreç: ~5557 satır, Arayüz: ~5224 satır, Mobil (Expo): ~5835 satır, Web: ~1788 satır |
 

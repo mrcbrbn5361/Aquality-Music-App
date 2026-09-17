@@ -1,8 +1,9 @@
 import { app, BrowserWindow, session, Session, shell } from 'electron';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import Store from 'electron-store';
 import CDP, { CDPClient } from 'chrome-remote-interface';
 
@@ -199,235 +200,242 @@ export class MusicAuth {
   // 1) Ayrı profille Chrome'u --remote-debugging-port=9222 ile başlat
   //    (kullanıcının ana Chrome'una dokunmaz, giriş yapması gerekir)
   // 2) "Girişi Aktar" — CDP üzerinden cookie'leri çekip Electron session'a yazar
-  getLoginUrl(): string { return 'https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&uilel=3&passive=true&continue=https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26app%3Ddesktop%26hl%3Dtr%26next%3Dhttps%253A%252F%252Fmusic.youtube.com%252F%26feature%3Dgps&hl=tr'; }
-  // Portsu tespit: Chrome cookie dosyasında music.youtube.com var mı?
-  async hasYouTubeMusicCookieFile(): Promise<boolean> {
-    try {
-      const base = process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Google\\Chrome\\User Data` : '';
-      const candidates = [`${base}\\Default\\Network\\Cookies`, `${base}\\Default\\Cookies`];
-      for (const p of candidates) {
-        if (!fs.existsSync(p)) continue;
-        const buf = fs.readFileSync(p);
-        if (buf.includes(Buffer.from('music.youtube.com')) || buf.includes(Buffer.from('youtube'))) return true;
-      }
-    } catch (e) {
-      console.warn('[Auth] Chrome cookie dosyası okunamadı:', e);
-    }
-    return false;
+  getLoginUrl(): string {
+    return 'https://accounts.google.com/v3/signin/identifier?continue=https://www.youtube.com/signin?action_handle_signin%3Dtrue%26app%3Ddesktop%26hl%3Dtr%26next%3Dhttps%253A%252F%252Fmusic.youtube.com%252F%26feature%3D__FEATURE__&hl=tr&ltmpl=music&passive=true&service=youtube&uilel=3&flowName=GlifWebSignIn&flowEntry=ServiceLogin&dsh=S-2096976315:1789660689225122';
   }
-  async findYouTubeMusicTarget(): Promise<{ id: string; url: string } | null> {
-    for (const port of CHROME_DEBUG_PORTS) {
-      try {
-        const controller = new AbortController();
-        const t = setTimeout(()=>controller.abort(), 800);
-        const res = await fetch(`http://127.0.0.1:${port}/json`, { signal: controller.signal } as any);
-        clearTimeout(t);
-        if (!res.ok) continue;
-        const targets = await res.json() as any[];
-        const hit = targets.find(t => t.type === 'page' && (t.url?.includes('music.youtube.com') || t.title?.toLowerCase().includes('youtube music')));
-        if (hit) return { id: hit.id, url: hit.url };
-      } catch (e) {
-        console.debug(`[Auth] Debug portu kapalı (${port}):`, (e as Error)?.message || e);
-      }
-    }
-    return null;
-  }
-  async hasExternalYouTubeMusic(): Promise<boolean> {
-    if (await this.findYouTubeMusicTarget().then(t=>!!t).catch(()=>false)) return true;
-    return await this.hasYouTubeMusicCookieFile();
-  }
+
+  // Güvenli sistem tarayıcısını doğrudan Google ServiceLogin bağlantısıyla açar
   async openChromeLogin(): Promise<{ opened: boolean; error?: string; alreadyRunning?: boolean; url?: string; externalFound?: boolean; targetId?: string }> {
-    const target = await this.findYouTubeMusicTarget();
-    if(target){
-      try{ const { execSync } = await import('child_process'); execSync(`powershell -NoProfile -Command "Add-Type -AssemblyName System; (Get-Process chrome | Where-Object { $_.MainWindowTitle -like '*YouTube*Music*' } | Select-Object -First 1).MainWindowHandle | ForEach-Object { Add-Type -MemberDefinition '[DllImport(\\"user32.dll\\")] public static extern bool SetForegroundWindow(IntPtr hWnd);' -Name Win -NamespaceTmp -PassThru | % { $_.SetForegroundWindow($_) } } 2>nul"`, { timeout:1500 } as any); } catch (e) { /* pencere öne çıkarma best-effort */ }
-      return { opened:true, alreadyRunning:true, url:target.url, externalFound:true, targetId: target.id };
-    }
     try {
-      if (this.loginWindow && !this.loginWindow.isDestroyed()) {
-        this.loginWindow.focus();
-        return { opened: true, alreadyRunning: true, url: this.getLoginUrl() };
-      }
-
-      // Preload yolunu derlenmiş konuma göre dinamik belirle
-      const preloadCandidates = [
-        path.join(__dirname, 'login-preload.js'),
-        path.join(__dirname, 'auth/login-preload.js'),
-        path.join(app.getAppPath(), 'dist/main/auth/login-preload.js')
-      ];
-      const preloadPath = preloadCandidates.find(p => fs.existsSync(p));
-
-      this.loginWindow = new BrowserWindow({
-        width: 1040,
-        height: 720,
-        show: true,
-        autoHideMenuBar: true,
-        title: 'Aquality Music - YouTube Music Oturum Aç',
-        webPreferences: {
-          partition: MUSIC_PARTITION,
-          nodeIntegration: false,
-          contextIsolation: false,
-          sandbox: false,
-          preload: preloadPath
-        }
-      });
-
-      try {
-        (this.loginWindow.webContents as any).setUserAgent(CHROME_UA);
-      } catch (e) { console.warn('[Auth] UA ayarlanamadı:', e); }
-
-      // Webdriver ve window.chrome simülasyonunu tüm alt sayfalara da doğrudan enjekte et
-      const STEALTH_INJECTION = `
-        try {
-          delete Object.getPrototypeOf(navigator).webdriver;
-          Object.defineProperty(navigator, 'webdriver', { get: () => undefined, configurable: true });
-          if (!window.chrome) window.chrome = {};
-          window.chrome.app = window.chrome.app || { isInstalled: false, InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' }, RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' } };
-          window.chrome.csi = window.chrome.csi || function () {};
-          window.chrome.loadTimes = window.chrome.loadTimes || function () { return { commitLoadTime: Date.now()/1000, connectionInfo: 'http/1.1', finishDocumentLoadTime: Date.now()/1000, finishLoadTime: Date.now()/1000, firstPaintAfterLoadTime: 0, firstPaintTime: Date.now()/1000, navigationType: 'Other', npnNegotiatedProtocol: 'unknown', requestTime: Date.now()/1000, startLoadTime: Date.now()/1000, wasAlternateProtocolAvailable: false, wasFetchedViaSpdy: false, wasNpnNegotiated: false }; };
-        } catch(e) {}
-      `;
-      this.loginWindow.webContents.on('did-start-navigation', () => {
-        try { this.loginWindow?.webContents.executeJavaScript(STEALTH_INJECTION, true).catch(() => {}); } catch (e) { /* stealth enjeksiyon best-effort */ }
-      });
-      this.loginWindow.webContents.on('dom-ready', () => {
-        try { this.loginWindow?.webContents.executeJavaScript(STEALTH_INJECTION, true).catch(() => {}); } catch (e) { /* stealth enjeksiyon best-effort */ }
-      });
-
-      // Oturum tamamlandığında (Google yönlendirmesi music.youtube.com'a döndüğünde) otomatik aktar
-      this.loginWindow.webContents.on('did-navigate', async (_, navUrl) => {
-        if (navUrl && navUrl.includes('music.youtube.com') && !navUrl.includes('accounts.google.com')) {
-          setTimeout(async () => {
-            try {
-              const hasLogin = await this.isAuthenticated();
-              if (hasLogin) {
-                console.log('[Auth] Oturum açma tespit edildi, profil aktarılıyor...');
-                await this.importFromChrome();
-              }
-            } catch (e) {
-              console.warn('[Auth] Otomatik profil aktarımı hatası:', e);
-            }
-          }, 1500);
-        }
-      });
-
-      this.loginWindow.loadURL(this.getLoginUrl(), {
-        httpReferrer: 'https://music.youtube.com/',
-        userAgent: CHROME_UA
-      });
-      this.loginWindow.on('closed', () => this.loginWindow = null);
-      return { opened: true, url: this.getLoginUrl() };
+      const url = this.getLoginUrl();
+      shell.openExternal(url);
+      console.log('[Auth] Google giriş bağlantısı varsayılan sistem tarayıcısında açıldı:', url);
+      return { opened: true, url, externalFound: true };
     } catch (e: any) {
+      console.error('[Auth] Tarayıcı açma hatası:', e);
       return { opened: false, error: e?.message || String(e), url: this.getLoginUrl() };
     }
   }
 
-  // Artık loginWindow'un kendi session'ında cookie zaten var — direkt profili çekip kapat
+  // Windows'ta Chrome, Edge veya Brave'in yerel çerez veritabanını DPAPI ile çözüp Electron session'ına aktarır
+  async importFromDecryptedBrowserCookies(): Promise<{ success: boolean; cookies: number; error?: string }> {
+    if (process.platform !== 'win32') {
+      return { success: false, cookies: 0, error: 'Otomatik çerez aktarımı Windows üzerinde etkindir.' };
+    }
+
+    try {
+      const localAppData = process.env.LOCALAPPDATA;
+      if (!localAppData) {
+        return { success: false, cookies: 0, error: 'LOCALAPPDATA ortam değişkeni bulunamadı.' };
+      }
+
+      const browsers = [
+        {
+          name: 'Chrome',
+          localState: path.join(localAppData, 'Google/Chrome/User Data/Local State'),
+          cookies: path.join(localAppData, 'Google/Chrome/User Data/Default/Network/Cookies')
+        },
+        {
+          name: 'Edge',
+          localState: path.join(localAppData, 'Microsoft/Edge/User Data/Local State'),
+          cookies: path.join(localAppData, 'Microsoft/Edge/User Data/Default/Network/Cookies')
+        },
+        {
+          name: 'Brave',
+          localState: path.join(localAppData, 'BraveSoftware/Brave-Browser/User Data/Local State'),
+          cookies: path.join(localAppData, 'BraveSoftware/Brave-Browser/User Data/Default/Network/Cookies')
+        }
+      ];
+
+      for (const b of browsers) {
+        if (!fs.existsSync(b.localState) || !fs.existsSync(b.cookies)) continue;
+
+        try {
+          const localState = JSON.parse(fs.readFileSync(b.localState, 'utf8'));
+          const encKeyBase64 = localState?.os_crypt?.encrypted_key;
+          if (!encKeyBase64) continue;
+
+          const encKey = Buffer.from(encKeyBase64, 'base64').subarray(5); // 'DPAPI' ön ekini çıkar
+          const b64 = encKey.toString('base64');
+          const psCmd = `Add-Type -AssemblyName System.Security; $bytes = [Convert]::FromBase64String('${b64}'); $dec = [System.Security.Cryptography.ProtectedData]::Unprotect($bytes, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser); [Convert]::ToBase64String($dec)`;
+          const decryptedB64 = execSync(`powershell -NoProfile -NonInteractive -Command "${psCmd}"`, { encoding: 'utf8' }).trim();
+          const masterKey = Buffer.from(decryptedB64, 'base64');
+
+          const tmpCopy = path.join(os.tmpdir(), `aquality-ck-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.db`);
+          fs.copyFileSync(b.cookies, tmpCopy);
+
+          let rows: any[] = [];
+          try {
+            const sqliteModule: any = (eval('require'))('node:sqlite');
+            if (sqliteModule && sqliteModule.DatabaseSync) {
+              const db = new sqliteModule.DatabaseSync(tmpCopy, { open: true, readOnly: true });
+              rows = db.prepare(
+                "SELECT name, encrypted_value, host_key, path, is_secure, is_httponly, expires_utc, samesite FROM cookies WHERE host_key LIKE '%youtube.com%' OR host_key LIKE '%google.com%'"
+              ).all();
+              db.close();
+            }
+          } catch (sqlErr) {
+            console.warn('[Auth] node:sqlite ile okunamadı:', sqlErr);
+          } finally {
+            try { if (fs.existsSync(tmpCopy)) fs.unlinkSync(tmpCopy); } catch {}
+          }
+
+          if (!rows || rows.length === 0) continue;
+
+          const ses = this.getSession();
+          let written = 0;
+
+          for (const row of rows) {
+            const val = this.decryptChromiumCookieValue(masterKey, row.encrypted_value);
+            if (!val) continue;
+
+            const domain = row.host_key.startsWith('.') ? row.host_key.slice(1) : row.host_key;
+            const url = `http${row.is_secure ? 's' : ''}://${domain}${row.path || '/'}`;
+            const sameSite = row.samesite === 2 ? 'strict' : (row.samesite === 1 ? 'lax' : 'no_restriction');
+            const expiresSec = row.expires_utc && row.expires_utc > 0
+              ? Math.floor((row.expires_utc / 1000000) - 11644473600)
+              : undefined;
+
+            try {
+              await ses.cookies.set({
+                url,
+                name: row.name,
+                value: val,
+                domain: row.host_key,
+                path: row.path || '/',
+                secure: !!row.is_secure,
+                httpOnly: !!row.is_httponly,
+                sameSite,
+                expirationDate: expiresSec && expiresSec > Date.now() / 1000 ? expiresSec : undefined
+              });
+              written++;
+            } catch (e) {
+              /* cookie yazma best-effort */
+            }
+          }
+
+          if (written > 0) {
+            console.log(`[Auth] ${b.name} tarayıcısından ${written} çerez Electron oturumuna aktarıldı.`);
+            return { success: true, cookies: written };
+          }
+        } catch (err) {
+          console.warn(`[Auth] ${b.name} çerez aktarım hatası:`, err);
+        }
+      }
+
+      return {
+        success: false,
+        cookies: 0,
+        error: 'Tarayıcınızda YouTube Music oturumu bulunamadı. Lütfen tarayıcıda giriş yaptıktan sonra tekrar deneyin.'
+      };
+    } catch (e: any) {
+      return { success: false, cookies: 0, error: e?.message || String(e) };
+    }
+  }
+
+  private decryptChromiumCookieValue(masterKey: Buffer, encryptedVal: any): string {
+    if (!encryptedVal) return '';
+    const buf = Buffer.isBuffer(encryptedVal) ? encryptedVal : Buffer.from(encryptedVal);
+    if (buf.length < 31) return '';
+    const prefix = buf.subarray(0, 3).toString('ascii');
+    if (prefix !== 'v10' && prefix !== 'v11') return '';
+    const iv = buf.subarray(3, 15);
+    const tag = buf.subarray(buf.length - 16);
+    const ciphertext = buf.subarray(15, buf.length - 16);
+    try {
+      const decipher = crypto.createDecipheriv('aes-256-gcm', masterKey, iv);
+      decipher.setAuthTag(tag);
+      return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+    } catch {
+      return '';
+    }
+  }
+
+  // Manuel / alternatif çerez metni aktarımı
+  async importFromCookieString(cookieString: string): Promise<{ success: boolean; cookies: number; error?: string }> {
+    if (!cookieString || typeof cookieString !== 'string') {
+      return { success: false, cookies: 0, error: 'Geçersiz çerez metni.' };
+    }
+    const ses = this.getSession();
+    const pairs = cookieString.split(';');
+    let written = 0;
+    for (const p of pairs) {
+      const trimmed = p.trim();
+      if (!trimmed) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx === -1) continue;
+      const name = trimmed.slice(0, eqIdx).trim();
+      const value = trimmed.slice(eqIdx + 1).trim();
+      if (!name || !value) continue;
+      try {
+        await ses.cookies.set({
+          url: 'https://music.youtube.com',
+          name,
+          value,
+          domain: '.youtube.com',
+          path: '/',
+          secure: true,
+          httpOnly: false,
+          sameSite: 'no_restriction'
+        });
+        written++;
+      } catch (e) {
+        /* cookie yazma best-effort */
+      }
+    }
+    if (written > 0) {
+      return await this.refreshProfileAfterCookieImport(written);
+    }
+    return { success: false, cookies: 0, error: 'Hiçbir çerez kaydedilemedi.' };
+  }
+
+  private async refreshProfileAfterCookieImport(written: number): Promise<{ success: boolean; cookies: number; error?: string }> {
+    await new Promise((r) => setTimeout(r, 1000));
+    let prof = await this.fetchProfileViaAPI().catch(() => null);
+    if (!prof || (!prof.name && !prof.email)) {
+      await new Promise((r) => setTimeout(r, 1500));
+      prof = await this.fetchProfileViaAPI().catch(() => null);
+    }
+    const existing = this.store.get('musicUser');
+    const finalName = sanitizeName(prof?.name) || sanitizeName(existing?.name) || 'YouTube Music';
+    this.store.set('musicUser', {
+      id: 'ytmusic',
+      name: finalName,
+      email: prof?.email || existing?.email || '',
+      picture: prof?.picture || existing?.picture || '',
+      provider: 'youtube-music'
+    });
+    return { success: true, cookies: written };
+  }
+
   async importFromChrome(): Promise<{ success: boolean; cookies: number; error?: string }> {
     try {
-      const ses=this.getSession();
-      // tüm domainlerde ara — accounts.google.com'da cookie olabilir ama music.youtube.com'da henüz yok
-      const urls=['https://music.youtube.com','https://accounts.google.com','https://youtube.com','https://www.youtube.com'];
-      let all: Electron.Cookie[]=[]; for(const u of urls){ try{ const cs=await ses.cookies.get({url:u}); all.push(...cs);}catch(e){ console.debug('[Auth] Cookie okunamadı:', u, (e as Error)?.message || e); } }
-      // dedupe by name+domain
-      const uniq=new Map<string,Electron.Cookie>(); for(const c of all){ uniq.set(c.name+'|'+c.domain, c); }
-      const cookies=[...uniq.values()];
-      if (!cookies.length) return { success:false, cookies:0, error:'Henüz giriş yapılmadı. Pencerede YouTube Music\'e giriş yapın.' };
-      const hasLogin=cookies.some(c=>c.name==='LOGIN_INFO' || c.name==='SAPISID' || c.name==='__Secure-1PSID');
-      if(!hasLogin) return { success:false, cookies:cookies.length, error:'Giriş tamamlanmamış — YouTube Music ana sayfası yüklenene kadar bekleyin.' };
-      // ÖNCELİK: loginWindow DOM'u (doğrudan render edilmiş sayfa)
-      let prof: { name: string; email: string; picture: string } | null = null;
-      try {
-        if (this.loginWindow && !this.loginWindow.isDestroyed()) {
-          // loginWindow music.youtube.com'da değilse oraya git ve header gelene kadar bekle
-          try {
-            const curUrl = this.loginWindow.webContents.getURL() || '';
-            if (!curUrl.includes('music.youtube.com')) {
-              await this.loginWindow.webContents.loadURL('https://music.youtube.com/');
-              for(let i=0;i<12;i++){ await new Promise(r=>setTimeout(r,1000)); try{ const has=await this.loginWindow!.webContents.executeJavaScript(`!!(document.querySelector('ytmusic-nav-bar #avatar img')||document.querySelector('#account-name'))`,true); if(has) break; }catch(e){ /* avatar bekleme best-effort */ } }
-            }
-          } catch (e) {
-            console.warn('[Auth] Giriş sayfası hazırlanamadı:', e);
-          }
-          // hesap menüsü kapalıysa avatar'a tıklayıp aç
-          try {
-            await this.loginWindow.webContents.executeJavaScript(`(function(){ if(!document.querySelector('ytd-active-account-header-renderer #account-name')){ const b=document.querySelector('ytmusic-nav-bar #avatar button')||document.querySelector('ytmusic-nav-bar #avatar')||document.querySelector('#avatar-btn'); if(b){ (b as HTMLElement).click(); } } })()`, true);
-          } catch (e) { /* avatar tıklama best-effort */ }
-          await new Promise(r=>setTimeout(r,2500));
-          const domData: any = await this.loginWindow.webContents.executeJavaScript(`(function(){
-            const acc=document.querySelector('ytd-active-account-header-renderer');
-            let name='', email='', picture='', handle='';
-            if(acc){
-              const n=acc.querySelector('#account-name'); if(n) name=(n.getAttribute('title')||n.textContent||'').trim();
-              const av=acc.querySelector('#avatar img#img'); let raw=''; if(av) raw=av.currentSrc||av.src||av.getAttribute('src')||'';
-              if(!raw){ const av2=acc.querySelector('#avatar img'); if(av2) raw=av2.currentSrc||av2.src||''; }
-              if(raw && (raw.includes('yt3.ggpht.com')||raw.includes('googleusercontent'))) picture=raw;
-              const em=acc.querySelector('#email'); if(em) email=(em.getAttribute('title')||em.textContent||'').trim();
-              const h=acc.querySelector('#channel-handle'); if(h) handle=(h.getAttribute('title')||h.textContent||'').trim();
-              if(!email && handle) email=handle;
-            }
-            return JSON.stringify({name:(name||'').trim(), email:(email||'').trim(), picture:(picture||'').trim(), handle:(handle||'').trim()});
-          })()`, true) as string;
-          const parsed = typeof domData==='string' ? JSON.parse(domData) : domData;
-          if(parsed && (parsed.name || parsed.picture)) prof = { name: parsed.name, email: parsed.email, picture: parsed.picture };
-        }
-      } catch (e) {
-        console.warn('[Auth] Giriş penceresi DOM profil hatası:', e);
+      // 1. Doğrudan tarayıcı çerez tablosundan şifre çözüp aktarmayı dene
+      const browserRes = await this.importFromDecryptedBrowserCookies().catch((e) => {
+        console.warn('[Auth] Tarayıcı çerez aktarım denemesi hatası:', e);
+        return { success: false, cookies: 0, error: String(e?.message || e) };
+      });
+
+      if (browserRes.success) {
+        return await this.refreshProfileAfterCookieImport(browserRes.cookies);
       }
-      // 2. yol: hidden window ile DOM çek (pp VEYA isim eksikse dene)
-      if (!prof || !prof.picture || !prof.name) {
-        try {
-          const hProf = await this.fetchProfileViaAPI().catch(()=>null);
-          if(hProf){
-            // Merge: mevcut veriyi koru, sadece boş alanları doldur
-            if(!prof) prof = { name:'', email:'', picture:'' };
-            if(hProf.picture && (hProf.picture.includes('googleusercontent')||hProf.picture.includes('ggpht.com')) && !prof.picture) prof.picture = hProf.picture;
-            if(hProf.name && hProf.name.length>1 && !prof.name) prof.name = hProf.name;
-            if(hProf.email && !prof.email) prof.email = hProf.email;
-          }
-        } catch (e) {
-          console.warn('[Auth] API profil yedeği hatası:', e);
-        }
+
+      // 2. Session'da daha önceden oturum çerezi kalmış mı kontrol et
+      const hasLogin = await this.isAuthenticated();
+      if (hasLogin) {
+        const cookies = await this.getCookies();
+        return await this.refreshProfileAfterCookieImport(cookies.length);
       }
-      // 3. yol: CDP (hâlâ isim yoksa)
-      if (!prof || !prof.name) {
-        try {
-          const cdpProf = await this.fetchProfileViaCDP(null).catch((e) => {
-            console.warn('[Auth] CDP profil çekilemedi:', e);
-            return null;
-          });
-          if(cdpProf){
-            if(!prof) prof = { name:'', email:'', picture:'' };
-            if(cdpProf.name && cdpProf.name.length>1 && !prof.name) prof.name = cdpProf.name;
-            if(cdpProf.email && !prof.email) prof.email = cdpProf.email;
-            if(cdpProf.picture && !prof.picture) prof.picture = cdpProf.picture;
-          }
-        } catch (e) {
-          console.warn('[Auth] CDP profil yedeği hatası:', e);
-        }
-      }
-      if(prof && (prof.name||prof.email||prof.picture)){
-        const existing = this.store.get('musicUser');
-        const rawName = prof.name && prof.name.trim().length>1 ? prof.name.trim() : (prof.email||'').trim();
-        const existingName = existing && sanitizeName(existing.name) ? existing.name : '';
-        const finalName = sanitizeName(rawName) || existingName;
-        if (!finalName) {
-          try { this.loginWindow?.close(); } catch (e) { /* pencere kapatma best-effort */ }
-          return { success:false, cookies: cookies.length, error:'Profil ismi okunamadı. Pencerede avatar menüsünü bir kez açıp tekrar "Girişi Aktar"a basın.' };
-        }
-        this.store.set('musicUser', {
-          id:'ytmusic',
-          name: finalName,
-          email: prof.email || existing?.email || '',
-          picture: prof.picture || existing?.picture || '',
-          provider:'youtube-music'
-        });
-      } else {
-        try { this.loginWindow?.close(); } catch (e) { /* pencere kapatma best-effort */ }
-        return { success:false, cookies: cookies.length, error:'Profil okunamadı. Music ana sayfası tam yüklenince tekrar "Girişi Aktar"a basın.' };
-      }
-      try { this.loginWindow?.close(); } catch (e) { /* pencere kapatma best-effort */ }
-      return { success:true, cookies: cookies.length };
-    } catch(e:any){ return { success:false, cookies:0, error:e?.message||String(e)}; }
+
+      return {
+        success: false,
+        cookies: 0,
+        error: browserRes.error || 'Tarayıcıda YouTube Music oturumu bulunamadı. Lütfen tarayıcınızda giriş yaptıktan sonra tekrar "Girişi Aktar"a basın.'
+      };
+    } catch (e: any) {
+      console.error('[Auth] importFromChrome hatası:', e);
+      return { success: false, cookies: 0, error: e?.message || String(e) };
+    }
   }
   // Portsu: Chrome cookie dosyasını kopyala ve Electron session'a aktar
   async importFromCookieFile(): Promise<{ success: boolean; cookies: number; error?: string }> {

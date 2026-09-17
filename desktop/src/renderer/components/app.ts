@@ -468,10 +468,10 @@
     const startWelcomeBtn = $('#btnStartWelcome');
 
     async function doLoginMusic() {
-      showToast('Chrome açılıyor... YouTube Music\'e giriş yapıp buraya dönün.', 'info');
+      showToast('Varsayılan tarayıcınız açılıyor... YouTube Music\'e giriş yapıp buraya dönün.', 'info');
       const opened = await api.auth.loginMusic();
       if (!opened?.opened) {
-        showToast(`Chrome açılamadı: ${opened?.error || 'bilinmeyen hata'}`, 'error');
+        showToast(`Tarayıcı açılamadı: ${opened?.error || 'bilinmeyen hata'}`, 'error');
         return;
       }
       showChromeImportPrompt(opened);
@@ -493,26 +493,37 @@
     }
   }
 
-  function showChromeImportPrompt(opened: any) {
+  function showChromeImportPrompt(_opened: any) {
     const existing = document.getElementById('chromeImportModal');
     if (existing) existing.remove();
-    const hasExt = !!opened?.externalFound;
     const modal = document.createElement('div');
     modal.id = 'chromeImportModal';
     modal.className = 'modal-overlay visible';
     modal.innerHTML = `
       <div class="modal" style="max-width:520px">
         <div class="modal-header">
-          <h3>${hasExt? 'Açık YouTube Music Hesabını Seç' : 'Aquality Music Giriş Penceresi Açıldı'}</h3>
+          <h3>Google ile Giriş Yap</h3>
           <button class="icon-btn" id="closeChromeImport"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="modal-body" style="padding:16px 20px">
-          ${hasExt? `<div style="padding:10px;border-radius:8px;background:var(--c-bg-3);border:1px solid var(--c-border);margin-bottom:10px"><p style="margin:0;color:var(--c-text-1)"><strong>Zaten YouTube Music açık</strong>. Lütfen o tarayıcıda <strong>YouTube Music → sağ üst profil → Hesap değiştir</strong> ile istediğin hesaba geç, sonra buraya dönüp <strong>Girişi Aktar</strong>'a bas. Ayrı şifre ekranı açılmayacak.</p></div><p style="margin:0 0 8px;color:var(--c-text-2);font-size:12px">Not: İlk seferinde Aquality Music giriş penceresi yerine mevcut Chrome'un kullanılacak, bu yüzden yeni şifre sormaz.</p>` : `<p style="margin:0 0 12px;color:var(--c-text-1);line-height:1.5">Ayrı bir <strong>YouTube Music giriş penceresi</strong> açıldı. Orada hesabınla giriş yap, ana sayfa yüklenince <strong>Girişi Aktar</strong>'a bas.</p>`}
-          <div id="importStatus" style="padding:10px;border-radius:6px;background:var(--c-bg-2);font-size:13px;color:var(--c-text-2);min-height:18px">${hasExt?'Harici Chrome hesabı bekleniyor...':'Pencere açık, giriş bekleniyor...'}</div>
+          <p style="margin:0 0 12px;color:var(--c-text-1);line-height:1.5">
+            Varsayılan tarayıcınızda resmi Google giriş sayfası açıldı. Hesabınızla giriş yaptıktan sonra aşağıdaki <strong>Girişi Aktar</strong> butonuna tıklayın.
+          </p>
+          <div id="importStatus" style="padding:10px;border-radius:6px;background:var(--c-bg-2);font-size:13px;color:var(--c-text-2);min-height:18px">Tarayıcıda giriş bekleniyor... Giriş tamamlanınca Girişi Aktar'a basın.</div>
+          
+          <div style="margin-top:12px;border-top:1px solid var(--c-border);padding-top:10px">
+            <details style="font-size:12px;color:var(--c-text-3);cursor:pointer">
+              <summary style="user-select:none">Alternatif: Cookie ile Aktar</summary>
+              <div style="margin-top:8px">
+                <input type="password" id="customCookieInput" class="modal-input" placeholder="Cookie dizesini buraya yapıştırın (SAPISID=...)" style="width:100%;box-sizing:border-box;margin-bottom:8px">
+                <button class="btn btn-ghost btn-sm" id="btnImportCustomCookie" style="width:100%">Cookie ile Giriş Yap</button>
+              </div>
+            </details>
+          </div>
         </div>
         <div class="modal-footer">
           <button class="btn btn-ghost" id="cancelChromeImport">İptal</button>
-          <button class="btn btn-primary" id="doChromeImport">${hasExt?'Seçili Hesapla Giriş Yap':'Girişi Aktar'}</button>
+          <button class="btn btn-primary" id="doChromeImport">Girişi Aktar</button>
         </div>
       </div>
     `;
@@ -536,17 +547,46 @@
     modal.querySelector('#doChromeImport')?.addEventListener('click', async () => {
       const status = modal.querySelector('#importStatus') as HTMLElement;
       const btn = modal.querySelector('#doChromeImport') as HTMLButtonElement;
-      btn.disabled = true; btn.textContent = 'Aktarılıyor...'; status.textContent = 'Hesap doğrulanıyor...';
+      btn.disabled = true; btn.textContent = 'Aktarılıyor...'; status.textContent = 'Tarayıcı oturumu kontrol ediliyor...';
       try {
         const r = await api.auth.importFromChrome();
         if (r?.success) {
           state.isLoggedIn = true; state.user = await api.auth.getMusicUser(); updateAuthUI();
-          status.textContent = `${state.user?.name || 'Giriş'} olarak giriş yapıldı (${r.cookies} cookie)`;
+          status.textContent = `${state.user?.name || 'Giriş'} olarak giriş yapıldı (${r.cookies} çerez)`;
           status.style.color = 'var(--c-success)';
           await checkAuthState(); updateAuthUI(); loadHome();
           setTimeout(close, 1500);
-        } else { status.textContent = `Hata: ${r?.error || 'Pencerede giriş yapılmamış'}`; status.style.color = 'var(--c-error)'; btn.disabled=false; btn.textContent='Tekrar Dene'; }
+        } else { status.textContent = `Hata: ${r?.error || 'Tarayıcıda giriş tamamlanmamış'}`; status.style.color = 'var(--c-error)'; btn.disabled=false; btn.textContent='Tekrar Dene'; }
       } catch(e:any){ status.textContent=`Hata: ${e?.message||String(e)}`; status.style.color='var(--c-error)'; btn.disabled=false; btn.textContent='Tekrar Dene'; }
+    });
+
+    modal.querySelector('#btnImportCustomCookie')?.addEventListener('click', async () => {
+      const input = modal.querySelector('#customCookieInput') as HTMLInputElement;
+      const status = modal.querySelector('#importStatus') as HTMLElement;
+      if (!input?.value?.trim()) {
+        status.textContent = 'Lütfen çerez metnini girin.';
+        status.style.color = 'var(--c-error)';
+        return;
+      }
+      status.textContent = 'Çerezler işleniyor...';
+      try {
+        const r = await api.auth.importFromCookieString(input.value.trim());
+        if (r?.success) {
+          state.isLoggedIn = true;
+          state.user = await api.auth.getMusicUser();
+          updateAuthUI();
+          status.textContent = `${state.user?.name || 'Giriş'} olarak oturum açıldı!`;
+          status.style.color = 'var(--c-success)';
+          await checkAuthState(); updateAuthUI(); loadHome();
+          setTimeout(close, 1500);
+        } else {
+          status.textContent = `Hata: ${r?.error || 'Çerez geçersiz'}`;
+          status.style.color = 'var(--c-error)';
+        }
+      } catch (e: any) {
+        status.textContent = `Hata: ${e?.message || String(e)}`;
+        status.style.color = 'var(--c-error)';
+      }
     });
   }
 

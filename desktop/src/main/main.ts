@@ -682,18 +682,7 @@ function setupIPC(): void {
     return await musicAuth.openChromeLogin();
   });
   ipcMain.handle('auth:importFromChrome', async () => {
-    let result = await musicAuth.importFromChrome();
-    if (!result.success) {
-      const target = await musicAuth.findYouTubeMusicTarget().catch((e) => {
-        console.warn('[Main] YouTube Music hedefi bulunamadı:', e);
-        return null;
-      });
-      const ext = await musicAuth.importFromExternalChrome(target?.id).catch((e) => {
-        console.warn('[Main] Harici Chrome aktarımı başarısız:', e);
-        return null;
-      });
-      if (ext && ext.success) result = ext as typeof result;
-    }
+    const result = await musicAuth.importFromChrome();
     if (result.success) {
       // importFromChrome zaten profili kaydetti. Ek olarak streamResolver'dan da dene
       // ama sadece mevcut verileri GÜNCELLE — boş alanları eski veriyle doldur
@@ -715,6 +704,9 @@ function setupIPC(): void {
       return { success: true, cookies: result.cookies, user: musicAuth.getUser() };
     }
     return result;
+  });
+  ipcMain.handle('auth:importFromCookieString', async (_, cookieString: string) => {
+    return await musicAuth.importFromCookieString(cookieString);
   });
   ipcMain.handle('auth:logoutMusic', async () => {
     await musicAuth.logout();
