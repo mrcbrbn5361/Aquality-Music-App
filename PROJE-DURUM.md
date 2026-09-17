@@ -4,12 +4,12 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-17 16:47` |
+| **Son Güncelleme** | `2026-09-17 16:50` |
 | **Proje Versiyonu** | `v1.0.2` (Masaüstü: `v1.0.2`, Web: `v1.0.2`, Mobil: `v1.0.2`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `ca61db7 - fix(desktop): music-auth bos catch bloklarina anlamli loglar (1 second ago)` |
+| **Son Git Commit** | `a27a691 - fix(desktop): innertube fallback zincirlerine debug loglar (0 seconds ago)` |
 | **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
-| **Kod Hacmi (LOC)** | Ana Süreç: ~5545 satır, Arayüz: ~5175 satır, Mobil (Expo): ~5833 satır, Web: ~1788 satır |
+| **Kod Hacmi (LOC)** | Ana Süreç: ~5557 satır, Arayüz: ~5175 satır, Mobil (Expo): ~5833 satır, Web: ~1788 satır |
 
 ---
 
