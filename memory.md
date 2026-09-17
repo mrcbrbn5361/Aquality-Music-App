@@ -110,7 +110,7 @@ Commit: **`f1dc31d`** (2026-09-16), header sync: **`454597e`** (HEAD) — push e
 
 Öncelik sırasına göre, her biri ayrı commit:
 
-1. **Sürüm eşitleme (küçük, risksiz):** kök + `desktop` + `mobile` + `website` `package.json` → `1.0.2`; commit `chore(release): sync version to 1.0.2`; push (tag ATMA — bir sonraki feature ile birlikte).
+1. ~~**Sürüm eşitleme (küçük, risksiz):** kök + `desktop` + `mobile` + `website` `package.json` → `1.0.2`; commit `chore(release): sync version to 1.0.2`; push (tag ATMA — bir sonraki feature ile birlikte).~~ ✅ TAMAMLANDI (2026-09-17, commit aşağıda). Ek olarak kök + mobile `app.json` expo.version da `1.0.2` yapıldı (unutulmuştu). Tag ATILMADI — kural korunuyor.
 2. **`music-auth.ts` boş catch'leri (~18 adet):** her birini tek tek oku; CDP/cookie/temp-dosya akışında gerçek hata yutma varsa anlamlı log + temizlik ekle; DOM/stealth enjeksiyonlarındakilere dokunma. Sonra typecheck + desktop build.
 3. **`innertube.ts` 5 boş catch:** API hata yolları — hangilerinin sessiz geçmesi gerektiğine karar ver, en azından debug log ekle.
 4. **`AudioBridge.tsx` güvenlik incelemesi (M-005/006/007):** önce dosyayı oku + risk analizi yaz; düzeltme ancak kullanıcı onayıyla.
@@ -128,5 +128,6 @@ Oturum bitmeden ÖNCE:
 
 ## 8. Oturum Kaydı (her güncellemede buraya ekle — en üste)
 
+- **2026-09-17 · OpenCode (Muse Spark):** `chore(release): sync version to 1.0.2` — 6 dosya (`package.json` ×4 + `app.json` ×2) `1.0.1`→`1.0.2`. Doğrulama: node JSON parse OK (6/6 `1.0.2`), `npm --workspace=desktop run typecheck` temiz. Tag atılmadı. Push edildi.
 - **2026-09-17 · OpenCode (Muse Spark):** `memory.md` oluşturuldu (`284ff9d`) + push. Ardından Docs Engine churn'ü ayrı commit'lendi (`cbb1076`) — bunun sonsuz döngü olduğu doğrulandı (fark yalnızca `Son Güncelleme`/`Son Git Commit` satırları), Bölüm 5'e **kural 11** eklendi. Bundan sonra churn yalnızca gerçek değişikliklerle paketlenerek commit'lenecek.
 - **2026-09-16 · OpenCode:** `605f390` güvenlik/WCAG/CI paketi + push; `e9612e8` alan adı `aqualitymusic.vercel.app` + website rebuild + push; `f1dc31d` Google login/misafir çalma düzeltmesi; `454597e` docs sync (HEAD); `v1.0.2` tag + GitHub Release; Windows Setup+Portable yerelde build edildi (~96 MB).
