@@ -4,10 +4,10 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-16 23:24` |
+| **Son Güncelleme** | `2026-09-17 16:37` |
 | **Proje Versiyonu** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`, Mobil: `v1.0.1`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `f1dc31d - fix(auth): resolve Google 'browser not secure' error and unblock guest playback (2 seconds ago)` |
+| **Son Git Commit** | `284ff9d - docs: add memory.md persistent handoff memory for OpenCode/Antigravity continuity (1 second ago)` |
 | **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Kod Hacmi (LOC)** | Ana Süreç: ~5527 satır, Arayüz: ~5175 satır, Mobil (Expo): ~5833 satır, Web: ~1788 satır |
 

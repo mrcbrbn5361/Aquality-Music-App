@@ -8,10 +8,10 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-16 23:24` |
+| **Son Güncelleme** | `2026-09-17 16:37` |
 | **Proje Sürümü** | `v1.0.1` (Masaüstü: `v1.0.1`, Web: `v1.0.1`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `f1dc31d - fix(auth): resolve Google 'browser not secure' error and unblock guest playback (2 seconds ago)` |
+| **Son Commit** | `284ff9d - docs: add memory.md persistent handoff memory for OpenCode/Antigravity continuity (1 second ago)` |
 | **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Takip Edilen Sorunlar** | 24 / 24 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->
