@@ -514,11 +514,15 @@
         </div>
         <div class="modal-body" style="padding:16px 20px">
           <p style="margin:0 0 12px;color:var(--c-text-1);line-height:1.5">
-            Varsayılan tarayıcınızda resmi Google giriş sayfası açıldı. Hesabınızla giriş yaptıktan sonra aşağıdaki <strong>Girişi Aktar</strong> butonuna tıklayın.
+            Açılan güvenli giriş penceresinde Google hesabınızla oturum açın. Giriş tamamlandığında otomatik olarak algılanacaktır.
           </p>
-          <div id="importStatus" style="padding:10px;border-radius:6px;background:var(--c-bg-2);font-size:13px;color:var(--c-text-2);min-height:18px">Tarayıcıda giriş bekleniyor... Giriş tamamlanınca Girişi Aktar'a basın.</div>
+          <div id="importStatus" style="padding:10px;border-radius:6px;background:var(--c-bg-2);font-size:13px;color:var(--c-text-2);min-height:18px">Giriş bekleniyor... Oturum açtıktan sonra Girişi Aktar'a basın.</div>
           
-          <div style="margin-top:12px;border-top:1px solid var(--c-border);padding-top:10px">
+          <div style="margin-top:12px;border-top:1px solid var(--c-border);padding-top:10px;display:flex;flex-direction:column;gap:8px">
+            <button class="btn btn-secondary btn-sm" id="btnOpenSystemBrowser" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              Varsayılan Tarayıcıda Aç
+            </button>
             <details style="font-size:12px;color:var(--c-text-3);cursor:pointer">
               <summary style="user-select:none">Alternatif: Cookie ile Aktar</summary>
               <div style="margin-top:8px">
@@ -550,6 +554,15 @@
     });
     modal.querySelector('#closeChromeImport')?.addEventListener('click', close);
     modal.querySelector('#cancelChromeImport')?.addEventListener('click', close);
+
+    modal.querySelector('#btnOpenSystemBrowser')?.addEventListener('click', async () => {
+      await api.auth?.openSystemBrowserLogin?.().catch(() => {});
+      const status = modal.querySelector('#importStatus') as HTMLElement;
+      if (status) {
+        status.textContent = 'Varsayılan tarayıcınız açıldı. Giriş yaptıktan sonra Girişi Aktar butonuna tıklayın.';
+        status.style.color = 'var(--c-text-1)';
+      }
+    });
 
     modal.querySelector('#doChromeImport')?.addEventListener('click', async () => {
       const status = modal.querySelector('#importStatus') as HTMLElement;

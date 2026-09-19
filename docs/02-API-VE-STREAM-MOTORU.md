@@ -8,10 +8,10 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-17 20:03` |
+| **Son Güncelleme** | `2026-09-17 20:17` |
 | **Proje Sürümü** | `v1.0.2` (Masaüstü: `v1.0.2`, Web: `v1.0.2`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `f096f03 - fix(desktop): show v1.0.2 in settings and sync dynamically from app version (0 seconds ago)` |
+| **Son Commit** | `440e816 - fix(bot): allow discord bot to respond across all servers and add command logs (0 seconds ago)` |
 | **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Takip Edilen Sorunlar** | 24 / 24 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->

@@ -205,21 +205,155 @@ export class MusicAuth {
 
   // İki adımlı giriş akışı:
   // 1) Ayrı profille Chrome'u --remote-debugging-port=9222 ile başlat
-  //    (kullanıcının ana Chrome'una dokunmaz, giriş yapması gerekir)
-  // 2) "Girişi Aktar" — CDP üzerinden cookie'leri çekip Electron session'a yazar
+  // Portsu tespit: Chrome cookie dosyasında music.youtube.com var mı?
+  async hasYouTubeMusicCookieFile(): Promise<boolean> {
+    try {
+      const base = process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Google\\Chrome\\User Data` : '';
+      const candidates = [`${base}\\Default\\Network\\Cookies`, `${base}\\Default\\Cookies`];
+      for (const p of candidates) {
+        if (!fs.existsSync(p)) continue;
+        const buf = fs.readFileSync(p);
+        if (buf.includes(Buffer.from('music.youtube.com')) || buf.includes(Buffer.from('youtube'))) return true;
+      }
+    } catch (e) {
+      console.warn('[Auth] Chrome cookie dosyası okunamadı:', e);
+    }
+    return false;
+  }
+
+  async findYouTubeMusicTarget(): Promise<{ id: string; url: string } | null> {
+    for (const port of CHROME_DEBUG_PORTS) {
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 800);
+        const res = await fetch(`http://127.0.0.1:${port}/json`, { signal: controller.signal } as any);
+        clearTimeout(t);
+        if (!res.ok) continue;
+        const targets = (await res.json()) as any[];
+        const hit = targets.find(
+          (t) => t.type === 'page' && (t.url?.includes('music.youtube.com') || t.title?.toLowerCase().includes('youtube music'))
+        );
+        if (hit) return { id: hit.id, url: hit.url };
+      } catch (e) {
+        console.debug(`[Auth] Debug portu kapalı (${port}):`, (e as Error)?.message || e);
+      }
+    }
+    return null;
+  }
+
+  async hasExternalYouTubeMusic(): Promise<boolean> {
+    if (await this.findYouTubeMusicTarget().then((t) => !!t).catch(() => false)) return true;
+    return await this.hasYouTubeMusicCookieFile();
+  }
+
   getLoginUrl(): string {
     return 'https://accounts.google.com/v3/signin/identifier?continue=https://www.youtube.com/signin?action_handle_signin%3Dtrue%26app%3Ddesktop%26hl%3Dtr%26next%3Dhttps%253A%252F%252Fmusic.youtube.com%252F%26feature%3D__FEATURE__&hl=tr&ltmpl=music&passive=true&service=youtube&uilel=3&flowName=GlifWebSignIn&flowEntry=ServiceLogin&dsh=S-2096976315:1789660689225122';
   }
 
   // Güvenli sistem tarayıcısını doğrudan Google ServiceLogin bağlantısıyla açar
-  async openChromeLogin(): Promise<{ opened: boolean; error?: string; alreadyRunning?: boolean; url?: string; externalFound?: boolean; targetId?: string }> {
+  async openSystemBrowserLogin(): Promise<{ opened: boolean; error?: string; url?: string }> {
     try {
       const url = this.getLoginUrl();
       shell.openExternal(url);
       console.log('[Auth] Google giriş bağlantısı varsayılan sistem tarayıcısında açıldı:', url);
-      return { opened: true, url, externalFound: true };
+      return { opened: true, url };
     } catch (e: any) {
       console.error('[Auth] Tarayıcı açma hatası:', e);
+      return { opened: false, error: e?.message || String(e), url: this.getLoginUrl() };
+    }
+  }
+
+  // Dahili güvenli BrowserWindow veya harici Chrome ile YouTube Music oturum açma penceresini açar
+  async openChromeLogin(): Promise<{ opened: boolean; error?: string; alreadyRunning?: boolean; url?: string; externalFound?: boolean; targetId?: string }> {
+    const target = await this.findYouTubeMusicTarget().catch(() => null);
+    if (target) {
+      try {
+        const { execSync } = await import('child_process');
+        execSync(`powershell -NoProfile -Command "Add-Type -AssemblyName System; (Get-Process chrome | Where-Object { $_.MainWindowTitle -like '*YouTube*Music*' } | Select-Object -First 1).MainWindowHandle | ForEach-Object { Add-Type -MemberDefinition '[DllImport(\\"user32.dll\\")] public static extern bool SetForegroundWindow(IntPtr hWnd);' -Name Win -NamespaceTmp -PassThru | % { $_.SetForegroundWindow($_) } } 2>nul"`, { timeout: 1500 } as any);
+      } catch (e) { /* pencere öne çıkarma best-effort */ }
+      return { opened: true, alreadyRunning: true, url: target.url, externalFound: true, targetId: target.id };
+    }
+
+    try {
+      if (this.loginWindow && !this.loginWindow.isDestroyed()) {
+        this.loginWindow.focus();
+        return { opened: true, alreadyRunning: true, url: this.getLoginUrl() };
+      }
+
+      const preloadCandidates = [
+        path.join(__dirname, 'login-preload.js'),
+        path.join(__dirname, 'auth/login-preload.js'),
+        path.join(app.getAppPath(), 'dist/main/auth/login-preload.js')
+      ];
+      const preloadPath = preloadCandidates.find((p) => fs.existsSync(p));
+
+      this.loginWindow = new BrowserWindow({
+        width: 1040,
+        height: 720,
+        show: true,
+        autoHideMenuBar: true,
+        title: 'Aquality Music - YouTube Music Oturum Aç',
+        webPreferences: {
+          partition: MUSIC_PARTITION,
+          nodeIntegration: false,
+          contextIsolation: false,
+          sandbox: false,
+          preload: preloadPath
+        }
+      });
+
+      try {
+        (this.loginWindow.webContents as any).setUserAgent(CHROME_UA);
+      } catch (e) {
+        console.warn('[Auth] UA ayarlanamadı:', e);
+      }
+
+      const STEALTH_INJECTION = `
+        try {
+          delete Object.getPrototypeOf(navigator).webdriver;
+          Object.defineProperty(navigator, 'webdriver', { get: () => undefined, configurable: true });
+          if (!window.chrome) window.chrome = {};
+          window.chrome.app = window.chrome.app || { isInstalled: false, InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' }, RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' } };
+          window.chrome.csi = window.chrome.csi || function () {};
+          window.chrome.loadTimes = window.chrome.loadTimes || function () { return { commitLoadTime: Date.now()/1000, connectionInfo: 'http/1.1', finishDocumentLoadTime: Date.now()/1000, finishLoadTime: Date.now()/1000, firstPaintAfterLoadTime: 0, firstPaintTime: Date.now()/1000, navigationType: 'Other', npnNegotiatedProtocol: 'unknown', requestTime: Date.now()/1000, startLoadTime: Date.now()/1000, wasAlternateProtocolAvailable: false, wasFetchedViaSpdy: false, wasNpnNegotiated: false }; };
+        } catch(e) {}
+      `;
+      this.loginWindow.webContents.on('did-start-navigation', () => {
+        try { this.loginWindow?.webContents.executeJavaScript(STEALTH_INJECTION, true).catch(() => {}); } catch {}
+      });
+      this.loginWindow.webContents.on('dom-ready', () => {
+        try { this.loginWindow?.webContents.executeJavaScript(STEALTH_INJECTION, true).catch(() => {}); } catch {}
+      });
+
+      // Oturum tamamlandığında (Google yönlendirmesi music.youtube.com'a döndüğünde) otomatik aktar
+      this.loginWindow.webContents.on('did-navigate', async (_, navUrl) => {
+        if (navUrl && navUrl.includes('music.youtube.com') && !navUrl.includes('accounts.google.com')) {
+          setTimeout(async () => {
+            try {
+              const hasLogin = await this.isAuthenticated();
+              if (hasLogin) {
+                console.log('[Auth] Oturum açma tespit edildi, profil aktarılıyor...');
+                await this.importFromChrome();
+              }
+            } catch (e) {
+              console.warn('[Auth] Otomatik profil aktarımı hatası:', e);
+            }
+          }, 1500);
+        }
+      });
+
+      this.loginWindow.loadURL(this.getLoginUrl(), {
+        httpReferrer: 'https://music.youtube.com/',
+        userAgent: CHROME_UA
+      });
+
+      this.loginWindow.on('closed', () => {
+        this.loginWindow = null;
+      });
+
+      return { opened: true, url: this.getLoginUrl() };
+    } catch (e: any) {
+      console.error('[Auth] Giriş penceresi açılamadı:', e);
       return { opened: false, error: e?.message || String(e), url: this.getLoginUrl() };
     }
   }
@@ -268,8 +402,14 @@ export class MusicAuth {
           const decryptedB64 = execSync(`powershell -NoProfile -NonInteractive -Command "${psCmd}"`, { encoding: 'utf8' }).trim();
           const masterKey = Buffer.from(decryptedB64, 'base64');
 
-          const tmpCopy = path.join(os.tmpdir(), `aquality-ck-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.db`);
-          fs.copyFileSync(b.cookies, tmpCopy);
+          let tmpCopy = '';
+          try {
+            tmpCopy = path.join(os.tmpdir(), `aquality-ck-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.db`);
+            fs.copyFileSync(b.cookies, tmpCopy);
+          } catch (copyErr) {
+            // Tarayıcı açıkken dosya Windows tarafından kilitlidir (EBUSY) - normal ve beklenen durum
+            continue;
+          }
 
           let rows: any[] = [];
           try {
@@ -282,7 +422,7 @@ export class MusicAuth {
               db.close();
             }
           } catch (sqlErr) {
-            console.warn('[Auth] node:sqlite ile okunamadı:', sqlErr);
+            // node:sqlite modülü Electron 28 çalışma zamanında bulunmayabilir
           } finally {
             try { if (fs.existsSync(tmpCopy)) fs.unlinkSync(tmpCopy); } catch {}
           }
@@ -418,27 +558,84 @@ export class MusicAuth {
 
   async importFromChrome(): Promise<{ success: boolean; cookies: number; error?: string }> {
     try {
-      // 1. Doğrudan tarayıcı çerez tablosundan şifre çözüp aktarmayı dene
-      const browserRes = await this.importFromDecryptedBrowserCookies().catch((e) => {
-        console.warn('[Auth] Tarayıcı çerez aktarım denemesi hatası:', e);
-        return { success: false, cookies: 0, error: String(e?.message || e) };
-      });
+      // 1. loginWindow açıksa ve YouTube Music'e yönlenmişse DOM'dan profil bilgilerini çek
+      let domProf: { name?: string; email?: string; picture?: string; handle?: string } | null = null;
+      if (this.loginWindow && !this.loginWindow.isDestroyed()) {
+        const curUrl = this.loginWindow.webContents.getURL() || '';
+        if (curUrl.includes('music.youtube.com')) {
+          try {
+            await this.loginWindow.webContents.executeJavaScript(`(function(){ if(!document.querySelector('ytd-active-account-header-renderer #account-name')){ const b=document.querySelector('ytmusic-nav-bar #avatar button')||document.querySelector('ytmusic-nav-bar #avatar')||document.querySelector('#avatar-btn'); if(b){ (b as HTMLElement).click(); } } })()`, true).catch(() => {});
+            await new Promise((r) => setTimeout(r, 1200));
+            const domData: any = await this.loginWindow.webContents.executeJavaScript(`(function(){
+              const acc = document.querySelector('ytd-active-account-header-renderer');
+              let name = '', email = '', picture = '', handle = '';
+              if (acc) {
+                const n = acc.querySelector('#account-name'); if (n) name = (n.getAttribute('title') || n.textContent || '').trim();
+                const av = acc.querySelector('#avatar img#img') || acc.querySelector('#avatar img');
+                if (av) { let raw = (av as any).currentSrc || (av as HTMLImageElement).src || ''; if (raw && (raw.includes('yt3.ggpht.com') || raw.includes('googleusercontent'))) picture = raw; }
+                const em = acc.querySelector('#email'); if (em) email = (em.getAttribute('title') || em.textContent || '').trim();
+                const h = acc.querySelector('#channel-handle'); if (h) handle = (h.getAttribute('title') || h.textContent || '').trim();
+                if (!email && handle) email = handle;
+              }
+              return JSON.stringify({ name: (name || '').trim(), email: (email || '').trim(), picture: (picture || '').trim(), handle: (handle || '').trim() });
+            })()`, true).catch(() => null);
 
-      if (browserRes.success) {
-        return await this.refreshProfileAfterCookieImport(browserRes.cookies);
+            const parsed = typeof domData === 'string' ? JSON.parse(domData) : domData;
+            if (parsed && (parsed.name || parsed.picture || parsed.handle)) {
+              domProf = parsed;
+            }
+          } catch (e) {
+            console.warn('[Auth] loginWindow DOM profil hatası:', e);
+          }
+        }
       }
 
-      // 2. Session'da daha önceden oturum çerezi kalmış mı kontrol et
+      // 2. Session'da oturum çerezi var mı kontrol et (loginWindow aynı partition'ı kullanır)
       const hasLogin = await this.isAuthenticated();
       if (hasLogin) {
         const cookies = await this.getCookies();
+        if (domProf && (domProf.name || domProf.picture || domProf.handle)) {
+          const existing = this.store.get('musicUser');
+          this.store.set('musicUser', {
+            id: 'ytmusic',
+            name: sanitizeName(domProf.name) || domProf.handle || existing?.name || 'YouTube Music',
+            email: domProf.email || existing?.email || domProf.handle || '',
+            picture: domProf.picture || existing?.picture || '',
+            provider: 'youtube-music',
+            handle: domProf.handle || existing?.handle || ''
+          });
+        }
+        try { this.loginWindow?.close(); } catch {}
+        this.loginWindow = null;
         return await this.refreshProfileAfterCookieImport(cookies.length);
+      }
+
+      // 3. Tarayıcı DPAPI çerez tablosundan şifre çözmeyi dene (Windows)
+      const browserRes = await this.importFromDecryptedBrowserCookies().catch((e) => {
+        console.debug('[Auth] Tarayıcı çerez aktarım denemesi:', e);
+        return { success: false, cookies: 0, error: String(e?.message || e) };
+      });
+      if (browserRes.success) {
+        try { this.loginWindow?.close(); } catch {}
+        this.loginWindow = null;
+        return await this.refreshProfileAfterCookieImport(browserRes.cookies);
+      }
+
+      // 4. Harici Chrome CDP hedefi kontrolü (remote debugging portu)
+      const target = await this.findYouTubeMusicTarget().catch(() => null);
+      if (target) {
+        const ext = await this.importFromExternalChrome(target.id).catch(() => null);
+        if (ext && ext.success) {
+          try { this.loginWindow?.close(); } catch {}
+          this.loginWindow = null;
+          return ext;
+        }
       }
 
       return {
         success: false,
         cookies: 0,
-        error: browserRes.error || 'Tarayıcıda YouTube Music oturumu bulunamadı. Lütfen tarayıcınızda giriş yaptıktan sonra tekrar "Girişi Aktar"a basın.'
+        error: 'Oturum bulunamadı. Lütfen açılan pencerede YouTube Music hesabınıza giriş yapın.'
       };
     } catch (e: any) {
       console.error('[Auth] importFromChrome hatası:', e);

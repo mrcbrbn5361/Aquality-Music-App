@@ -682,8 +682,24 @@ function setupIPC(): void {
   ipcMain.handle('auth:openChromeLogin', async () => {
     return await musicAuth.openChromeLogin();
   });
+  ipcMain.handle('auth:openSystemBrowserLogin', async () => {
+    return await musicAuth.openSystemBrowserLogin();
+  });
   ipcMain.handle('auth:importFromChrome', async () => {
-    const result = await musicAuth.importFromChrome();
+    let result = await musicAuth.importFromChrome();
+    if (!result.success) {
+      const target = await musicAuth.findYouTubeMusicTarget().catch((e) => {
+        console.warn('[Main] YouTube Music hedefi bulunamadı:', e);
+        return null;
+      });
+      if (target) {
+        const ext = await musicAuth.importFromExternalChrome(target.id).catch((e) => {
+          console.warn('[Main] Harici Chrome aktarımı başarısız:', e);
+          return null;
+        });
+        if (ext && ext.success) result = ext as typeof result;
+      }
+    }
     if (result.success) {
       // importFromChrome zaten profili kaydetti. Ek olarak streamResolver'dan da dene
       // ama sadece mevcut verileri GÜNCELLE — boş alanları eski veriyle doldur
@@ -696,7 +712,8 @@ function setupIPC(): void {
             name: prof.name || existing?.name || '',
             email: prof.email || existing?.email || '',
             picture: prof.picture || existing?.picture || '',
-            provider: 'youtube-music'
+            provider: 'youtube-music',
+            handle: existing?.handle
           });
         }
       } catch (e) {

@@ -62,6 +62,7 @@ const api = {
     isGoogleAuthenticated: () => ipcRenderer.invoke('auth:isGoogleAuthenticated'),
     getGoogleUser: () => ipcRenderer.invoke('auth:getGoogleUser'),
     loginMusic: () => ipcRenderer.invoke('auth:openChromeLogin'),
+    openSystemBrowserLogin: () => ipcRenderer.invoke('auth:openSystemBrowserLogin'),
     importFromChrome: () => ipcRenderer.invoke('auth:importFromChrome'),
     importFromCookieString: (str: string) => ipcRenderer.invoke('auth:importFromCookieString', str),
     logoutMusic: () => ipcRenderer.invoke('auth:logoutMusic'),
