@@ -182,6 +182,8 @@ Oturum bitmeden ÖNCE:
 
 ## 8. Oturum Kaydı (her güncellemede buraya ekle — en üste)
 
+- **2026-09-19 · Antigravity:** Windows CI İş Akışı Düzeltmesi (`build-windows.yml`) — GitHub Actions üzerinde `desktop/node_modules` Junction oluşturulurken oluşan `Creating a junction requires an absolute path for the target` hatası düzeltildi; `(Get-Item "node_modules").FullName` ile mutlak yol verildi.
+
 - **2026-09-19 · Antigravity:** 3. Onarım (Discord Bot Privileged Intent Fallback Toleransı) TAMAMLANDI — `scripts/discord-bot/index.js` içinde `DISALLOWED_INTENTS` hatası yakalanarak standart gateway intent'lerine zarif otomatik geçiş sağlandı. Bot artık Developer Portal'da Privileged Intent'ler açık olmasa dahi çökmeden çalışır ve yerel REST API (Port 9863) ile şarkı durumu kartlarını kusursuz çizer. Node syntax kontrolü (`node -c`) ve desktop typecheck 0 hata ile doğrulandı.
 
 - **2026-09-19 · Antigravity:** 2. Onarım (REST API Token & Kural 4 Uyumu) TAMAMLANDI — `desktop/src/main/api/bot-server.ts` dosyasında yetkisiz harici web origin'leri 403 Forbidden ile engellendi, sunulan Bearer token'ların doğrulanması korundu ve yerel loopback / Discord botu için salt-okunur durum sorguları güvenli biçimde dengelendi. Typecheck 0 hata ile doğrulandı. Push edildi (`65c5f46`).

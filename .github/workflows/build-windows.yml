@@ -37,7 +37,8 @@ jobs:
       - name: Ensure desktop node_modules
         run: |
           if (-not (Test-Path "desktop/node_modules")) {
-            New-Item -ItemType Junction -Path "desktop/node_modules" -Target "node_modules"
+            $target = (Get-Item "node_modules").FullName
+            New-Item -ItemType Junction -Path "desktop/node_modules" -Target $target
           }
         shell: pwsh
 
