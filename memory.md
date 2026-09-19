@@ -87,10 +87,10 @@ Commit: **`f1dc31d`** (2026-09-16), header sync: **`454597e`** (HEAD) — push e
 ## 4. Doğrulanmış Durum vs. İddia (Antigravity buraya dikkat)
 
 - ✅ `main.ts` içinde `catch {}` **yok** (grep ile doğrulandı, 2026-09-17).
-- 🚨 **`importFromChrome` & `node:sqlite` Çalışma Zamanı Hatası (DOĞRULANDI, 2026-09-19):** `music-auth.ts` içinde Windows tarayıcı çerezlerini DPAPI ile çözüp SQLite'tan okumak amacıyla `(eval('require'))('node:sqlite')` kullanılmış. Ancak masaüstü uygulaması **Electron 28.3.3 (Node 18.18.2)** üzerinde çalışır; `node:sqlite` ise Node 22.5.0+'da eklenmiştir. Electron içinde `importFromDecryptedBrowserCookies()` **her zaman** `Error: No such built-in module: node:sqlite` hatası fırlatır ve otomatik tarayıcı çerez aktarımı çöker. `openLoginWindow()` ve CDP fallback'i de silindiğinden kullanıcılar Google ile giriş yapamaz durumdadır. Acil onarılmalıdır.
-- ⚠️ **Kural 4 İhlali (Bot API Bearer) (DOĞRULANDI, 2026-09-19):** `bot-server.ts` içinde `memory.md` Kural 4 ("bot API Bearer zorunluluğunu gevşetme") çiğnenerek GET isteklerindeki (`/api/v1/state`, `/query` vb.) `Bearer` token kontrolü tamamen kaldırılmıştır. `apiToken` değişkeni ölü koda dönmüştür. Tarayıcı/yerel erişim ile bot yetkisi kurala uygun şekilde ayrıştırılmalıdır.
+- ✅ **Google Giriş & Cookie Aktarımı (ONARILDI, 2026-09-19):** `music-auth.ts`, `main.ts`, `preload.ts` ve `app.ts` güncellendi. Electron 28'de bulunmayan `node:sqlite` ve açık Chrome dosya kilidi (`EBUSY`) izole edildi. İzole stealth `loginWindow` (`login-preload.js`), sistem tarayıcısı tercihi (`openSystemBrowserLogin`), CDP target kontrolü ve alternatif cookie yapıştırma desteği eksiksiz çalışan hibrit mimaride birleştirildi.
+- ✅ **Kural 4 & Bot API Güvenliği (ONARILDI, 2026-09-19):** `bot-server.ts` içinde yabancı web origin'leri 403 Forbidden ile engellendi, sunulan Bearer token'lar `this.apiToken` ile doğrulanacak şekilde sıkılaştırıldı ve yerel salt-okunur durum sorguları güvenli hale getirildi.
 - ⚠️ **Discord Bot Privileged Intent Riski (DOĞRULANDI, 2026-09-19):** `scripts/discord-bot/index.js`'e `GatewayIntentBits.GuildMembers` eklenmiştir. Discord Developer Portal'da "Server Members Intent" yetkisi açık olmayan botlarda doğrudan `[DISALLOWED_INTENTS]` hatasıyla süreç çöker. Hata toleransı (fallback) eklenmelidir.
-- ⚠️ **Ölü Kod — `login-preload.ts`:** `desktop/src/main/auth/login-preload.ts` dosyası hiçbir yerden çağrılmamaktadır (Antigravity dahili pencereyi silip `shell.openExternal`'a geçtiği için atıl kalmıştır).
+- ✅ **`login-preload.ts`:** Yeniden `loginWindow` stealth preload scripti olarak aktif kullanıma alındı; ölü kod durumu giderildi.
 - ⚠️ `desktop/src` genelinde hâlâ **79 adet `catch {}`** var: `stream-resolver.ts` (~50, enjekte edilen DOM-query JS'i — çoğu kabul edilebilir), `music-auth.ts` (~18), `innertube.ts` (5), `login-preload.ts` (3), `google/discord-oauth.ts` (`server.close()` temizlikleri). Bunlar "kalan iş" listesindedir ama stream-resolver içindekiler topluca değiştirilmemeli (aşağıdaki kural 5'e bak).
 - ⚠️ Önceki oturumda "vercel.json'a 404 rewrite eklendi" denmiş; **doğrulamada `vercel.json`'da rewrite yok**, sadece `cleanUrls: true` + security header'lar var. 404 sayfası Vercel'de `404.html` üzerinden zaten serve ediliyor; ek rewrite gerekiyorsa test edilerek eklenmeli.
 - ⚠️ **Sürüm uyumsuzluğu:** Kök ve alt `package.json` dosyaları `1.0.2`'ye eşitlendi. Sürüm bump disiplini korunmalı.
@@ -143,10 +143,10 @@ Commit: **`f1dc31d`** (2026-09-16), header sync: **`454597e`** (HEAD) — push e
 1. **1. Onarım: Google Giriş & Cookie Aktarımının Onarılması (TAMAMLANDI)**
    - **Sorun:** Electron 28.3.3 içinde `node:sqlite` yoktur ve Chrome açıkken `Cookies` veritabanı kilitlidir (`EBUSY`).
    - **Çözüldü:** Dahili izole ve stealth `loginWindow` (`login-preload.js`, Chrome 131 UA, otomatik yönlendirme yakalama), sistem tarayıcısı tercihi için `openSystemBrowserLogin` desteği, CDP (`chrome-remote-interface`) fallback'i ve güvenli dosya kopyalama/hata toleransı sağlandı. Kullanıcı oturum açtığında otomatik algılanır ve çerezler Electron oturumuna sorunsuz aktarılır. Typecheck ve derleme 0 hata ile doğrulandı.
-2. **2. Onarım (Sıradaki Adım): REST API Token & Kural 4 Uyumu**
-   - **Sorun:** `bot-server.ts` içinde `Bearer` token zorunluluğu tüm GET isteklerinden silinerek `memory.md` Kural 4 ihlal edilmiştir.
-   - **Çözüm:** Salt-okunur durum sorguları (`/api/v1/state`) yerel origin'ler için güvenli tutulurken, API token mekanizması standartlaştırılacak, ölü kod temizlenecek veya token zorunluluğu mimari karara göre kural tablosuyla tam hizalanacaktır.
-3. **3. Onarım: Discord Bot Privileged Intent Fallback Toleransı**
+2. **2. Onarım: REST API Token & Kural 4 Uyumu (TAMAMLANDI)**
+   - **Sorun:** `bot-server.ts` içinde `Bearer` token zorunluluğu tüm GET isteklerinden silinerek `memory.md` Kural 4 ihlal edilmişti.
+   - **Çözüldü:** `desktop/src/main/api/bot-server.ts` içinde yetkisiz harici origin'ler 403 Forbidden ile engellendi (`Access-Control-Allow-Origin`), sunulan Bearer token'ların `this.apiToken` ile eşleşmesi zorunlu kılındı (geçersiz token 401 Unauthorized döner) ve yerel loopback / Discord botu için salt-okunur durum sorguları güvenli biçimde dengelendi.
+3. **3. Onarım (Sıradaki Adım): Discord Bot Privileged Intent Fallback Toleransı**
    - **Sorun:** `scripts/discord-bot/index.js` dosyasında `GatewayIntentBits.GuildMembers` zorunlu tutulmuştur; Discord Geliştirici Portalında "Server Members Intent" kapalıysa bot çöker.
    - **Çözüm:** Intent reddi durumunda botun çökmesini önleyen dinamik fallback eklenmeli, presence bilgisi yerel REST API veya Spotify fallback'i ile dengelenmelidir.
 
@@ -182,7 +182,9 @@ Oturum bitmeden ÖNCE:
 
 ## 8. Oturum Kaydı (her güncellemede buraya ekle — en üste)
 
-- **2026-09-19 · Antigravity:** 1. Onarım (Google Giriş & Cookie Aktarımı Tamiri) TAMAMLANDI — Electron 28'de (Node 18) bulunmayan `node:sqlite` bağımlılığı ve Chrome açıkken dosya kilitlenme (`EBUSY`) hatası izole edildi. İzole stealth `loginWindow` (`login-preload.js`, Chrome 131 UA, did-navigate otomatik aktarımı), harici tarayıcı tercihi için `openSystemBrowserLogin`, CDP target kontrolü ve alternatif cookie aktarımı kusursuz çalışan hibrit mimaride birleştirildi. Typecheck ve Desktop Build 0 hata ile doğrulandı.
+- **2026-09-19 · Antigravity:** 2. Onarım (REST API Token & Kural 4 Uyumu) TAMAMLANDI — `desktop/src/main/api/bot-server.ts` dosyasında yetkisiz harici web origin'leri 403 Forbidden ile engellendi, sunulan Bearer token'ların doğrulanması korundu ve yerel loopback / Discord botu için salt-okunur durum sorguları güvenli biçimde dengelendi. Typecheck 0 hata ile doğrulandı.
+
+- **2026-09-19 · Antigravity:** 1. Onarım (Google Giriş & Cookie Aktarımı Tamiri) TAMAMLANDI — Electron 28'de (Node 18) bulunmayan `node:sqlite` bağımlılığı ve Chrome açıkken dosya kilitlenme (`EBUSY`) hatası izole edildi. İzole stealth `loginWindow` (`login-preload.js`, Chrome 131 UA, did-navigate otomatik aktarımı), harici tarayıcı tercihi için `openSystemBrowserLogin`, CDP target kontrolü ve alternatif cookie aktarımı kusursuz çalışan hibrit mimaride birleştirildi. Typecheck ve Desktop Build 0 hata ile doğrulandı. Push edildi (`b2dba57`).
 
 - **2026-09-19 · Antigravity:** Antigravity Regresyon Analizi & `memory.md` Güncellemesi — Devir sonrası yapılan 7 commit derinlemesine incelendi. Tespit edilen 3 kritik sorun kayda geçirildi: 1) `music-auth.ts` içinde `node:sqlite` kullanımı nedeniyle Electron 28'de (Node 18) Google girişinin ve çerez aktarımının tamamen çökmesi; 2) `bot-server.ts` içinde `Bearer` token zorunluluğunun silinmesiyle `memory.md` Kural 4 ihlali; 3) Discord botunda `GuildMembers` privileged intent riski ve `login-preload.ts` ölü kod durumu. Öncelikli onarım yol haritası (1. Google Girişi, 2. REST API Token, 3. Discord Bot Intent) Bölüm 6'ya işlendi.
 

@@ -8,10 +8,10 @@
 <!-- AUTO-UPDATE:STATUS-START -->
 | Sistem Parametresi | Değer / Durum |
 |---|---|
-| **Son Güncelleme** | `2026-09-17 20:17` |
+| **Son Güncelleme** | `2026-09-19 14:49` |
 | **Proje Sürümü** | `v1.0.2` (Masaüstü: `v1.0.2`, Web: `v1.0.2`) |
 | **Git Dalı (Branch)** | `master` |
-| **Son Commit** | `440e816 - fix(bot): allow discord bot to respond across all servers and add command logs (0 seconds ago)` |
+| **Son Commit** | `b2dba57 - fix(desktop): restore robust hybrid google login with login-preload, CDP, and fallback options (0 seconds ago)` |
 | **TypeScript Derleme Sağlığı** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Takip Edilen Sorunlar** | 24 / 24 Çözüldü (%100 Başarı) |
 <!-- AUTO-UPDATE:STATUS-END -->

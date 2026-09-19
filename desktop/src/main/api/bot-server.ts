@@ -165,16 +165,23 @@ export class BotServer {
     return new Promise((resolve) => {
       this.server = http.createServer((req, res) => {
         const origin = req.headers.origin;
-        // Güvenli Origin kontrolü: Localhost, 127.0.0.1, Vercel app veya tarayıcı direkt ziyaret / curl (Origin yok)
+        // Güvenli Origin kontrolü: Localhost, 127.0.0.1, Vercel app veya yerel direkt ziyaret / curl (Origin yok)
         const isAllowedOrigin = !origin ||
           origin.startsWith('http://localhost') ||
           origin.startsWith('http://127.0.0.1') ||
           origin.startsWith('https://aqualitymusic.vercel.app') ||
           origin.startsWith('chrome-extension://');
 
-        if (isAllowedOrigin && origin) {
+        // Yabancı web kökenlerinin yerel API'yi gizlice okumasını 403 ile engelle
+        if (origin && !isAllowedOrigin) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: 'Forbidden: Origin not allowed' }));
+          return;
+        }
+
+        if (origin) {
           res.setHeader('Access-Control-Allow-Origin', origin);
-        } else if (!origin) {
+        } else {
           res.setHeader('Access-Control-Allow-Origin', '*');
         }
 
@@ -187,6 +194,14 @@ export class BotServer {
           return;
         }
 
+        // Authorization başlığı sunulmuşsa geçerli API token ile doğrula
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader !== `Bearer ${this.apiToken}`) {
+          res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: 'Unauthorized: Invalid Bearer token' }));
+          return;
+        }
+
         const parsedUrl = (req.url || '/').split('?')[0];
 
         // Sağlık kontrolleri her zaman açıktır
@@ -196,7 +211,7 @@ export class BotServer {
           return;
         }
 
-        // Salt okunur durum sorguları (tarayıcı, curl, Discord botu, yerel araçlar)
+        // Salt okunur durum sorguları (yerel loopback / bot)
         if (parsedUrl === '/' || parsedUrl === '/api/v1/state' || parsedUrl === '/query' || parsedUrl === '/state') {
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify(this.state, null, 2));
