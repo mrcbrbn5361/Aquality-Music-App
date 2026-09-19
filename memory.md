@@ -14,7 +14,7 @@
 > kelimesini hiç içermiyor).
 >
 > Son güncelleme: **2026-09-19** · Güncelleyen: **Antigravity**
-> HEAD: `440e816` · Branch: `master` · Repo: `mrcbrbn5361/Aquality-Music-App`
+> HEAD: `65c5f46` · Branch: `master` · Repo: `mrcbrbn5361/Aquality-Music-App`
 
 ---
 
@@ -146,9 +146,9 @@ Commit: **`f1dc31d`** (2026-09-16), header sync: **`454597e`** (HEAD) — push e
 2. **2. Onarım: REST API Token & Kural 4 Uyumu (TAMAMLANDI)**
    - **Sorun:** `bot-server.ts` içinde `Bearer` token zorunluluğu tüm GET isteklerinden silinerek `memory.md` Kural 4 ihlal edilmişti.
    - **Çözüldü:** `desktop/src/main/api/bot-server.ts` içinde yetkisiz harici origin'ler 403 Forbidden ile engellendi (`Access-Control-Allow-Origin`), sunulan Bearer token'ların `this.apiToken` ile eşleşmesi zorunlu kılındı (geçersiz token 401 Unauthorized döner) ve yerel loopback / Discord botu için salt-okunur durum sorguları güvenli biçimde dengelendi.
-3. **3. Onarım (Sıradaki Adım): Discord Bot Privileged Intent Fallback Toleransı**
-   - **Sorun:** `scripts/discord-bot/index.js` dosyasında `GatewayIntentBits.GuildMembers` zorunlu tutulmuştur; Discord Geliştirici Portalında "Server Members Intent" kapalıysa bot çöker.
-   - **Çözüm:** Intent reddi durumunda botun çökmesini önleyen dinamik fallback eklenmeli, presence bilgisi yerel REST API veya Spotify fallback'i ile dengelenmelidir.
+3. **3. Onarım: Discord Bot Privileged Intent Fallback Toleransı (TAMAMLANDI)**
+   - **Sorun:** `scripts/discord-bot/index.js` dosyasında `GatewayIntentBits.GuildMembers` ve `GuildPresences` doğrudan verilmişti; Discord Developer Portal'da bu izinler kapalı olduğunda bot `[DISALLOWED_INTENTS]` hatasıyla çöküyordu.
+   - **Çözüldü:** `scripts/discord-bot/index.js` içinde iki kademeli zarif fallback mekanizması kuruldu. Bot ilk açılışta tam intent setiyle bağlanmayı dener; eğer Discord `DISALLOWED_INTENTS` dönerse, bot çökmeden otomatik olarak `GuildPresences` ve `GuildMembers` intent'lerini devreden çıkarıp standart intent'lerle (`Guilds`, `GuildMessages`, `MessageContent`) bağlanır. Gateway presence'ın okunamadığı durumlarda masaüstü uygulamasının yerel REST API'si (Port 9863) ve Spotify fallback'i devreye girer. Syntax ve çalışma doğrulaması tamamlandı.
 
 ---
 
@@ -182,7 +182,9 @@ Oturum bitmeden ÖNCE:
 
 ## 8. Oturum Kaydı (her güncellemede buraya ekle — en üste)
 
-- **2026-09-19 · Antigravity:** 2. Onarım (REST API Token & Kural 4 Uyumu) TAMAMLANDI — `desktop/src/main/api/bot-server.ts` dosyasında yetkisiz harici web origin'leri 403 Forbidden ile engellendi, sunulan Bearer token'ların doğrulanması korundu ve yerel loopback / Discord botu için salt-okunur durum sorguları güvenli biçimde dengelendi. Typecheck 0 hata ile doğrulandı.
+- **2026-09-19 · Antigravity:** 3. Onarım (Discord Bot Privileged Intent Fallback Toleransı) TAMAMLANDI — `scripts/discord-bot/index.js` içinde `DISALLOWED_INTENTS` hatası yakalanarak standart gateway intent'lerine zarif otomatik geçiş sağlandı. Bot artık Developer Portal'da Privileged Intent'ler açık olmasa dahi çökmeden çalışır ve yerel REST API (Port 9863) ile şarkı durumu kartlarını kusursuz çizer. Node syntax kontrolü (`node -c`) ve desktop typecheck 0 hata ile doğrulandı.
+
+- **2026-09-19 · Antigravity:** 2. Onarım (REST API Token & Kural 4 Uyumu) TAMAMLANDI — `desktop/src/main/api/bot-server.ts` dosyasında yetkisiz harici web origin'leri 403 Forbidden ile engellendi, sunulan Bearer token'ların doğrulanması korundu ve yerel loopback / Discord botu için salt-okunur durum sorguları güvenli biçimde dengelendi. Typecheck 0 hata ile doğrulandı. Push edildi (`65c5f46`).
 
 - **2026-09-19 · Antigravity:** 1. Onarım (Google Giriş & Cookie Aktarımı Tamiri) TAMAMLANDI — Electron 28'de (Node 18) bulunmayan `node:sqlite` bağımlılığı ve Chrome açıkken dosya kilitlenme (`EBUSY`) hatası izole edildi. İzole stealth `loginWindow` (`login-preload.js`, Chrome 131 UA, did-navigate otomatik aktarımı), harici tarayıcı tercihi için `openSystemBrowserLogin`, CDP target kontrolü ve alternatif cookie aktarımı kusursuz çalışan hibrit mimaride birleştirildi. Typecheck ve Desktop Build 0 hata ile doğrulandı. Push edildi (`b2dba57`).
 
