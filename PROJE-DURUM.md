@@ -4,10 +4,10 @@
 
 | Özellik | Değer |
 |---|---|
-| **Son Güncelleme** | `2026-09-19 14:51` |
+| **Son Güncelleme** | `2026-09-19 14:54` |
 | **Proje Versiyonu** | `v1.0.2` (Masaüstü: `v1.0.2`, Web: `v1.0.2`, Mobil: `v1.0.2`) |
 | **Aktif Git Branch** | `master` |
-| **Son Git Commit** | `65c5f46 - fix(desktop): secure bot server with origin verification and enforced bearer token validation (1 second ago)` |
+| **Son Git Commit** | `39e7d47 - fix(bot): add graceful fallback for privileged gateway intents (0 seconds ago)` |
 | **TypeScript Sağlık** | ✅ BAŞARILI (Masaüstü Main + Renderer + Mobil Expo Hatasız) |
 | **Kod Hacmi (LOC)** | Ana Süreç: ~5874 satır, Arayüz: ~5294 satır, Mobil (Expo): ~5835 satır, Web: ~1787 satır |
 
