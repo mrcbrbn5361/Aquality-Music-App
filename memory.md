@@ -14,7 +14,7 @@
 > kelimesini hiç içermiyor).
 >
 > Son güncelleme: **2026-09-19** · Güncelleyen: **Antigravity**
-> HEAD: `65c5f46` · Branch: `master` · Repo: `mrcbrbn5361/Aquality-Music-App`
+> HEAD: `77f549c` · Branch: `master` · Repo: `mrcbrbn5361/Aquality-Music-App`
 
 ---
 
@@ -182,7 +182,9 @@ Oturum bitmeden ÖNCE:
 
 ## 8. Oturum Kaydı (her güncellemede buraya ekle — en üste)
 
-- **2026-09-19 · Antigravity:** Windows CI İş Akışı Düzeltmesi (`build-windows.yml`) — GitHub Actions üzerinde `desktop/node_modules` Junction oluşturulurken oluşan `Creating a junction requires an absolute path for the target` hatası düzeltildi; `(Get-Item "node_modules").FullName` ile mutlak yol verildi.
+- **2026-09-19 · Antigravity:** Windows & macOS Uygulama Güncellemesi ve Release Asset Senkronizasyonu — Tüm onarımları (Google giriş hibriti, REST API origin & Bearer kontrolü, Discord bot intent fallback) içeren güncel kod tabanı yerel ve CI ortamında derlendi. Windows için `Aquality-Music-Setup-1.0.2-win11.exe` (~96.8 MB) ve `Aquality-Music-Portable-1.0.2-win11.exe` (~96.3 MB) sıfırdan üretilip `gh release upload v1.0.2 --clobber` ile GitHub Release `v1.0.2` sayfasına yüklendi. macOS için GitHub Actions üzerinde `build-macos` koşusu (DMG arm64 + x64) başarıyla tamamlandı.
+
+- **2026-09-19 · Antigravity:** Windows CI İş Akışı Düzeltmesi (`build-windows.yml`) — GitHub Actions üzerinde `desktop/node_modules` Junction oluşturulurken oluşan `Creating a junction requires an absolute path for the target` hatası düzeltildi; `(Get-Item "node_modules").FullName` ile mutlak yol verildi. Push edildi (`77f549c`).
 
 - **2026-09-19 · Antigravity:** 3. Onarım (Discord Bot Privileged Intent Fallback Toleransı) TAMAMLANDI — `scripts/discord-bot/index.js` içinde `DISALLOWED_INTENTS` hatası yakalanarak standart gateway intent'lerine zarif otomatik geçiş sağlandı. Bot artık Developer Portal'da Privileged Intent'ler açık olmasa dahi çökmeden çalışır ve yerel REST API (Port 9863) ile şarkı durumu kartlarını kusursuz çizer. Node syntax kontrolü (`node -c`) ve desktop typecheck 0 hata ile doğrulandı.
 
