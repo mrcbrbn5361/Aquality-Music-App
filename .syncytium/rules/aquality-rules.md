@@ -1,0 +1,26 @@
+---
+id: aquality-rules
+title: Aquality Music Core Engineering Rules
+description: 12 mandatory engineering rules for building and maintaining Aquality Music
+alwaysApply: true
+globs: []
+tags:
+  - rules
+  - engineering
+  - electron
+  - monorepo
+---
+## 🛡️ Aquality Music — 12 Altın Mühendislik Kuralı
+
+1. **Bağımlılık Kuralı:** Asla `npm install` çalıştırılmaz; her zaman `npm ci` kullanılır. `package-lock.json` kasten güncellenmedikçe bağımlılıklar kilitlidir.
+2. **Commit Öncesi Doğrulama:** Typecheck (`npm --workspace=desktop run typecheck`) ve build geçmeden asla commit atılmaz veya kod bitti denmez.
+3. **Electron Sürümü:** Electron **28.3.3** sürümünde sabit kalır. Electron major yükseltmesi yapılmaz.
+4. **macOS Derleme Kısıtı:** Windows ortamında `npm run build:mac` çalıştırılmaz (`supported only on macOS`). Mac derlemeleri GitHub Actions CI'a (`build-mac.yml`) bırakılır.
+5. **Node Runtime Sınırı:** Electron 28 içinde Node 18 gömülüdür. Node 22+ API'leri (örneğin `node:sqlite`) desktop main sürecinde ASLA kullanılmaz.
+6. **InnerTube API:** InnerTube istemci sürümü `clientVersion: 1.20250801.00.00` olarak korunur.
+7. **Secret İzolasyonu:** Client Secret, API token ve auth verileri asla Renderer süreçlerine aktarılmaz; yalnızca ana süreçte tutulur.
+8. **REST API Güvenliği (Port 9863):** Yabancı harici web origin'leri 403 Forbidden ile engellenir. Değişiklik yapan uçlarda Bearer token zorunludur.
+9. **Taşınabilir Sürüm (Portable):** `PORTABLE_EXECUTABLE_DIR` algılandığında veriler exe'nin yanındaki `data/` klasörüne yazılır.
+10. **Mobil Ses Köprüsü:** React Native tarafında YouTube müzik akışı için `AudioBridge` (Hidden WebView + YouTube IFrame API) korunur.
+11. **Docs Engine Koruması:** `scripts/update-docs.cjs` kaynaklı salt tarih/commit churn'ü için tek başına commit atılmaz; gerçek değişikliklerle paketlenir.
+12. **Model & Handoff Disiplini:** OpenCode (Muse Spark) ve Google Antigravity arasında geçiş yaparken `.syncytium/HANDOFF.md` ve `memory.md` güncellenir.

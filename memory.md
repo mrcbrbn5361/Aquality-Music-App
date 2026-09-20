@@ -47,6 +47,7 @@
 | Portable mod | `PORTABLE_EXECUTABLE_DIR` algılanırsa veriler exe yanındaki `data/` klasörüne yazılır — bu mantığa dokunma |
 | InnerTube | `clientVersion 1.20250801.00.00` — YouTube drop ederse 400'ler başlar; ilk bakılacak yer |
 | Devlet sırrı niteliğinde | `desktop/src/main/auth/*` içindeki Client Secret / token'lar renderer'a ASLA taşınmaz |
+| Çoklu Ajan Köprüsü | **SyncytiumMD (`.syncytium/`)** — SSoT kural, ADR ve handoff katmanı; OpenCode ↔ Antigravity köprüsü (`npx syncytium-md sync`) |
 
 ## 3. Bu Oturumda Yapılanlar (değişiklik günlüğü)
 
@@ -181,6 +182,8 @@ Oturum bitmeden ÖNCE:
 5. **Kota kuralı (kritik):** Limitin dolmasına yakınsan YENİ kod yazmayı bırak; sadece analiz edip bu dosyayı güncelle ve Bölüm 6'yı netleştir. Yarım kalmış, build'i kırık kod ASLA bırakma — ya bitir ya başlama.
 
 ## 8. Oturum Kaydı (her güncellemede buraya ekle — en üste)
+
+- **2026-09-20 · Antigravity:** SyncytiumMD Universal Context & 3D Graph Senkronizasyonu — OpenCode (Muse Spark) ve Google Antigravity arasındaki kural ve bağlam kaymasını önlemek için `.syncytium/` Tek Doğruluk Kaynağı (SSoT) projenin gerçek 4 platformlu mimarisiyle baştan sona yapılandırıldı. `architecture.md`, `aquality-rules.md` (12 altın kural), `security.md`, ADR-001..ADR-005 ve `HANDOFF.md` güncellendi. `npx syncytium-md sync` ile 18 köprü dosyası (`AGENT.md`, `CONVENTIONS.md`, `.gemini/antigravity/rules/*.md`, `CLAUDE.md`, `.cursorrules` vb.) derlendi ve `syncytium doctor` ile %100 senkronize olduğu doğrulandı.
 
 - **2026-09-19 · Antigravity:** Windows & macOS Uygulama Güncellemesi ve Release Asset Senkronizasyonu — Tüm onarımları (Google giriş hibriti, REST API origin & Bearer kontrolü, Discord bot intent fallback) içeren güncel kod tabanı yerel ve CI ortamında derlendi. Windows için `Aquality-Music-Setup-1.0.2-win11.exe` (~96.8 MB) ve `Aquality-Music-Portable-1.0.2-win11.exe` (~96.3 MB) sıfırdan üretilip `gh release upload v1.0.2 --clobber` ile GitHub Release `v1.0.2` sayfasına yüklendi. macOS için GitHub Actions üzerinde `build-macos` koşusu (DMG arm64 + x64) başarıyla tamamlandı.
 
