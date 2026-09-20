@@ -1271,6 +1271,7 @@
         if (timeNowEl) timeNowEl.textContent = formatTime(state.currentTime, '0:00');
         if (timeEndEl) timeEndEl.textContent = formatTime(state.duration, '0:00');
         autoScrollLyrics(pct / 100);
+        updateActiveLyric(state.currentTime);
       } else {
         const timeNowEl = $opt('#timeNow');
         const timeEndEl = $opt('#timeEnd');
@@ -1800,6 +1801,7 @@
     if (!btn) return;
     const liked = state.liked.has(state.currentSong.id);
     btn.classList.toggle('active', liked);
+    btn.classList.toggle('liked', liked);
     const svg = btn.querySelector('svg');
     if (svg) svg.setAttribute('fill', liked ? 'currentColor' : 'none');
   }
@@ -2038,9 +2040,15 @@
     body.addEventListener('keydown', mark);
   }
 
+  interface ParsedLyric {
+    time: number;
+    text: string;
+  }
+  let currentParsedLyrics: ParsedLyric[] | null = null;
+
   /** Şarkı ilerlemesine orantılı söz kaydırma (zaman damgasız sözler için). */
   function autoScrollLyrics(ratio: number) {
-    if (state.panelOpen !== 'lyrics' || !state.playing) return;
+    if (state.panelOpen !== 'lyrics' || !state.playing || currentParsedLyrics) return;
     if (!Number.isFinite(ratio) || ratio < 0 || ratio > 1) return;
     if (Date.now() - lastLyricsUserScrollAt < 8000) return;
     const body = $opt('#lyricsBody');
@@ -2057,75 +2065,171 @@
     }
   }
 
+  /** LRC zaman damgalı sözleri şarkı süresiyle senkronize eder (Spotify Karaoke Modu). */
+  function updateActiveLyric(currentTime: number) {
+    if (state.panelOpen !== 'lyrics' || !currentParsedLyrics || !currentParsedLyrics.length) return;
+    const body = $opt('#lyricsBody');
+    if (!body) return;
+
+    let activeIdx = -1;
+    for (let i = 0; i < currentParsedLyrics.length; i++) {
+      if (currentParsedLyrics[i].time <= currentTime + 0.3) {
+        activeIdx = i;
+      } else {
+        break;
+      }
+    }
+
+    const lines = body.querySelectorAll('.lyric-line');
+    lines.forEach((l, idx) => {
+      if (idx === activeIdx) {
+        if (!l.classList.contains('active')) {
+          l.classList.add('active');
+          if (Date.now() - lastLyricsUserScrollAt > 8000) {
+            try {
+              (l as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } catch {
+              // Smooth scroll fallback
+            }
+          }
+        }
+      } else {
+        l.classList.remove('active');
+      }
+    });
+  }
+
   async function loadLyrics() {
     if (!state.currentSong) return;
     const body = $opt('#lyricsBody');
     if (!body) return;
     trackLyricsUserScroll();
-    // Gezinme sayacı: kullanıcı sözler yüklenirken sayfa değiştirirse
-    // eskimiş sonuç panele yazılmaz.
     const generation = state.navGeneration;
     const songId = state.currentSong.id;
-    body.innerHTML = '<div class="empty-state"><p class="empty-hint-text">Yükleniyor...</p></div>';
-    const lyrics = await ytLyrics(songId);
+    body.innerHTML = '<div class="empty-state"><p class="empty-hint-text">Şarkı sözleri yükleniyor...</p></div>';
+    currentParsedLyrics = null;
+
+    let rawLyrics: any = null;
+    try {
+      rawLyrics = await ytLyrics(songId);
+    } catch {
+      rawLyrics = null;
+    }
+
     if (generation !== state.navGeneration || state.currentSong?.id !== songId) return;
-    if (lyrics) {
-      body.innerHTML = lyrics.split('\n').map((line: string) =>
-        `<div class="lyric-line">${line ? escapeHtml(line) : '&nbsp;'}</div>`
-      ).join('');
-    } else {
+
+    if (!rawLyrics) {
       body.innerHTML = '<div class="empty-state"><p class="empty-text">Şarkı sözleri bulunamadı</p></div>';
+      return;
+    }
+
+    const rawStr = typeof rawLyrics === 'string' ? rawLyrics : (rawLyrics.lyrics || '');
+    const lines = rawStr.split('\n');
+    const lrcRegex = /^\[(\d{1,2}):(\d{2}(?:\.\d{1,3})?)\](.*)$/;
+    const parsed: ParsedLyric[] = [];
+    let isLrc = false;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      const match = trimmed.match(lrcRegex);
+      if (match) {
+        isLrc = true;
+        const min = parseInt(match[1], 10);
+        const sec = parseFloat(match[2]);
+        const time = min * 60 + sec;
+        const text = match[3].trim();
+        parsed.push({ time, text });
+      } else if (trimmed) {
+        parsed.push({ time: -1, text: trimmed });
+      }
+    }
+
+    if (isLrc) {
+      currentParsedLyrics = parsed.filter(p => p.time >= 0);
+      body.innerHTML = `<div class="lyrics-container">${currentParsedLyrics.map((item, idx) => `
+        <div class="lyric-line" data-time="${item.time}" data-idx="${idx}">
+          ${escapeHtml(item.text) || '♪'}
+        </div>
+      `).join('')}</div>`;
+
+      // Spotify tarzı: satıra tıklanınca o saniyeye atla
+      body.querySelectorAll('.lyric-line').forEach((el) => {
+        el.addEventListener('click', () => {
+          const t = parseFloat((el as HTMLElement).dataset.time || '-1');
+          if (t >= 0 && Number.isFinite(t)) {
+            api.player.seek(t).catch(() => {});
+          }
+        });
+      });
+      updateActiveLyric(state.currentTime);
+    } else {
+      currentParsedLyrics = null;
+      body.innerHTML = `<div class="lyrics-container">${lines.map((line: string) =>
+        `<div class="lyric-line">${line ? escapeHtml(line) : '&nbsp;'}</div>`
+      ).join('')}</div>`;
     }
   }
 
   function renderQueue() {
     const body = $('#queueBody');
-    if (!state.userQueue.length && !state.contextQueue.length) {
+    if (!state.currentSong && !state.userQueue.length && !state.contextQueue.length) {
       body.innerHTML = '<div class="empty-state"><p class="empty-hint-text">Sıra boş</p></div>';
       return;
     }
 
     let html = '';
 
-    // Kullanıcının ekledikleri
+    // 1. Şu Anda Çalınan (Now Playing)
+    if (state.currentSong) {
+      html += `<div class="queue-section">
+        <div class="queue-section-title">Şu Anda Çalınan</div>
+        <div class="queue-item active" style="cursor:default">
+          <img class="queue-thumb" src="${escapeHtml(state.currentSong.thumbnail)}" alt="" onerror="this.style.display='none'">
+          <div class="queue-info">
+            <div class="queue-title">${escapeHtml(state.currentSong.title)}</div>
+            <div class="queue-artist">${escapeHtml(state.currentSong.artist)}</div>
+          </div>
+          <span class="song-dur" style="font-size:12px;color:var(--c-accent-hover,#1ED760)">Çalıyor</span>
+        </div>
+      </div>`;
+    }
+
+    // 2. Kullanıcının Sıraya Ekledikleri (Next In Queue)
     if (state.userQueue.length) {
-      html += `<div style="margin-bottom:16px">
+      html += `<div class="queue-section">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <h4 style="font-size:13px;font-weight:600;color:var(--c-text-2)">Sıradaki Şarkılar</h4>
-          <button class="icon-btn" id="clearUserQueue" style="font-size:11px;padding:4px 8px;background:var(--c-bg-3);border-radius:4px;color:var(--c-text-2);border:none;cursor:pointer">Temizle</button>
+          <div class="queue-section-title" style="margin-bottom:0">Sıradaki Şarkılar</div>
+          <button class="btn btn-ghost" id="clearUserQueue" style="font-size:11px;padding:3px 8px;border-radius:4px;cursor:pointer">Temizle</button>
         </div>
         <div class="song-list">${state.userQueue.map((s, i) => `
           <div class="queue-item" data-type="user" data-idx="${i}">
-            <img class="song-thumb" src="${escapeHtml(s.thumbnail)}" alt="" style="width:36px;height:36px" onerror="this.style.display='none'">
-            <div class="song-meta">
-              <div class="song-title">${escapeHtml(s.title)}</div>
-              <div class="song-artist">${escapeHtml(s.artist)}</div>
+            <img class="queue-thumb" src="${escapeHtml(s.thumbnail)}" alt="" onerror="this.style.display='none'">
+            <div class="queue-info">
+              <div class="queue-title">${escapeHtml(s.title)}</div>
+              <div class="queue-artist">${escapeHtml(s.artist)}</div>
             </div>
-            <span class="song-dur">${formatTime(s.duration)}</span>
-            <span class="queue-move">
-              <button class="icon-btn queue-move-btn" data-move="-1" data-idx="${i}" title="Yukarı taşı" aria-label="${escapeHtml(s.title)} parçasını yukarı taşı" ${i === 0 ? 'disabled' : ''}>▲</button>
-              <button class="icon-btn queue-move-btn" data-move="1" data-idx="${i}" title="Aşağı taşı" aria-label="${escapeHtml(s.title)} parçasını aşağı taşı" ${i === state.userQueue.length - 1 ? 'disabled' : ''}>▼</button>
-            </span>
+            <span class="song-dur" style="font-size:12px;color:var(--c-text-3);margin-right:8px">${formatTime(s.duration)}</span>
+            <button class="queue-remove-btn" data-idx="${i}" title="Sıradan çıkar" aria-label="Sıradan çıkar">✕</button>
           </div>`).join('')}</div>
       </div>`;
     }
 
-    // Bağlam şarkıları (çalma listesi/albumden gelen)
+    // 3. Bağlamdan Sıradakiler (Upcoming from Context / Playlist / Album)
     if (state.contextQueue.length) {
-      const contextLabel = state.contextName || 'Bağlam';
+      const contextLabel = state.contextName ? `${state.contextName} içinden sırada` : 'Sıradaki Parçalar';
       const currentCtxIdx = state.contextQueue.findIndex((s) => s.id === state.currentSong?.id);
       const upcomingCtx = currentCtxIdx >= 0 ? state.contextQueue.slice(currentCtxIdx + 1) : state.contextQueue;
       if (upcomingCtx.length) {
-        html += `<div>
-          <h4 style="font-size:13px;font-weight:600;color:var(--c-text-2);margin-bottom:8px">${escapeHtml(contextLabel)}</h4>
+        html += `<div class="queue-section">
+          <div class="queue-section-title">${escapeHtml(contextLabel)}</div>
           <div class="song-list">${upcomingCtx.map((s, i) => `
             <div class="queue-item" data-type="context" data-idx="${i}">
-              <img class="song-thumb" src="${escapeHtml(s.thumbnail)}" alt="" style="width:36px;height:36px" onerror="this.style.display='none'">
-              <div class="song-meta">
-                <div class="song-title">${escapeHtml(s.title)}</div>
-                <div class="song-artist">${escapeHtml(s.artist)}</div>
+              <img class="queue-thumb" src="${escapeHtml(s.thumbnail)}" alt="" onerror="this.style.display='none'">
+              <div class="queue-info">
+                <div class="queue-title">${escapeHtml(s.title)}</div>
+                <div class="queue-artist">${escapeHtml(s.artist)}</div>
               </div>
-              <span class="song-dur">${formatTime(s.duration)}</span>
+              <span class="song-dur" style="font-size:12px;color:var(--c-text-3)">${formatTime(s.duration)}</span>
             </div>`).join('')}</div>
         </div>`;
       }
@@ -2142,39 +2246,34 @@
       });
     }
 
-    // Kuyruk sırası değiştirme (yukarı/aşağı) — yalnızca kullanıcı kuyruğu
-    body.querySelectorAll('.queue-move-btn').forEach((btn) => {
+    // Sıradan tek parça çıkarma butonu
+    body.querySelectorAll('.queue-remove-btn').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const idx = parseInt((btn as HTMLElement).dataset.idx || '-1', 10);
-        const delta = parseInt((btn as HTMLElement).dataset.move || '0', 10);
-        const j = idx + delta;
-        if (idx < 0 || j < 0 || j >= state.userQueue.length) return;
-        const tmp = state.userQueue[idx];
-        state.userQueue[idx] = state.userQueue[j];
-        state.userQueue[j] = tmp;
-        state.queue = rebuildMergedQueue();
-        saveQueue();
-        renderQueue();
+        if (idx >= 0 && idx < state.userQueue.length) {
+          state.userQueue.splice(idx, 1);
+          state.queue = rebuildMergedQueue();
+          saveQueue();
+          renderQueue();
+        }
       });
     });
 
-    // Queue item click
-    body.querySelectorAll('.queue-item').forEach((item) => {
+    // Queue item click (parçayı hemen çal)
+    body.querySelectorAll('.queue-item[data-type]').forEach((item) => {
       item.addEventListener('click', () => {
         const type = (item as HTMLElement).dataset.type;
-        const idx = parseInt((item as HTMLElement).dataset.idx!);
+        const idx = parseInt((item as HTMLElement).dataset.idx || '-1', 10);
         if (type === 'user') {
           const song = state.userQueue[idx];
           if (song) {
-            // Kullanıcı queue'sundan seçildi → tüket, sonraki kaldığı yerden devam etsin
             state.userQueue.splice(idx, 1);
             state.queue = rebuildMergedQueue();
             state.queueIndex = idx - 1;
             playSong(song);
           }
         } else if (type === 'context') {
-          // idx dilimlenmiş upcomingCtx'e ait — tam dizinden değil dilimden oku
           const currentCtxIdx = state.contextQueue.findIndex((s) => s.id === state.currentSong?.id);
           const upcomingCtx = currentCtxIdx >= 0 ? state.contextQueue.slice(currentCtxIdx + 1) : state.contextQueue;
           const song = upcomingCtx[idx];
@@ -2424,6 +2523,8 @@
       // Don't trigger if typing in input
       if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return;
 
+      const isCtrlOrMeta = e.ctrlKey || e.metaKey;
+
       switch (e.code) {
         case 'Space':
           e.preventDefault();
@@ -2431,14 +2532,18 @@
           break;
         case 'ArrowLeft':
           e.preventDefault();
-          if (state.duration) {
+          if (isCtrlOrMeta) {
+            prevSong();
+          } else if (state.duration) {
             const step = e.shiftKey ? 10 : 5;
             api.player.seek(Math.max(0, state.currentTime - step)).catch(() => {});
           }
           break;
         case 'ArrowRight':
           e.preventDefault();
-          if (state.duration) {
+          if (isCtrlOrMeta) {
+            nextSong();
+          } else if (state.duration) {
             const step = e.shiftKey ? 10 : 5;
             api.player.seek(Math.min(state.duration, state.currentTime + step)).catch(() => {});
           }
@@ -2465,6 +2570,26 @@
           e.preventDefault();
           $('#btnVolume').click();
           break;
+        case 'KeyL':
+          e.preventDefault();
+          $opt('#btnLyrics')?.click();
+          break;
+        case 'KeyQ':
+          e.preventDefault();
+          $opt('#btnQueue')?.click();
+          break;
+        case 'KeyN':
+          if (isCtrlOrMeta) {
+            e.preventDefault();
+            nextSong();
+          }
+          break;
+        case 'KeyP':
+          if (isCtrlOrMeta) {
+            e.preventDefault();
+            prevSong();
+          }
+          break;
         case 'KeyS':
           e.preventDefault();
           toggleShuffle();
@@ -2476,6 +2601,10 @@
         case 'KeyF':
           e.preventDefault();
           api.window.fullscreen();
+          break;
+        case 'Escape':
+          closePanels();
+          closeContextMenu();
           break;
       }
     });

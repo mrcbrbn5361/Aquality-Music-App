@@ -66,6 +66,19 @@ decisions:
       events to native playback controls.
     consequences: >-
       Stable audio playback on both Android and iOS without cipher breakage.
+  - id: ADR-006
+    title: Spotify-Parity Synced Lyrics, Queue Drawer and Global Shortcuts
+    status: accepted
+    date: '2026-09-20'
+    context: >-
+      Aquality Music lacked synced lyrics, live queue drawer, and rich keyboard navigation,
+      hindering parity with premium music desktop clients like Spotify.
+    decision: >-
+      Implement glassmorphic slide-over panels for lyrics and queue, timestamp-synced LRC
+      karaoke parser with smooth auto-centering, interactive queue with Now Playing and item
+      removal, and Spotify-standard global keyboard shortcuts (Space, Ctrl+Arrows, L, Q, M, Esc).
+    consequences: >-
+      Elevates user experience to commercial Spotify grade with zero latency.
 ---
 # Architectural Decision Records (ADR)
 
@@ -142,4 +155,17 @@ Utilize an invisible WebView running YouTube IFrame API (`AudioBridge`) that com
 **Consequences:**
 Guarantees uninterrupted audio streaming on both Android and iOS without cipher maintenance overhead.
 
+---
 
+### [ADR-006] Spotify-Parity Synced Lyrics, Queue Drawer and Global Shortcuts
+- **Status:** accepted
+- **Date:** 2026-09-20
+
+**Context:**
+Aquality Music lacked synced lyrics, interactive queue drawer, and rich keyboard navigation, hindering parity with premium music desktop clients like Spotify.
+
+**Decision:**
+Implement glassmorphic slide-over panels for lyrics and queue, timestamp-synced LRC karaoke parser with smooth auto-centering, interactive queue with Now Playing and item removal, and Spotify-standard global keyboard shortcuts (Space, Ctrl+Arrows, L, Q, M, Esc).
+
+**Consequences:**
+Elevates user experience to commercial Spotify grade with zero latency.

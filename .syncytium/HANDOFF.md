@@ -9,16 +9,16 @@ completedWork:
   - 2. Onarım: REST API (Port 9863) yetkisiz origin engelleme ve Bearer token sertleştirmesi yapıldı (65c5f46)
   - 3. Onarım: Discord Bot Privileged Intent Fallback toleransı eklendi (39e7d47)
   - Windows Setup + Portable ve macOS v1.0.2 ikilileri derlendi ve GitHub Release sayfasına yüklendi
-  - .syncytium/ SSoT kasası (architecture.md, aquality-rules.md, ADR-001..ADR-005) güncellendi
+  - .syncytium/ SSoT kasası (architecture.md, aquality-rules.md, ADR-001..ADR-006) güncellendi
+  - Spotify-Grade Yükseltme: Canlı LRC karaoke şarkı sözleri, oynatma sırası (Now Playing + kaldırma), Spotify klavye kısayolları ve kalp pop animasyonu eklendi
 pendingTasks:
   - Run `npx syncytium-md sync` to generate updated bridge files across all IDEs and agents
   - Verify syncytium doctor health check
   - UI/UX backlog doğrulamaları ve geliştirmeleri (Görev A)
   - OpenCode free kotası açıldığında Muse Spark modeline kesintisiz devir için hazır tut
 touchedFiles:
-  - .syncytium/architecture.md
-  - .syncytium/rules/aquality-rules.md
-  - .syncytium/rules/security.md
+  - desktop/src/renderer/styles/main.css
+  - desktop/src/renderer/components/app.ts
   - .syncytium/memory/decisions.md
   - .syncytium/HANDOFF.md
   - memory.md
