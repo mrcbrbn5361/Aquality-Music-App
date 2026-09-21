@@ -14,7 +14,7 @@
 > kelimesini hiç içermiyor).
 >
 > Son güncelleme: **2026-09-21** · Güncelleyen: **OpenCode (Muse Spark)**
-> HEAD: `a81d9f5` · Branch: `master` · Repo: `mrcbrbn5361/Aquality-Music-App`
+> HEAD: `a7dcdcf` · Branch: `master` · Repo: `mrcbrbn5361/Aquality-Music-App`
 
 ---
 
