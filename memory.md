@@ -13,8 +13,8 @@
 > Kökteki `memory.md` bu motordan etkilenmez (doğrulandı: script `memory`
 > kelimesini hiç içermiyor).
 >
-> Son güncelleme: **2026-09-19** · Güncelleyen: **Antigravity**
-> HEAD: `77f549c` · Branch: `master` · Repo: `mrcbrbn5361/Aquality-Music-App`
+> Son güncelleme: **2026-09-21** · Güncelleyen: **OpenCode (Muse Spark)**
+> HEAD: `a81d9f5` · Branch: `master` · Repo: `mrcbrbn5361/Aquality-Music-App`
 
 ---
 
@@ -151,6 +151,11 @@ Commit: **`f1dc31d`** (2026-09-16), header sync: **`454597e`** (HEAD) — push e
    - **Sorun:** `scripts/discord-bot/index.js` dosyasında `GatewayIntentBits.GuildMembers` ve `GuildPresences` doğrudan verilmişti; Discord Developer Portal'da bu izinler kapalı olduğunda bot `[DISALLOWED_INTENTS]` hatasıyla çöküyordu.
    - **Çözüldü:** `scripts/discord-bot/index.js` içinde iki kademeli zarif fallback mekanizması kuruldu. Bot ilk açılışta tam intent setiyle bağlanmayı dener; eğer Discord `DISALLOWED_INTENTS` dönerse, bot çökmeden otomatik olarak `GuildPresences` ve `GuildMembers` intent'lerini devreden çıkarıp standart intent'lerle (`Guilds`, `GuildMessages`, `MessageContent`) bağlanır. Gateway presence'ın okunamadığı durumlarda masaüstü uygulamasının yerel REST API'si (Port 9863) ve Spotify fallback'i devreye girer. Syntax ve çalışma doğrulaması tamamlandı.
 
+### 🔧 e5f746f Regresyon Düzeltmeleri (OpenCode, 2026-09-21 — TAMAMLANDI)
+- Spotify-parity paketindeki 8 düzeltme uygulandı (detay: Bölüm 8 en üst kayıt). Kapsam: klavye scope, Queue ▲/▼, z-index 960, LRC parser, ölü CSS, söz kaydırma, Escape/Ctrl+N/P, mikro-paket.
+- **Bilinçli korunanlar (borç değil, karar):** `Ctrl+Ok` medya kısayolları; queueIndex idx-1 consume-semantiği (iz kanıtlı doğru); `heartPop` (camelCase, çalışıyor — commit mesajındaki kebab adı yalnızca isimlendirme notu).
+- **Kalan DÜŞÜK borç (fırsat bulunca):** `updateActiveLyric` O(n) class churn optimizasyonu; sıcak yollardaki throw'cu `$` kullanımları (`renderQueue`, `closePanels` — elemanlar mevcut, risk düşük).
+
 ---
 
 ### Görev C — Kalan teknik borç (küçük, fırsat bulunca)
@@ -183,6 +188,7 @@ Oturum bitmeden ÖNCE:
 
 ## 8. Oturum Kaydı (her güncellemede buraya ekle — en üste)
 
+- **2026-09-21 · OpenCode (Muse Spark):** Antigravity regresyon denetimi (Adım 1-5, tek tek, kullanıcı onaylı) — Adım 1: `syncytium-md doctor` %100 temiz, 18 köprü senkron. Adım 2: main+renderer typecheck EXIT:0, website build EXIT:0, ağaç temiz. Adım 3: e5f746f taramasında 15 app.ts + 10 main.css bulgusu; 3 onarım (music-auth node:sqlite guard, bot-server origin/Bearer, discord intent fallback) kod-doğrulamalı TEMİZ çıktı. Adım 4: 8 düzeltme uygulandı — 1) klavye gaspları (Space/tek-tuş/ok scope + SELECT guard + $opt null-güvenlik), 2) kaldırılan Queue ▲/▼ sıralama geri getirildi, 3) z-index savaşı (modal-overlay 960 + modal açılırken closePanels), 4) queueIndex idx-1 HÜKÜM: değişiklik yok (iz kanıtıyla doğru, dokunmak bozardı), 5) LRC multi-timestamp genişletme + zamansız satır koruma, 6) ölü CSS temizliği (.panel/.panel-backdrop/.lyric-line/.queue-item.playing/.panel-header/.panel-body, !important sızıntısı, transform geçişi), 7) söz kaydırma (yalnızca panel-içi + scrollbar-drag ayrımı + reduced-motion + hedef sıfırlama), 8) Escape playlist modalını kapatır + Ctrl+N/P tarayıcıya iade; mikro-paket (liste kalplerinde liked pop, boş sözde "bulunamadı", ✕ focus-within/touch reveal). Doğrulama: renderer tsc 0 hata + vite build yeşil. Bilinçli korunan: Ctrl+Ok medya kısayolları (medya-öncelikli uygulama kararı).
 - **2026-09-20 · Antigravity:** Spotify-Grade Rekabetçi Yükseltme Paketi (ADR-006) — Aquality Music'i Spotify standardına taşımak için: 1) Zaman damgalı senkronize şarkı sözleri (LRC karaoke parser), aktif satır parlaması, yumuşak merkezleme ve söz satırına tıklayarak zamana atlama; 2) Canlı Oynatma Sırası (Queue Drawer) ile "Şu Anda Çalınan" kartı, sıradan tek tıkla parça silme (`✕`) ve sırayı temizleme; 3) Spotify standardı evrensel klavye kısayolları (`Space`, `Ctrl+Arrows`, `L`, `Q`, `M`, `Esc`); 4) Beğeni kalp pop animasyonu (`@keyframes heartPop`); 5) Cam efektli kayar yan panel çekmeceleri (`.panel`, `.panel-backdrop`) uygulandı. Typecheck 0 hata, desktop vite build (1.04s) yeşil, Syncytium-MD 18 köprü dosyası %100 senkron.
 
 - **2026-09-20 · Antigravity:** SyncytiumMD Universal Context & 3D Graph Senkronizasyonu — OpenCode (Muse Spark) ve Google Antigravity arasındaki kural ve bağlam kaymasını önlemek için `.syncytium/` Tek Doğruluk Kaynağı (SSoT) projenin gerçek 4 platformlu mimarisiyle baştan sona yapılandırıldı. `architecture.md`, `aquality-rules.md` (12 altın kural), `security.md`, ADR-001..ADR-005 ve `HANDOFF.md` güncellendi. `npx syncytium-md sync` ile 18 köprü dosyası (`AGENT.md`, `CONVENTIONS.md`, `.gemini/antigravity/rules/*.md`, `CLAUDE.md`, `.cursorrules` vb.) derlendi ve `syncytium doctor` ile %100 senkronize olduğu doğrulandı.

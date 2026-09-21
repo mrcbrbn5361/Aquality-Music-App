@@ -503,6 +503,7 @@
   function showChromeImportPrompt(_opened: any) {
     const existing = document.getElementById('chromeImportModal');
     if (existing) existing.remove();
+    closePanels();
     const modal = document.createElement('div');
     modal.id = 'chromeImportModal';
     modal.className = 'modal-overlay visible';
@@ -1789,9 +1790,12 @@
       selector = `.like-btn[data-id="${CSS.escape(id)}"]`;
     } catch { /* CSS.escape yoksa genel seçici */ }
     document.querySelectorAll(selector).forEach((btn) => {
-      btn.classList.toggle('active', state.liked.has(id));
+      const liked = state.liked.has(id);
+      btn.classList.toggle('active', liked);
+      // Ana oynatıcı kalbiyle aynı pop animasyonu için (sadece toggle anında)
+      btn.classList.toggle('liked', liked);
       const svg = btn.querySelector('svg');
-      if (svg) svg.setAttribute('fill', state.liked.has(id) ? 'currentColor' : 'none');
+      if (svg) svg.setAttribute('fill', liked ? 'currentColor' : 'none');
     });
   }
 
@@ -2029,6 +2033,15 @@
   // otomatik kaydırma duraklatılır, sonra kaldığı yerden devam eder.
   let lastLyricsUserScrollAt = 0;
   let lyricsScrollTracked = false;
+  // Son programatik kaydırma hedefi — scroll olayında kullanıcı/program ayrımı için
+  let lastLyricsAutoTarget = -1;
+  /** reduced-motion kullanıcıları için animasyonsuz kaydırma davranışı. */
+  function lyricsScrollBehavior(): ScrollBehavior {
+    try {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return 'auto';
+    } catch { /* matchMedia yoksa yumuşak kaydır */ }
+    return 'smooth';
+  }
   function trackLyricsUserScroll() {
     if (lyricsScrollTracked) return;
     const body = $opt('#lyricsBody');
@@ -2038,6 +2051,13 @@
     body.addEventListener('wheel', mark, { passive: true });
     body.addEventListener('touchmove', mark, { passive: true });
     body.addEventListener('keydown', mark);
+    // Scrollbar-drag hiçbirini tetiklemez; programatik hedeften belirgin
+    // sapma = kullanıcı müdahalesi sayılır
+    body.addEventListener('scroll', () => {
+      if (lastLyricsAutoTarget < 0 || Math.abs(body.scrollTop - lastLyricsAutoTarget) > 40) {
+        lastLyricsUserScrollAt = Date.now();
+      }
+    }, { passive: true });
   }
 
   interface ParsedLyric {
@@ -2057,8 +2077,9 @@
     if (maxScroll <= 0) return;
     const target = ratio * maxScroll;
     if (Math.abs(body.scrollTop - target) > 120) {
+      lastLyricsAutoTarget = target;
       try {
-        body.scrollTo({ top: target, behavior: 'smooth' });
+        body.scrollTo({ top: target, behavior: lyricsScrollBehavior() });
       } catch {
         body.scrollTop = target;
       }
@@ -2073,7 +2094,10 @@
 
     let activeIdx = -1;
     for (let i = 0; i < currentParsedLyrics.length; i++) {
-      if (currentParsedLyrics[i].time <= currentTime + 0.3) {
+      const t = currentParsedLyrics[i].time;
+      // Zamansız (static) satırlar ne aktif olur ne taramayı durdurur
+      if (t < 0) continue;
+      if (t <= currentTime + 0.3) {
         activeIdx = i;
       } else {
         break;
@@ -2087,9 +2111,15 @@
           l.classList.add('active');
           if (Date.now() - lastLyricsUserScrollAt > 8000) {
             try {
-              (l as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+              // SADECE söz paneli kayar — scrollIntoView ancestor'ları zıplatırdı
+              const el = l as HTMLElement;
+              const bodyRect = body.getBoundingClientRect();
+              const lineRect = el.getBoundingClientRect();
+              const target = body.scrollTop + (lineRect.top - bodyRect.top) - body.clientHeight / 2 + lineRect.height / 2;
+              lastLyricsAutoTarget = target;
+              body.scrollTo({ top: target, behavior: lyricsScrollBehavior() });
             } catch {
-              // Smooth scroll fallback
+              // Scroll fallback: sessiz geç
             }
           }
         }
@@ -2104,6 +2134,8 @@
     const body = $opt('#lyricsBody');
     if (!body) return;
     trackLyricsUserScroll();
+    // Yeni içerikte scroll sıfırlanır; eski hedef sahte kullanıcı-işareti üretmesin
+    lastLyricsAutoTarget = -1;
     const generation = state.navGeneration;
     const songId = state.currentSong.id;
     body.innerHTML = '<div class="empty-state"><p class="empty-hint-text">Şarkı sözleri yükleniyor...</p></div>';
@@ -2124,30 +2156,48 @@
     }
 
     const rawStr = typeof rawLyrics === 'string' ? rawLyrics : (rawLyrics.lyrics || '');
+    // Boş/obje-form yanıtlar boş panel çizmesin
+    if (!rawStr.trim()) {
+      body.innerHTML = '<div class="empty-state"><p class="empty-text">Şarkı sözleri bulunamadı</p></div>';
+      return;
+    }
     const lines = rawStr.split('\n');
-    const lrcRegex = /^\[(\d{1,2}):(\d{2}(?:\.\d{1,3})?)\](.*)$/;
+    // Baştaki TÜM zaman etiketlerini yakalar: [00:10.00][00:20.00]nakarat dahil
+    const lrcTagRegex = /^\[(\d{1,2}):(\d{1,2}(?:\.\d{1,3})?)\]/;
     const parsed: ParsedLyric[] = [];
     let isLrc = false;
 
     for (const line of lines) {
-      const trimmed = line.trim();
-      const match = trimmed.match(lrcRegex);
-      if (match) {
+      let rest = line.trim();
+      const times: number[] = [];
+      let m: RegExpMatchArray | null;
+      // Satır başındaki tüm [dk:sn] etiketlerini tüket
+      while ((m = rest.match(lrcTagRegex)) !== null) {
+        const min = parseInt(m[1], 10);
+        const sec = parseFloat(m[2]);
+        if (Number.isFinite(min) && Number.isFinite(sec) && sec < 60) {
+          times.push(min * 60 + sec);
+        }
+        rest = rest.slice(m[0].length).trim();
+      }
+      if (times.length > 0) {
         isLrc = true;
-        const min = parseInt(match[1], 10);
-        const sec = parseFloat(match[2]);
-        const time = min * 60 + sec;
-        const text = match[3].trim();
-        parsed.push({ time, text });
-      } else if (trimmed) {
-        parsed.push({ time: -1, text: trimmed });
+        // Her zaman damgası aynı sözle ayrı satır olur (tekrarlı nakarat korunur)
+        times.sort((a, b) => a - b);
+        for (const time of times) {
+          parsed.push({ time, text: rest });
+        }
+      } else if (rest) {
+        // Zamansız satırlar (başlık/bölüm etiketi) görüntülenir ama senkron dışıdır
+        parsed.push({ time: -1, text: rest });
       }
     }
 
     if (isLrc) {
-      currentParsedLyrics = parsed.filter(p => p.time >= 0);
+      // Zamansız satırlar da DOM'da yer alır (static) — dizi/DOM sırası korunur
+      currentParsedLyrics = parsed;
       body.innerHTML = `<div class="lyrics-container">${currentParsedLyrics.map((item, idx) => `
-        <div class="lyric-line" data-time="${item.time}" data-idx="${idx}">
+        <div class="lyric-line${item.time < 0 ? ' lyric-static' : ''}"${item.time >= 0 ? ` data-time="${item.time}"` : ''} data-idx="${idx}">
           ${escapeHtml(item.text) || '♪'}
         </div>
       `).join('')}</div>`;
@@ -2209,6 +2259,10 @@
               <div class="queue-artist">${escapeHtml(s.artist)}</div>
             </div>
             <span class="song-dur" style="font-size:12px;color:var(--c-text-3);margin-right:8px">${formatTime(s.duration)}</span>
+            <span class="queue-move">
+              <button class="icon-btn queue-move-btn" data-move="-1" data-idx="${i}" title="Yukarı taşı" aria-label="${escapeHtml(s.title)} parçasını yukarı taşı" ${i === 0 ? 'disabled' : ''}>▲</button>
+              <button class="icon-btn queue-move-btn" data-move="1" data-idx="${i}" title="Aşağı taşı" aria-label="${escapeHtml(s.title)} parçasını aşağı taşı" ${i === state.userQueue.length - 1 ? 'disabled' : ''}>▼</button>
+            </span>
             <button class="queue-remove-btn" data-idx="${i}" title="Sıradan çıkar" aria-label="Sıradan çıkar">✕</button>
           </div>`).join('')}</div>
       </div>`;
@@ -2245,6 +2299,23 @@
         renderQueue();
       });
     }
+
+    // Kuyruk sırası değiştirme (yukarı/aşağı) — yalnızca kullanıcı kuyruğu
+    body.querySelectorAll('.queue-move-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt((btn as HTMLElement).dataset.idx || '-1', 10);
+        const delta = parseInt((btn as HTMLElement).dataset.move || '0', 10);
+        const j = idx + delta;
+        if (idx < 0 || j < 0 || j >= state.userQueue.length) return;
+        const tmp = state.userQueue[idx];
+        state.userQueue[idx] = state.userQueue[j];
+        state.userQueue[j] = tmp;
+        state.queue = rebuildMergedQueue();
+        saveQueue();
+        renderQueue();
+      });
+    });
 
     // Sıradan tek parça çıkarma butonu
     body.querySelectorAll('.queue-remove-btn').forEach((btn) => {
@@ -2520,13 +2591,25 @@
   // ── Keyboard Shortcuts ─────────────────────
   function setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
-      // Don't trigger if typing in input
-      if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return;
+      const target = e.target as HTMLElement;
+      const tag = target.tagName;
+      // Yazı yazılan alanlarda kısayollar çalışmaz (Escape hariç — panelleri kapatır)
+      const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+      if (isTyping && e.code !== 'Escape') return;
 
       const isCtrlOrMeta = e.ctrlKey || e.metaKey;
+      // Açık panel/modal/menü içindeyken medya tuşları o katmanın olur (Ctrl kombo ve Escape hariç)
+      const inOverlay = target.closest('.panel.open, .modal-overlay.visible, .context-menu') !== null;
+      if (inOverlay && e.code !== 'Escape' && !isCtrlOrMeta) return;
+      // Odak etkileşimli elemandaysa (buton/bağlantı/kart) Space ve harf tuşları native davranır
+      const interactive = target.closest('button, a, [role="button"], .card') !== null;
+      const singleLetter = e.code === 'KeyM' || e.code === 'KeyL' || e.code === 'KeyQ' ||
+        e.code === 'KeyS' || e.code === 'KeyR' || e.code === 'KeyF';
+      if (singleLetter && interactive) return;
 
       switch (e.code) {
         case 'Space':
+          if (interactive) return;
           e.preventDefault();
           togglePlay();
           break;
@@ -2552,8 +2635,13 @@
           e.preventDefault();
           state.volume = Math.min(100, state.volume + 5);
           if (state.volume > 0) state.lastVolume = state.volume;
-          ($('#volumeSlider') as HTMLInputElement).value = String(state.volume);
-          ($('#volumeSlider') as HTMLInputElement).style.setProperty('--vol-pct', `${state.volume}%`);
+          {
+            const slider = $opt('#volumeSlider') as HTMLInputElement | null;
+            if (slider) {
+              slider.value = String(state.volume);
+              slider.style.setProperty('--vol-pct', `${state.volume}%`);
+            }
+          }
           api.player.setVolume(state.volume / 100).catch(() => {});
           api.store.set('volume', state.volume);
           break;
@@ -2561,14 +2649,19 @@
           e.preventDefault();
           state.volume = Math.max(0, state.volume - 5);
           if (state.volume > 0) state.lastVolume = state.volume;
-          ($('#volumeSlider') as HTMLInputElement).value = String(state.volume);
-          ($('#volumeSlider') as HTMLInputElement).style.setProperty('--vol-pct', `${state.volume}%`);
+          {
+            const slider = $opt('#volumeSlider') as HTMLInputElement | null;
+            if (slider) {
+              slider.value = String(state.volume);
+              slider.style.setProperty('--vol-pct', `${state.volume}%`);
+            }
+          }
           api.player.setVolume(state.volume / 100).catch(() => {});
           api.store.set('volume', state.volume);
           break;
         case 'KeyM':
           e.preventDefault();
-          $('#btnVolume').click();
+          $opt('#btnVolume')?.click();
           break;
         case 'KeyL':
           e.preventDefault();
@@ -2578,18 +2671,8 @@
           e.preventDefault();
           $opt('#btnQueue')?.click();
           break;
-        case 'KeyN':
-          if (isCtrlOrMeta) {
-            e.preventDefault();
-            nextSong();
-          }
-          break;
-        case 'KeyP':
-          if (isCtrlOrMeta) {
-            e.preventDefault();
-            prevSong();
-          }
-          break;
+        // NOT: Ctrl+N (yeni pencere) ve Ctrl+P (yazdır) tarayıcı/OS seviyesinde
+        // kalır; gasp edilmez. Parça geçişi için Ctrl+Ok tuşları kullanılır.
         case 'KeyS':
           e.preventDefault();
           toggleShuffle();
@@ -2603,8 +2686,10 @@
           api.window.fullscreen();
           break;
         case 'Escape':
-          closePanels();
           closeContextMenu();
+          // Açık modal varsa önce onu kapat (kendi Esc dinleyicisi yoksa)
+          $opt('#playlistModal')?.classList.remove('visible');
+          closePanels();
           break;
       }
     });
@@ -2644,6 +2729,7 @@
     onClick('#btnNewPlaylist', () => {
       input.value = '';
       updatePlaylistCharCount();
+      closePanels();
       modal.classList.add('visible');
       setTimeout(() => input.focus(), 100);
     });
